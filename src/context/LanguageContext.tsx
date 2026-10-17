@@ -1,38 +1,37 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { Lang } from '../i18n/translations';
+import { translateKey, translateText } from '../i18n/translate';
 
-interface LanguageContextProps {
-  language: 'en' | 'ar';
-  toggleLanguage: () => void;
+interface LanguageContextValue {
+  lang: Lang;
+  setLang: (lang: Lang) => void;
+  /** Translate a dictionary key. */
+  t: (key: string) => string;
+  /** Translate free English text (data values, notes); no-op in English. */
+  tx: (text: string) => string;
 }
 
-const LanguageContext = createContext<LanguageContextProps | undefined>(undefined);
+const LanguageContext = createContext<LanguageContextValue | undefined>(undefined);
 
-export const useLanguage = () => {
-  const context = useContext(LanguageContext);
-  if (!context) {
-    throw new Error('useLanguage must be used within a LanguageProvider');
-  }
-  return context;
-};
+export function LanguageProvider({ children, initialLang = 'en' }: { children: ReactNode; initialLang?: Lang }) {
+  const [lang, setLang] = useState<Lang>(initialLang);
 
-export const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
-  const [language, setLanguage] = useState<'en' | 'ar'>('en');
-
-  const toggleLanguage = () => {
-    setLanguage(prev => prev === 'en' ? 'ar' : 'en');
-  };
-
-  // Update HTML lang and dir attributes when language changes
   useEffect(() => {
-    document.documentElement.lang = language;
-    document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
-  }, [language]);
+    const root = document.documentElement;
+    root.lang = lang;
+    root.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.title = lang === 'ar' ? 'جلف موفر — النموذج الأولي لواجهة المستخدم' : 'Gulf Mover — UX/UI Prototype';
+  }, [lang]);
 
-  return (
-    <LanguageContext.Provider value={{ language, toggleLanguage }}>
-      {children}
-    </LanguageContext.Provider>
-  );
-};
+  const t = useCallback((key: string) => translateKey(lang, key), [lang]);
+  const tx = useCallback((text: string) => translateText(lang, text), [lang]);
+  const value = useMemo(() => ({ lang, setLang, t, tx }), [lang, t, tx]);
 
-export default LanguageContext;
+  return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>;
+}
+
+export function useLanguage(): LanguageContextValue {
+  const ctx = useContext(LanguageContext);
+  if (!ctx) throw new Error('useLanguage must be used within a LanguageProvider');
+  return ctx;
+}

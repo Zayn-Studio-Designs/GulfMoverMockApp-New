@@ -1,363 +1,432 @@
-import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { useDemo } from '../context/DemoContext';
+import { useDemo, type ServiceType, type PaymentChoice } from '../context/DemoContext';
+import { useUi } from '../context/UiContext';
+import { PageHeader } from '../components/PageHeader';
+import { StatusPill } from '../components/StatusPill';
+import { ArrowIcon, Icon, type IconName } from '../components/Icon';
+import { DESTINATIONS, ORIGIN, today } from '../data/demoData';
+import { DEPARTURE_TIMES, FARE_PER_PASSENGER_LEG, fareTotal, legCount, thresholdLabel } from '../domain/rules';
 
-export const BookingView: React.FC = () => {
-  const { language, toggleLanguage } = useLanguage();
-  const { demoMode, resetDemoData } = useDemo();
+const SERVICES: ReadonlyArray<{ value: ServiceType; title: string; desc: string; icon: IconName }> = [
+  { value: 'passenger', title: 'servicePassenger', desc: 'servicePassengerDesc', icon: 'user' },
+  { value: 'material', title: 'serviceMaterial', desc: 'serviceMaterialDesc', icon: 'box' },
+  { value: 'combined', title: 'serviceCombined', desc: 'serviceCombinedDesc', icon: 'list' },
+  { value: 'charter', title: 'serviceCharter', desc: 'serviceCharterDesc', icon: 'ship' },
+];
 
-  const t = (key: string) => {
-    // Simple translation object - in a real app, this would be more comprehensive
-    const translations: Record<string, Record<'en' | 'ar', string>> = {
-      'title': { en: 'Book a Marine Transfer', ar: 'حجز transfer البحري' },
-      'subtitle': { en: 'Choose a service and a sailing. Review the full fare before the payment simulation.', ar: 'اختر خدمة ورحلة. راجع السعر الكامل قبل محاكاة الدفع.' },
-      'serviceSelection': { en: 'Service Selection', ar: 'اختيار الخدمة' },
-      'passengerTransfer': { en: 'Passenger Transfer', ar: 'نقل ركاب' },
-      'materialTransfer': { en: 'Material Transfer', ar: 'نقل مواد' },
-      'combinedRequest': { en: 'Combined Request', ar: 'طلب مركب' },
-      'charterTrip': { en: 'Dedicated Trip / Charter', ar: 'رحلة مخصصة / مستأجرة' },
-      'journey': { en: 'Journey', ar: 'الرحلة' },
-      'details': { en: 'Details', ar: 'التفاصيل' },
-      'reviewPay': { en: 'Review & Pay', ar: 'راجع وادفع' },
-      'result': { en: 'Result', ar: 'النتيجة' },
-      'customerBooking': { en: 'CUSTOMER BOOKING', ar: 'حجز العميل' },
-      'fareSubtotal': { en: 'Fare Subtotal', ar: 'مجموع الأجرة' },
-      'vatTreatment': { en: 'VAT Treatment', ar: 'معاملة الضريبة' },
-      'total': { en: 'Total', ar: 'المجموع' },
-      'paymentSimulation': { en: 'Payment Simulation', ar: 'محاكاة الدفع' },
-      'payRecorded': { en: 'Simulate Payment Recorded', ar: 'محاكاة تسجيل الدفع' },
-      'payPending': { en: 'Simulate Payment Pending', ar: 'محاكاة الدفع pending' },
-      'payFailed': { en: 'Simulate Payment Failed', ar: 'محاكاة فشل الدفع' },
-      'continue': { en: 'Continue', ar: 'متابعة' },
-      'back': { en: 'Back', ar: 'رجوع' },
-      'findSailings': { en: 'Find Sailings', ar: 'ابحث عن الرحلات' },
-      'outboundLeg': { en: 'Outbound Leg', ar: 'الرحلة الذهاب' },
-      'returnLeg': { en: 'Return Leg', ar: 'الرحلة العودة' },
-      'noReturn': { en: 'No Return Leg Selected', ar: 'لم يتم اختيار رحلة عودة' },
-      'quantity': { en: 'Quantity', ar: 'الكمية' },
-      'perTrip': { en: 'per passenger · one way', ar: 'لكل راكب · اتجاه واحد' },
-      'schedule': { en: 'Schedule', ar: 'الجدول' },
-      'localTime': { en: 'Saudi local time', ar: 'الوقت المحلي السعودي' },
-      'fareFormula': { en: 'SAR 500 × passengers × selected one-way legs', ar: '500 ريال سعودي × عدد الركاب × الاتجاهات المختارة' },
-      'finish': { en: 'Show Booking Result', ar: 'عرض نتيجة الحجز' },
-      'bookingResult': { en: 'Booking Result', ar: 'نتيجة الحجز' },
-      'paymentStatus': { en: 'Payment Status', ar: 'حالة الدفع' },
-      'thresholdStatus': { en: 'Threshold Status', ar: 'حالة العتبة' },
-      'opsStatus': { en: 'Operational Status', ar: 'الحالة التشغيلية' },
-      'boardingStatus': { en: 'Boarding Status', ar: 'حالة الصعود' },
-      'recorded': { en: 'Recorded', ar: 'مسجل' },
-      'pending': { en: 'Pending', ar: 'معلق' },
-      'met': { en: 'Met', ar: 'مستوفى' },
-      'awaiting': { en: 'Awaiting', ar: 'في انتظار' },
-      'notStarted': { en: 'Not Started', ar: 'غير begonnen' },
-      'collecting': { en: 'Collecting Bookings', ar: 'جمع الحجوزات' },
-      'thresholdExplainer': { en: 'The four-ticket threshold is aggregated across all eligible bookings for this sailing, not per customer.', ar: 'عتبة الأربعة تذاكر يتم تجميعها عبر جميع الحجوزات المؤهلة لهذه الرحلة، وليس لكل عميل.' },
-      'newBooking': { en: 'Create Another Demo Booking', ar: 'إنشاء حجز تجريبي آخر' },
-      'viewBookings': { en: 'View My Bookings', ar: 'عرض حجوزاتي' }
-    };
+const SERVICE_LABEL: Record<ServiceType, string> = {
+  passenger: 'Passenger transfer', material: 'Material request', combined: 'Combined request', charter: 'Charter inquiry',
+};
 
-    const translation = translations[key];
-    if (translation) {
-      return translation[language] || translation['en'] || key;
+function Stepper({ step }: { step: number }) {
+  const { t } = useLanguage();
+  const names = [t('stepService'), t('stepSearch'), t('stepDetails'), t('stepReview'), t('stepResult')];
+  return (
+    <ol className="stepper">
+      {names.map((n, i) => (
+        <li key={n} className={`step${step === i + 1 ? ' active' : ''}${step > i + 1 ? ' done' : ''}`}>
+          <span className="step-num">{step > i + 1 ? '✓' : i + 1}</span><span>{n}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function ServiceStep() {
+  const { t } = useLanguage();
+  const { wizard, updateWizard, addAudit } = useDemo();
+  const { openModal, toast } = useUi();
+
+  const next = () => {
+    if (wizard.service === 'charter') {
+      openModal({
+        title: t('serviceCharter'), desc: t('serviceCharterDesc'), confirmText: t('confirm'), requireReason: false,
+        onConfirm: () => { addAudit('Prototype', 'Charter inquiry created (demo)'); toast(t('inquiryCreated')); },
+      });
+      return;
     }
-    return key;
+    updateWizard({ bookStep: 2 });
   };
 
   return (
-    <div className="page-container">
-      <header className="page-header">
-        <h1>{t('title')}</h1>
-        <p>{t('subtitle')}</p>
-        <button
-          onClick={toggleLanguage}
-          className="language-toggle"
-          aria-label={`Toggle language to ${language === 'en' ? 'Arabic' : 'English'}`}
-        >
-          {language === 'en' ? 'العربية' : 'EN'}
-        </button>
-      </header>
-
-      <main className="booking-form">
-        <section className="service-selection">
-          <h2>{t('serviceSelection')}</h2>
-          <div className="service-options">
-            <button className="service-option">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 5a2 2 0 0 1 2-2h3l2 4h2l2-4h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5z"/>
-              </svg>
-              <span>{t('passengerTransfer')}</span>
-            </button>
-            <button className="service-option">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 3h18v2H3V3zm0 8h18v2H3v-2zm0 8h18v2H3v-2z"/>
-              </svg>
-              <span>{t('materialTransfer')}</span>
-            </button>
-            <button className="service-option">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 4v16m8-8H4"/>
-              </svg>
-              <span>{t('combinedRequest')}</span>
-            </button>
-            <button className="service-option">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 3h18v2H3V3zm0 16h18v2H3v-2z"/>
-              </svg>
-              <span>{t('charterTrip')}</span>
-            </button>
-          </div>
-        </section>
-
-        <section className="journey-selection">
-          <h2>{t('journey')}</h2>
-          <div className="form-group">
-            <label>{t('outboundLeg')}</label>
-            <select>
-              <option value="07:00">07:00</option>
-              <option value="09:30">09:30</option>
-              <option value="13:00">13:00</option>
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label>{t('returnLeg')}</label>
-            <select>
-              <option value="">-- {t('noReturn')} --</option>
-              <option value="07:00">07:00</option>
-              <option value="09:30">09:30</option>
-              <option value="13:00">13:00</option>
-            </select>
-          </div>
-        </section>
-
-        <section className="passenger-details">
-          <h2>{t('details')}</h2>
-          <div className="form-group">
-            <label>Full Name</label>
-            <input type="text" placeholder="Enter full name" />
-          </div>
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" placeholder="Enter email" />
-          </div>
-          <div className="form-group">
-            <label>Phone Number</label>
-            <input type="tel" placeholder="Enter phone number" />
-          </div>
-        </section>
-
-        <section className="fare-review">
-          <h2>{t('reviewPay')}</h2>
-          <div className="fare-breakdown">
-            <div className="fare-item">
-              <span>{t('fareSubtotal')}</span>
-              <span>SAR 500</span>
-            </div>
-            <div className="fare-item">
-              <span>{t('vatTreatment')}</span>
-              <span>Pending ATCO confirmation</span>
-            </div>
-            <div className="fare-item total">
-              <span>{t('total')}</span>
-              <span>SAR 500</span>
-            </div>
-          </div>
-
-          <div className="policy-section">
-            <p>This is a demo - no real payment will be processed.</p>
-            <p>Booking does not authorize port entry or vessel departure.</p>
-          </div>
-
-          <button className="primary-btn" onClick={() => alert('Booking simulated!')}>
-            {t('finish')}
+    <div className="card card-pad">
+      <div className="between">
+        <div><h2 className="card-title">{t('serviceTitle')}</h2><p className="card-desc">{t('homeCopy')}</p></div>
+        <span className="pill pill-blue">{t('stepService')} 1/5</span>
+      </div>
+      <div className="grid grid-2" style={{ marginTop: 18 }}>
+        {SERVICES.map(s => (
+          <button key={s.value} type="button" aria-pressed={wizard.service === s.value}
+            className={`service-card${wizard.service === s.value ? ' selected' : ''}`}
+            onClick={() => updateWizard({ service: s.value, bookStep: 1, formError: '' })}>
+            <span className="service-icon"><Icon name={s.icon} /></span>
+            <span><span className="service-name">{t(s.title)}</span><span className="service-desc">{t(s.desc)}</span></span>
           </button>
-        </section>
-      </main>
-
-      {demoMode && (
-        <footer className="demo-footer">
-          <button onClick={resetDemoData} className="demo-btn">
-            Reset Demo Data
-          </button>
-          <span className="demo-note">DEMO DATA - {t('demoNote')}</span>
-        </footer>
+        ))}
+      </div>
+      {wizard.service === 'charter' && (
+        <div className="notice warn" style={{ marginTop: 15 }}><strong>{t('serviceCharter')}</strong>{t('serviceCharterDesc')}</div>
       )}
+      <div className="between" style={{ marginTop: 20 }}>
+        <span className="small muted">{t('briefFare')}: <strong>SAR 500</strong> {t('perTrip')}</span>
+        <button type="button" className="btn btn-primary" onClick={next}>{t('continue')} <ArrowIcon /></button>
+      </div>
     </div>
   );
-};
+}
 
-// Add some basic CSS for the component
-const style = document.createElement('style');
-style.textContent = `
-  .page-container {
-    max-width: 800px;
-    margin: 0 auto;
-    padding: 20px;
-  }
+function SailingChoices({ leg }: { leg: 'outbound' | 'return' }) {
+  const { t, tx, lang } = useLanguage();
+  const { wizard, updateWizard, sailings } = useDemo();
+  const current = leg === 'return' ? wizard.selectedRet : wizard.selectedOut;
+  return (
+    <div style={{ marginTop: 15 }}>
+      <div className="between" style={{ marginBottom: 9 }}>
+        <strong className="card-title">{leg === 'return' ? t('returnSailing') : t('departure')}</strong>
+        <span className="tiny muted">{t('demoAvailability')}</span>
+      </div>
+      {DEPARTURE_TIMES.map(time => {
+        const sailing = sailings.find(s => s.time === time);
+        const count = sailing?.count ?? 0;
+        const selected = current === time;
+        return (
+          <button key={time} type="button" aria-pressed={selected} className={`sailing-option${selected ? ' selected' : ''}`}
+            onClick={() => updateWizard(leg === 'return' ? { selectedRet: time } : { selectedOut: time })}>
+            <span className={`radio${selected ? ' on' : ''}`} />
+            <span className="time-cell"><span className="time-big mono">{time}</span><br />
+              <span className="route-small">{tx(leg === 'return' ? 'Return (demo)' : 'Departure (demo)')}</span></span>
+            <span className="route-cell"><span className="route-badge">{tx(sailing?.dest ?? DESTINATIONS[0])}</span><br />
+              <span className="route-small">{t('demoAvailability')}: {count >= 4 ? tx('4+ eligible tickets (demo)') : t('ticketsOfMin').replace('{n}', String(count))}</span></span>
+            <span className="fare-cell"><span className="fare">SAR {FARE_PER_PASSENGER_LEG}</span><br /><span className="fare-note">{t('perPassenger')}</span></span>
+            <span className="select-cell">{selected ? <StatusPill text={lang === 'ar' ? 'محدد' : 'Selected'} /> : <span className="route-badge">{tx('Select')}</span>}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-  .page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 30px;
-    padding-bottom: 20px;
-    border-bottom: 2px solid var(--line);
-  }
+function JourneyStep() {
+  const { t, tx } = useLanguage();
+  const { wizard, updateWizard } = useDemo();
+  const { toast } = useUi();
 
-  .language-toggle {
-    background: var(--teal2);
-    border: 2px solid var(--teal);
-    color: var(--teal);
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-  }
-
-  .service-options {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 16px;
-    margin: 20px 0;
-  }
-
-  .service-option {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-    border: 2px solid var(--line);
-    border-radius: var(--radius);
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .service-option:hover {
-    background: var(--teal2);
-    border-color: var(--teal);
-  }
-
-  .service-option svg {
-    width: 48px;
-    height: 48px;
-    margin-bottom: 12px;
-  }
-
-  .form-group {
-    margin-bottom: 20px;
-  }
-
-  .form-group label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 600;
-  }
-
-  .form-group input,
-  .form-group select {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    font: inherit;
-  }
-
-  .fare-breakdown {
-    display: grid;
-    gap: 12px;
-    margin: 20px 0;
-  }
-
-  .fare-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 12px;
-    background: var(--ice);
-    border-radius: var(--radius);
-  }
-
-  .fare-item.total {
-    background: var(--teal2);
-    border: 2px solid var(--teal);
-    font-weight: bold;
-  }
-
-  .policy-section {
-    background: var(--ice);
-    padding: 20px;
-    border-radius: var(--radius);
-    margin: 20px 0;
-    font-size: 14px;
-    color: var(--muted);
-  }
-
-  .primary-btn {
-    background: var(--teal);
-    color: var(--white);
-    border: none;
-    padding: 14px 28px;
-    border-radius: var(--radius);
-    font-weight: 600;
-    cursor: pointer;
-    width: 100%;
-    max-width: 300px;
-  }
-
-  .primary-btn:hover {
-    background: var(--teal2);
-    color: var(--teal);
-  }
-
-  .demo-footer {
-    margin-top: 40px;
-    padding-top: 20px;
-    border-top: 1px solid var(--line);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
-  }
-
-  .demo-btn {
-    background: var(--muted);
-    color: var(--white);
-    border: none;
-    padding: 10px 16px;
-    border-radius: var(--radius);
-    cursor: pointer;
-  }
-
-  .demo-btn:hover {
-    background: var(--ink);
-  }
-
-  .demo-note {
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  @media (max-width: 600px) {
-    .page-container {
-      padding: 16px;
+  const next = () => {
+    if (!wizard.journeyDate) { toast(t('chooseDate')); return; }
+    if (wizard.addReturn) {
+      if (!wizard.returnDate) { toast(t('chooseReturnDate')); return; }
+      if (wizard.returnDate < wizard.journeyDate) { toast(t('returnAfter')); return; }
     }
+    updateWizard({ bookStep: 3 });
+  };
 
-    .page-header {
-      flex-direction: column;
-      gap: 16px;
-      text-align: center;
+  return (
+    <div className="card card-pad">
+      <div className="between">
+        <div><h2 className="card-title">{t('journeyTitle')}</h2><p className="card-desc">{t('journeySub')}</p></div>
+        <StatusPill text={t('demoOnly')} />
+      </div>
+      <div className="form-grid">
+        <div className="field">
+          <label htmlFor="journey-date">{t('departureDate')} *</label>
+          <input id="journey-date" type="date" value={wizard.journeyDate} min={today()} onChange={e => updateWizard({ journeyDate: e.target.value })} />
+        </div>
+        <div className="field">
+          <label htmlFor="dest-select">{t('destination')} *</label>
+          <select id="dest-select" value={wizard.chosenDestination} onChange={e => updateWizard({ chosenDestination: e.target.value })}>
+            {DESTINATIONS.map(d => <option key={d} value={d}>{tx(d)}</option>)}
+          </select>
+          <small>{t('capacityNotSet')}</small>
+        </div>
+        <div className="field">
+          <label htmlFor="pax-count">{t('passengers')} *</label>
+          <select id="pax-count" value={wizard.paxCount} onChange={e => updateWizard({ paxCount: Number(e.target.value) || 1 })}>
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label>{t('direction')}</label>
+          <div className="inset row"><span className="pill pill-blue">{t('outbound')}</span><span className="small muted">{tx(ORIGIN)}</span></div>
+        </div>
+      </div>
+      <SailingChoices leg="outbound" />
+      <div className="divider" />
+      <label className="switch">
+        <input type="checkbox" id="return-toggle" checked={wizard.addReturn} onChange={e => updateWizard({ addReturn: e.target.checked })} />
+        <span>{t('returnToggle')}</span>
+      </label>
+      {wizard.addReturn ? (
+        <>
+          <div className="form-grid" style={{ marginTop: 13 }}>
+            <div className="field">
+              <label htmlFor="return-date">{t('returnDate')} *</label>
+              <input type="date" id="return-date" value={wizard.returnDate} min={today()} onChange={e => updateWizard({ returnDate: e.target.value })} />
+            </div>
+            <div className="field"><label>{t('destination')}</label><div className="inset">{tx(wizard.chosenDestination)}</div></div>
+          </div>
+          <SailingChoices leg="return" />
+        </>
+      ) : <p className="card-desc" style={{ marginTop: 10 }}>{t('returnHint')}</p>}
+      {(wizard.service === 'material' || wizard.service === 'combined') && (
+        <div className="notice warn" style={{ marginTop: 16 }}><strong>{t('materialPending')}</strong>{t('serviceMaterialDesc')} {t('capacityNotSet')}</div>
+      )}
+      <div className="between" style={{ marginTop: 20 }}>
+        <button type="button" className="btn btn-outline" onClick={() => updateWizard({ bookStep: 1 })}>{t('back')}</button>
+        <button type="button" className="btn btn-primary" onClick={next}>{t('continue')} <ArrowIcon /></button>
+      </div>
+      <p className="footer-note">{t('fareFormula')}. {t('vatPending')}.</p>
+    </div>
+  );
+}
+
+function DetailsStep() {
+  const { t } = useLanguage();
+  const { wizard, updateWizard } = useDemo();
+
+  const next = () => {
+    const name = wizard.passengerName.trim(), email = wizard.passengerEmail.trim(), phone = wizard.passengerPhone.trim();
+    if (!name || !email || !phone) { updateWizard({ formError: 'completeFields' }); return; }
+    if (!email.includes('@')) { updateWizard({ formError: 'validEmail' }); return; }
+    updateWizard({ formError: '', bookStep: 4 });
+  };
+
+  const field = (id: string, labelKey: string, key: 'passengerName' | 'passengerEmail' | 'passengerPhone' | 'passengerCompany' | 'vessel' | 'imo',
+    opts: { required?: boolean; type?: string; autoComplete?: string; placeholder: string; hint?: string }) => (
+    <div className="field">
+      <label htmlFor={id}>{t(labelKey)}{opts.required ? ' *' : ''}</label>
+      <input id={id} type={opts.type ?? 'text'} autoComplete={opts.autoComplete} placeholder={opts.placeholder}
+        required={opts.required} value={wizard[key]} onChange={e => updateWizard({ [key]: e.target.value })} />
+      {opts.hint && <small>{opts.hint}</small>}
+    </div>
+  );
+
+  return (
+    <div className="card card-pad">
+      <div className="between">
+        <div><h2 className="card-title">{t('detailsTitle')}</h2><p className="card-desc">{t('detailsSub')}</p></div>
+        <span className="pill pill-neutral">{t('stepDetails')} 3/5</span>
+      </div>
+      {wizard.formError && <div className="notice danger" role="alert" style={{ marginTop: 15 }}>{t(wizard.formError)}</div>}
+      <div className="form-grid" style={{ marginTop: 17 }}>
+        {field('passenger-name', 'fullName', 'passengerName', { required: true, autoComplete: 'name', placeholder: 'Demo Passenger' })}
+        {field('passenger-email', 'email', 'passengerEmail', { required: true, type: 'email', autoComplete: 'email', placeholder: 'passenger@example.test' })}
+        {field('passenger-phone', 'phone', 'passengerPhone', { required: true, type: 'tel', autoComplete: 'tel', placeholder: '+966 5X XXX XXXX' })}
+        {field('passenger-company', 'company', 'passengerCompany', { placeholder: 'Demo Logistics Co.', hint: t('fieldOptional') })}
+        {field('vessel-field', 'vessel', 'vessel', { placeholder: 'Offshore Vessel Demo-01' })}
+        {field('imo-field', 'imo', 'imo', { placeholder: 'Demo reference only' })}
+      </div>
+      <div className="notice" style={{ marginTop: 17 }}><strong>{t('noSensitive')}</strong>{t('detailsSub')}</div>
+      <div className="between" style={{ marginTop: 20 }}>
+        <button type="button" className="btn btn-outline" onClick={() => updateWizard({ bookStep: 2 })}>{t('back')}</button>
+        <button type="button" className="btn btn-primary" onClick={next}>{t('continue')} <ArrowIcon /></button>
+      </div>
+    </div>
+  );
+}
+
+function ReviewStep() {
+  const { t, tx } = useLanguage();
+  const { wizard, updateWizard, materials, addMaterial, addAudit } = useDemo();
+  const { toast } = useUi();
+  const navigate = useNavigate();
+  const pax = Math.max(1, wizard.paxCount);
+  const materialOnly = wizard.service === 'material';
+  const total = materialOnly ? 0 : fareTotal(pax, wizard.addReturn);
+  const legLine = (labelKey: string, date: string, time: string) => (
+    <>
+      <div className="between"><strong>{t(labelKey)}</strong><StatusPill text="DEMO DATA" /></div>
+      <p className="small muted">{date} · <b className="mono">{time}</b> · {tx(wizard.chosenDestination)}</p>
+      <div className="between"><span>{pax} × {t('perPassenger')}</span><strong>SAR {pax * FARE_PER_PASSENGER_LEG}</strong></div>
+    </>
+  );
+
+  const next = () => {
+    if (!wizard.policyAck || !wizard.accessAck) { toast(t('ackFirst')); return; }
+    if (materialOnly) {
+      const id = `MR-DEMO-${String(materials.length + 1).padStart(2, '0')}`;
+      addMaterial({ id, name: 'New material request (demo)', qty: 'To be reviewed', weight: 'Not provided', size: 'Not provided', status: 'Pending review',
+        sender: wizard.passengerCompany || 'Demo requestor', receiver: wizard.chosenDestination,
+        detail: 'Submitted through the offline UI prototype only. No actual transport acceptance or charge.' });
+      addAudit('Prototype', `${id} submitted for review (demo)`);
+      navigate('/materials');
+      toast(t('materialPending'));
+      return;
     }
+    updateWizard({ bookStep: 5, paymentChoice: '' });
+  };
 
-    .demo-footer {
-      flex-direction: column;
-      align-items: stretch;
+  return (
+    <div className="split">
+      <div className="card card-pad">
+        <div className="between">
+          <div><h2 className="card-title">{t('reviewTitle')}</h2><p className="card-desc">{t('reviewSub')}</p></div>
+          <span className="pill pill-blue">{t('stepReview')} 4/5</span>
+        </div>
+        <div className="divider" />
+        {legLine('outboundLeg', wizard.journeyDate, wizard.selectedOut)}
+        {wizard.addReturn && <><div className="divider" />{legLine('returnLeg', wizard.returnDate, wizard.selectedRet)}</>}
+        <div className="divider" />
+        <div className="price-line"><span>{t('subtotal')}</span><strong>SAR {total.toLocaleString('en-US')}</strong></div>
+        <div className="price-line"><span>{t('vat')}</span><strong>{t('vatPending')}</strong></div>
+        <div className="price-line price-total"><span>{t('total')}</span>
+          <strong>{materialOnly ? t('materialNoPayment') : `SAR ${total.toLocaleString('en-US')} + ${tx('VAT/approved charges TBD')}`}</strong></div>
+        <p className="footer-note">{materialOnly ? t('materialNoTariff') : t('fareFormula')}</p>
+        <div className="divider" />
+        <h3 className="card-title" style={{ marginBottom: 9 }}>{t('policyTitle')}</h3>
+        <div className="notice warn"><strong>{t('policyDemo')}</strong>{t('ackAccess')}</div>
+        <div className="grid" style={{ gap: 10, marginTop: 13 }}>
+          <label className="checkrow"><input id="policy-ack" type="checkbox" checked={wizard.policyAck} onChange={e => updateWizard({ policyAck: e.target.checked })} /><span>{t('ackPolicy')}</span></label>
+          <label className="checkrow"><input id="access-ack" type="checkbox" checked={wizard.accessAck} onChange={e => updateWizard({ accessAck: e.target.checked })} /><span>{t('ackAccess')}</span></label>
+        </div>
+        <div className="between" style={{ marginTop: 20 }}>
+          <button type="button" className="btn btn-outline" onClick={() => updateWizard({ bookStep: 3 })}>{t('back')}</button>
+          <button type="button" className="btn btn-primary" onClick={next}>{materialOnly ? t('materialSubmit') : t('simulatePayment')} <ArrowIcon /></button>
+        </div>
+      </div>
+      <aside className="card card-pad">
+        <div className="eyebrow">{t('safeTitle')}</div>
+        <h3 className="card-title">{t('safeTitle')}</h3>
+        <p className="card-desc">{t('safeCopy')}</p>
+        <div className="divider" />
+        <div className="between"><span className="small muted">{t('passengers')}</span><strong>{pax}</strong></div>
+        <div className="between" style={{ marginTop: 9 }}><span className="small muted">{t('leg')}</span><strong>{t('legsSelected').replace('{n}', String(legCount(wizard.addReturn)))}</strong></div>
+        <div className="divider" />
+        <p className="small muted">{t('thresholdExplainer')}</p>
+      </aside>
+    </div>
+  );
+}
+
+function PaymentStep() {
+  const { t, tx } = useLanguage();
+  const { wizard, updateWizard, bookings, sailings, addBooking, addMaterial, materials, addTicketsToSailing } = useDemo();
+  const { toast } = useUi();
+  const choices: ReadonlyArray<{ value: PaymentChoice; title: string; desc: string; icon: IconName }> = [
+    { value: 'recorded', title: 'payRecorded', desc: 'Local demo state only.', icon: 'check' },
+    { value: 'pending', title: 'payPending', desc: 'Shows an uncertain/pending payment.', icon: 'clock' },
+    { value: 'failed', title: 'payFailed', desc: 'No payment is made.', icon: 'alert' },
+  ];
+  const feedback = wizard.paymentChoice === 'recorded' ? t('recorded') : wizard.paymentChoice === 'pending' ? t('pending') : tx('Payment failed / uncertain (demo)');
+
+  const finish = () => {
+    if (!wizard.paymentChoice) { toast(t('paymentNotice')); return; }
+    const pax = Math.max(1, wizard.paxCount);
+    // Minimum is aggregated across all bookings on the sailing, not per booking.
+    const existing = sailings.find(s => s.time === wizard.selectedOut && s.dir === 'Outbound')?.count ?? 0;
+    const booking = {
+      ref: `GM-DEMO-${String(3200 + bookings.length + 1).padStart(4, '0')}`,
+      date: wizard.journeyDate, leg: wizard.addReturn ? 'Outbound + return' : 'Outbound', time: wizard.selectedOut,
+      dest: wizard.chosenDestination, passengers: pax, amount: fareTotal(pax, wizard.addReturn),
+      payment: wizard.paymentChoice === 'recorded' ? 'Payment recorded (demo)' : wizard.paymentChoice === 'pending' ? 'Payment pending (demo)' : 'Payment failed / uncertain (demo)',
+      threshold: thresholdLabel(existing + pax), ops: 'Awaiting ATCO decision', boarding: 'Not started',
+      service: SERVICE_LABEL[wizard.service],
+      return: wizard.addReturn ? { date: wizard.returnDate, time: wizard.selectedRet, dest: wizard.chosenDestination } : null,
+    };
+    addBooking(booking);
+    addTicketsToSailing(wizard.selectedOut, pax);
+    if (wizard.service !== 'passenger') {
+      addMaterial({ id: `MR-DEMO-${String(materials.length + 1).padStart(2, '0')}`, name: 'New fictional material request', qty: 'To confirm',
+        weight: 'Not provided', size: 'Not provided', status: 'Pending review', sender: 'Demo requestor', receiver: wizard.chosenDestination,
+        detail: 'Created locally from the UI prototype; not submitted to an actual operator.' });
     }
-  }
-`;
+    updateWizard({ bookStep: 6, currentBooking: booking });
+  };
 
-document.head.appendChild(style);
+  return (
+    <div className="card card-pad" style={{ maxWidth: 880, margin: '0 auto' }}>
+      <div className="eyebrow">{t('stepResult')} / {tx('DEMO')}</div>
+      <h2 className="card-title" style={{ fontSize: 24 }}>{t('paymentTitle')}</h2>
+      <p className="card-desc">{t('paymentSub')}</p>
+      <div className="notice warn" style={{ marginTop: 17 }}><strong>{t('demoOnly')}</strong>{t('paymentNotice')}</div>
+      <div className="grid grid-3" style={{ marginTop: 20 }}>
+        {choices.map(c => (
+          <button key={c.value} type="button" aria-pressed={wizard.paymentChoice === c.value}
+            className={`service-card${wizard.paymentChoice === c.value ? ' selected' : ''}`} onClick={() => updateWizard({ paymentChoice: c.value })}>
+            <span className="service-icon"><Icon name={c.icon} /></span>
+            <span><span className="service-name">{t(c.title)}</span><span className="service-desc">{tx(c.desc)}</span></span>
+          </button>
+        ))}
+      </div>
+      <div style={{ marginTop: 14 }} aria-live="polite">
+        {wizard.paymentChoice && (
+          <div className={`notice${wizard.paymentChoice === 'recorded' ? '' : ' warn'}`}><strong>{feedback}</strong>{t('paymentNotice')}</div>
+        )}
+      </div>
+      <div className="between" style={{ marginTop: 18 }}>
+        <button type="button" className="btn btn-outline" onClick={() => updateWizard({ bookStep: 4 })}>{t('back')}</button>
+        <button type="button" className="btn btn-primary" onClick={finish} disabled={!wizard.paymentChoice}>{t('finish')}</button>
+      </div>
+    </div>
+  );
+}
 
-export default BookingView;
+function ResultStep() {
+  const { t, tx } = useLanguage();
+  const { wizard, bookings, resetWizard } = useDemo();
+  const navigate = useNavigate();
+  const b = wizard.currentBooking ?? bookings[0];
+  const rows: Array<[string, string]> = [['paymentStatus', b.payment], ['thresholdStatus', b.threshold], ['opsStatus', b.ops], ['boardingStatus', b.boarding]];
+  return (
+    <div className="card card-pad">
+      <div className="between">
+        <div><div className="eyebrow">{t('stepResult')} 5/5</div><h2 className="card-title" style={{ fontSize: 25 }}>{t('resultTitle')}</h2><p className="card-desc">{t('resultSub')}</p></div>
+        <StatusPill text={tx('DEMO')} />
+      </div>
+      <div className="hero-panel" style={{ marginTop: 18, minHeight: 0 }}>
+        <div className="eyebrow" style={{ color: '#a7e5e0' }}>{tx('BOOKING REFERENCE · FICTIONAL')}</div>
+        <h2 style={{ fontSize: 27 }} className="mono">{b.ref}</h2>
+        <p>{tx(b.service)} · {b.date} · {b.time}</p>
+        <div className="hero-meta">
+          <span>{b.passengers} {tx('passenger(s) demo')}</span>
+          <span>SAR {Number(b.amount).toLocaleString('en-US')} {tx('before unconfirmed taxes')}</span>
+          <span>{tx('Destination')}: {tx(b.dest)}</span>
+        </div>
+      </div>
+      <div className="status-grid" style={{ marginTop: 17 }}>
+        {rows.map(([label, val]) => (
+          <div key={label} className="status-item"><div className="status-label">{t(label)}</div><div className="status-text">{tx(val)}</div><StatusPill text={val} /></div>
+        ))}
+      </div>
+      {b.return && (
+        <div className="inset" style={{ marginTop: 14 }}>
+          <strong>{t('returnLeg')} · {b.return.date} · <span className="mono">{b.return.time}</span></strong>
+          <div className="small muted">{tx(b.return.dest)} — {tx('separate sailing and ticket.')}</div>
+        </div>
+      )}
+      {wizard.service === 'combined' && (
+        <div className="notice warn" style={{ marginTop: 14 }}><strong>{t('materialPending')}</strong>{tx('Passenger fare only is shown. Materials still require review/quote and are not included in the total.')}</div>
+      )}
+      <div className="notice warn" style={{ marginTop: 17 }}><strong>{t('thresholdStatus')}</strong>{t('thresholdExplainer')}</div>
+      <div className="between" style={{ marginTop: 19 }}>
+        <button type="button" className="btn btn-outline" onClick={() => navigate('/bookings')}>{t('viewBookings')}</button>
+        <button type="button" className="btn btn-primary" onClick={resetWizard}>{t('newBooking')}</button>
+      </div>
+    </div>
+  );
+}
+
+export default function BookingView() {
+  const { t, tx } = useLanguage();
+  const { wizard } = useDemo();
+  const step = wizard.bookStep;
+  return (
+    <>
+      <PageHeader titleKey="bookTitle" subKey="bookSub" eyebrow="GULF MOVER / CUSTOMER" />
+      <div className="hero-panel" style={{ marginBottom: 18 }}>
+        <div className="eyebrow" style={{ color: '#8ee1dc' }}>{t('customer')}</div>
+        <h2>{t('quick')}</h2>
+        <p>{t('homeCopy')}</p>
+        <div className="hero-meta">
+          <span>{t('briefFare')}: <b>SAR 500</b> {t('perTrip')}</span>
+          <span>{t('schedule')}: <b className="mono">07:00 · 09:30 · 13:00</b></span>
+          <span>{t('localTime')}</span>
+        </div>
+      </div>
+      <Stepper step={step} />
+      {step === 1 ? <ServiceStep /> : step === 2 ? <JourneyStep /> : step === 3 ? <DetailsStep /> : step === 4 ? <ReviewStep /> : step === 5 ? <PaymentStep /> : <ResultStep />}
+      <p className="footer-note">{tx('All sample records, availability and statuses are fictional. Initial fare and departure times are taken from the client brief; final tariffs, tax, capacities, routes, permits and policies require ATCO confirmation.')}</p>
+    </>
+  );
+}
+
