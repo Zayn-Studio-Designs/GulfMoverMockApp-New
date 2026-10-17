@@ -57,7 +57,8 @@ export function Layout() {
             {NAV_ITEMS.map(item => (
               <NavLink key={item.to} to={item.to} end className={({ isActive }) => `nav-btn${isActive ? ' active' : ''}`}>
                 <Icon name={item.icon} />
-                <span>{t(item.key)}</span>
+                <span className="nav-full">{t(item.key)}</span>
+                <span className="nav-short">{t(`${item.key}Short`)}</span>
               </NavLink>
             ))}
           </nav>
@@ -66,6 +67,7 @@ export function Layout() {
         </aside>
         <main className="main" id="app-main" tabIndex={-1}>
           <Outlet />
+          <button type="button" className="mobile-reset" onClick={onReset}><Icon name="reset" />{t('resetDemo')}</button>
         </main>
       </div>
     </>

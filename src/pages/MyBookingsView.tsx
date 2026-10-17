@@ -58,13 +58,13 @@ export default function MyBookingsView() {
             <tbody>
               {filtered.map(b => (
                 <tr key={b.ref}>
-                  <td><strong className="mono">{b.ref}</strong><div className="tiny muted">{tx(b.service)}</div></td>
-                  <td>{b.date}</td>
-                  <td>{tx(b.leg)} · <span className="mono">{b.time}</span></td>
-                  <td><strong>SAR {Number(b.amount).toLocaleString('en-US')}</strong><div className="tiny muted">{tx('VAT treatment pending')}</div></td>
-                  <td><StatusPill text={b.payment} /></td>
-                  <td><StatusPill text={b.ops} /></td>
-                  <td><button type="button" className="link-btn" onClick={() => setDetailRef(b.ref)}>{t('view')}</button></td>
+                  <td data-label={t('bookingRef')}><strong className="mono">{b.ref}</strong><div className="tiny muted">{tx(b.service)}</div></td>
+                  <td data-label={t('date')}>{b.date}</td>
+                  <td data-label={t('leg')}>{tx(b.leg)} · <span className="mono">{b.time}</span></td>
+                  <td data-label={t('amount')}><strong>SAR {Number(b.amount).toLocaleString('en-US')}</strong><div className="tiny muted">{tx('VAT treatment pending')}</div></td>
+                  <td data-label={t('paymentStatus')}><StatusPill text={b.payment} /></td>
+                  <td data-label={t('opsStatus')}><StatusPill text={b.ops} /></td>
+                  <td data-label={t('actions')}><button type="button" className="link-btn" onClick={() => setDetailRef(b.ref)}>{t('view')}</button></td>
                 </tr>
               ))}
             </tbody>

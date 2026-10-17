@@ -57,11 +57,11 @@ export default function CorporateView() {
               <tbody>
                 {bookings.slice(0, 2).map(b => (
                   <tr key={b.ref}>
-                    <td className="mono">{b.ref}</td>
-                    <td>{isAgent ? tx('Assigned demo client') : t('corpOrg')}</td>
-                    <td>{tx(b.leg)} · {b.time}</td>
-                    <td>SAR {b.amount} <span className="tiny muted">{tx('demo')}</span></td>
-                    <td><StatusPill text={b.payment} /></td>
+                    <td data-label={t('bookingRef')} className="mono">{b.ref}</td>
+                    <td data-label={tx('Client scope')}>{isAgent ? tx('Assigned demo client') : t('corpOrg')}</td>
+                    <td data-label={t('leg')}>{tx(b.leg)} · {b.time}</td>
+                    <td data-label={t('amount')}>SAR {b.amount} <span className="tiny muted">{tx('demo')}</span></td>
+                    <td data-label={t('status')}><StatusPill text={b.payment} /></td>
                   </tr>
                 ))}
               </tbody>

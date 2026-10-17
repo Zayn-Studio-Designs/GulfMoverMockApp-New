@@ -76,13 +76,13 @@ export default function OperationsView() {
             <tbody>
               {list.map(s => (
                 <tr key={s.id}>
-                  <td><strong className="mono">{s.time}</strong><div className="tiny muted">{tx(s.dir)} · {tx('demo')}</div></td>
-                  <td><strong>{tx(s.dest)}</strong><div className="tiny muted">{s.id}</div></td>
-                  <td>{s.count} / {s.minimum} <div className="bar"><span style={{ width: `${Math.min(100, (s.count / s.minimum) * 100)}%` }} /></div></td>
-                  <td><StatusPill text={thresholdLabel(s.count)} /></td>
-                  <td><StatusPill text={s.ops} /></td>
-                  <td>{tx(s.manifest)}</td>
-                  <td><div className="row">
+                  <td data-label={t('time')}><strong className="mono">{s.time}</strong><div className="tiny muted">{tx(s.dir)} · {tx('demo')}</div></td>
+                  <td data-label={t('route')}><strong>{tx(s.dest)}</strong><div className="tiny muted">{s.id}</div></td>
+                  <td data-label={t('tickets')}>{s.count} / {s.minimum} <div className="bar"><span style={{ width: `${Math.min(100, (s.count / s.minimum) * 100)}%` }} /></div></td>
+                  <td data-label={t('threshold')}><StatusPill text={thresholdLabel(s.count)} /></td>
+                  <td data-label={t('readiness')}><StatusPill text={s.ops} /></td>
+                  <td data-label={t('manifest')}>{tx(s.manifest)}</td>
+                  <td data-label={t('actions')}><div className="row">
                     <button type="button" className="link-btn" onClick={() => setSelectedId(s.id)}>{t('openDetail')}</button>
                     <button type="button" className="btn btn-danger btn-small" onClick={() => askSuspend(s.id)}>{t('suspend')}</button>
                   </div></td>
