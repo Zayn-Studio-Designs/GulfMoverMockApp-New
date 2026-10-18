@@ -23,3 +23,29 @@ Test coverage (`src/tests/`):
 
 ## Not tested
 - Real devices, screen readers, and a native Arabic-speaker review of the translations.
+
+## Verification — 2026-10-18 (branch `feature/match-bilingual-prototype`, commit 90a4626)
+
+Fresh clone of the branch on Linux, Node 22.22.0 / npm 10.9.4.
+
+| Check | Command / method | Result |
+|---|---|---|
+| Clean install | `npm ci` | OK (164 packages). Engine warnings: jsdom wants Node ≥ 22.22.2. `npm audit`: 6 issues in dev/test tooling (esbuild dev server, vitest/tinypool); fixes need breaking upgrades — not applied. |
+| Type check | `npm run typecheck` | 0 errors |
+| Tests | `npm test` | 4 files, 41/41 passed |
+| Production build | `npm run build` | OK — JS 325.6 kB (100.6 kB gzip), CSS 33.4 kB |
+| Dev server | `npm run dev` | `http://localhost:3000/` — 200, deep link `/fleet` 200 |
+| Production preview | `npm run preview` | `http://localhost:4173/` — 200, deep link `/fleet` 200 |
+
+Browser checks (Chromium via Playwright against the dev server; desktop 1366×900 and iPhone 14):
+- Signed-out visitor redirected to sign-in; sign-up works and returns to the requested page; password not stored in plain text; session survives refresh.
+- EN ↔ AR: `dir`/`lang` switch to `rtl`/`ar` and back; heading and menu translated; sidebar moves to the right.
+- Booking: City offers Dammam only; 25 departure slots, 12:00 AM–11:00 PM, AM/PM; 2 passengers + return = SAR 2,000; VAT shown as pending; separate statuses on the result; four-ticket minimum met across bookings.
+- Boats: chartered boat disabled for passengers; boat with passengers cannot be chartered; new booking listed on Fleet page (in-app navigation).
+- Phone: no horizontal scroll on any page, bottom navigation bar, Arabic RTL.
+- No page or console errors.
+- `previews/*.html` opened from disk with all network requests blocked: no external requests, no errors; sign-in → app and phone frame both work.
+
+Not verified automatically (manual check recommended): Safari / Firefox / real phones, Windows/macOS install, profile-photo and logo upload with real images on a phone, Boarding Desk duplicate-scan and Materials review flows in the browser (covered by unit/UI tests only), every Arabic screen visually.
+
+Known limitations: bookings and boat reservations are kept in memory and reset on page refresh; payment-step copy says "No gateway or card details are used" rather than the exact phrase "No real payment made".
