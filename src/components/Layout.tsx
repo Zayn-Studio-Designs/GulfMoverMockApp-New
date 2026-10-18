@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Avatar } from './Avatar';
+import { CompanyLogo } from './ImageUpload';
 import { useLanguage } from '../context/LanguageContext';
 import { useDemo } from '../context/DemoContext';
 import { useUi } from '../context/UiContext';
@@ -44,9 +45,21 @@ function AccountMenu() {
       </button>
       {open && (
         <div className="account-pop" role="menu">
-          <div className="account-who"><strong>{user.username}</strong><span>{user.company}</span><span className="muted">{user.email}</span></div>
-          <Link role="menuitem" className="account-item" to="/settings" onClick={() => setOpen(false)}>{t('settingsLink')}</Link>
-          <button role="menuitem" type="button" className="account-item" onClick={() => { setOpen(false); signOut(); toast(t('signedOut')); navigate('/signin'); }}>{t('signOut')}</button>
+          <div className="account-who">
+            <Avatar user={user} size={40} />
+            <div style={{ minWidth: 0 }}>
+              <strong>{user.fullName || user.username}</strong>
+              <span className="account-co"><CompanyLogo company={user.company} logo={user.companyLogo} size={16} />{user.company}</span>
+              <span className="muted" dir="ltr">{user.email}</span>
+            </div>
+          </div>
+          <Link role="menuitem" className="account-item" to="/settings" onClick={() => setOpen(false)}>{t('profile')}</Link>
+          <Link role="menuitem" className="account-item" to="/settings?tab=company" onClick={() => setOpen(false)}>{t('companyTitle')}</Link>
+          <Link role="menuitem" className="account-item" to="/settings?tab=security" onClick={() => setOpen(false)}>{t('securityTab')}</Link>
+          <Link role="menuitem" className="account-item" to="/settings?tab=notifications" onClick={() => setOpen(false)}>{t('notificationsTitle')}</Link>
+          <Link role="menuitem" className="account-item" to="/settings?tab=preferences" onClick={() => setOpen(false)}>{t('settingsLink')}</Link>
+          <div className="account-sep" />
+          <button role="menuitem" type="button" className="account-item account-signout" onClick={() => { setOpen(false); signOut(); toast(t('signedOut')); navigate('/signin'); }}>{t('signOut')}</button>
         </div>
       )}
     </div>

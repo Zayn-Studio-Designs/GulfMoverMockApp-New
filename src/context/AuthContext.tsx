@@ -15,7 +15,12 @@ export interface Account {
   id: string;
   email: string;
   username: string;
+  fullName: string;
+  phone: string;
   company: string;
+  companyLogo: string; // data URL, '' when none
+  companyAddress: string;
+  companyWebsite: string;
   avatar: string; // data URL, '' when none
   notifications: NotificationPrefs;
   createdAt: string;
@@ -27,10 +32,15 @@ export type PublicAccount = Omit<Account, 'salt' | 'passwordHash'>;
 
 export type AuthError =
   | 'errEmail' | 'errUsername' | 'errCompany' | 'errPasswordRules' | 'errPasswordMatch'
-  | 'errEmailTaken' | 'errUsernameTaken' | 'errSignIn' | 'errCurrentPassword' | 'errNoAccount';
+  | 'errEmailTaken' | 'errUsernameTaken' | 'errSignIn' | 'errCurrentPassword' | 'errNoAccount'
+  | 'errPhone' | 'errWebsite' | 'errResetCode' | 'errSameEmail';
+
+export type ProfilePatch = Partial<Pick<Account,
+  'username' | 'fullName' | 'phone' | 'company' | 'companyLogo' | 'companyAddress' | 'companyWebsite' | 'avatar' | 'notifications'>>;
 
 const ACCOUNTS_KEY = 'gm-demo-accounts';
 const SESSION_KEY = 'gm-demo-session';
+const RESET_CODE_MINUTES = 15;
 
 const DEFAULT_NOTIFICATIONS: NotificationPrefs = { emailBookings: true, smsSchedule: true, whatsapp: false, productNews: false };
 
@@ -45,14 +55,28 @@ function load<T>(key: string, fallback: T): T {
   }
 }
 
-function save(key: string, value: unknown) {
+function save(key: string, value: unknown, store: Storage = localStorage) {
   try {
-    if (value === null) localStorage.removeItem(key);
-    else localStorage.setItem(key, JSON.stringify(value));
+    if (value === null) store.removeItem(key);
+    else store.setItem(key, JSON.stringify(value));
   } catch {
     // Storage unavailable (private mode): the demo still works for this session.
   }
 }
+
+/** "Keep me signed in" keeps the session in localStorage; otherwise it lasts until the tab closes. */
+function loadSession(): string | null {
+  try {
+    return load<string | null>(SESSION_KEY, null) ?? (JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null') as string | null);
+  } catch {
+    return null;
+  }
+}
+
+/** Older demo accounts were saved before the extra profile/company fields existed. */
+const withDefaults = (a: Partial<Account> & Omit<Account, 'fullName' | 'phone' | 'companyLogo' | 'companyAddress' | 'companyWebsite'>): Account => ({
+  fullName: '', phone: '', companyLogo: '', companyAddress: '', companyWebsite: '', ...a,
+});
 
 const randomId = () => Math.random().toString(36).slice(2, 10);
 
@@ -73,6 +97,8 @@ export const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test
 /** At least 8 characters with a letter and a number. */
 export const isValidPassword = (pw: string) => pw.length >= 8 && /[A-Za-z]/.test(pw) && /\d/.test(pw);
 export const isValidUsername = (u: string) => /^[A-Za-z0-9._-]{3,30}$/.test(u.trim());
+export const isValidPhone = (p: string) => !p.trim() || /^\+?[0-9 ()-]{7,20}$/.test(p.trim());
+export const isValidWebsite = (w: string) => !w.trim() || /^(https?:\/\/)?[^\s.]+\.[^\s]{2,}$/i.test(w.trim());
 
 const toPublic = ({ salt: _salt, passwordHash: _hash, ...rest }: Account): PublicAccount => rest;
 
@@ -83,24 +109,34 @@ interface AuthContextValue {
   /** True after the user signed out on purpose (so we don't send them back to their last page). */
   signedOutByUser: boolean;
   signUp: (input: SignUpInput) => Promise<AuthError | null>;
-  signIn: (login: string, password: string) => Promise<AuthError | null>;
+  signIn: (login: string, password: string, remember?: boolean) => Promise<AuthError | null>;
   signInAsGuest: () => Promise<void>;
   signOut: () => void;
-  updateProfile: (patch: Partial<Pick<Account, 'username' | 'company' | 'email' | 'avatar' | 'notifications'>>) => AuthError | null;
+  updateProfile: (patch: ProfilePatch) => AuthError | null;
+  changeEmail: (email: string, password: string) => Promise<AuthError | null>;
   changePassword: (current: string, next: string, confirm: string) => Promise<AuthError | null>;
-  resetPassword: (email: string, next: string, confirm: string) => Promise<AuthError | null>;
+  /** Demo stand-in for "email me a reset code": returns the code so the demo can display it. */
+  requestResetCode: (email: string) => { code: string } | { error: AuthError };
+  resetPassword: (email: string, code: string, next: string, confirm: string) => Promise<AuthError | null>;
   deleteAccount: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [accounts, setAccountsState] = useState<Account[]>(() => load<Account[]>(ACCOUNTS_KEY, []));
-  const [sessionId, setSessionId] = useState<string | null>(() => load<string | null>(SESSION_KEY, null));
+  const [accounts, setAccountsState] = useState<Account[]>(() => load<Account[]>(ACCOUNTS_KEY, []).map(withDefaults));
+  const [sessionId, setSessionId] = useState<string | null>(loadSession);
   const [signedOutByUser, setSignedOutByUser] = useState(false);
+  // Reset codes live only in memory, like a short-lived emailed code.
+  const [resetCodes, setResetCodes] = useState<Record<string, { code: string; expires: number }>>({});
 
   const setAccounts = useCallback((next: Account[]) => { setAccountsState(next); save(ACCOUNTS_KEY, next); }, []);
-  const startSession = useCallback((id: string | null) => { setSessionId(id); save(SESSION_KEY, id); setSignedOutByUser(id === null); }, []);
+  const startSession = useCallback((id: string | null, remember = true) => {
+    setSessionId(id);
+    save(SESSION_KEY, remember ? id : null);
+    try { save(SESSION_KEY, remember ? null : id, sessionStorage); } catch { /* no session storage */ }
+    setSignedOutByUser(id === null);
+  }, []);
 
   const current = accounts.find(a => a.id === sessionId);
   const user = current ? toPublic(current) : null;
@@ -115,7 +151,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (accounts.some(a => a.username.toLowerCase() === username.trim().toLowerCase())) return 'errUsernameTaken';
     const salt = randomId() + randomId();
     const account: Account = {
-      id: `U-${randomId()}`, email: email.trim(), username: username.trim(), company: company.trim(), avatar: '',
+      id: `U-${randomId()}`, email: email.trim(), username: username.trim(), fullName: '', phone: '',
+      company: company.trim(), companyLogo: '', companyAddress: '', companyWebsite: '', avatar: '',
       notifications: { ...DEFAULT_NOTIFICATIONS }, createdAt: new Date().toISOString(), salt, passwordHash: await hashPassword(password, salt),
     };
     setAccounts([...accounts, account]);
@@ -123,11 +160,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   }, [accounts, setAccounts, startSession]);
 
-  const signIn = useCallback(async (login: string, password: string): Promise<AuthError | null> => {
+  const signIn = useCallback(async (login: string, password: string, remember = true): Promise<AuthError | null> => {
     const key = login.trim().toLowerCase();
     const account = accounts.find(a => a.email.toLowerCase() === key || a.username.toLowerCase() === key);
     if (!account || (await hashPassword(password, account.salt)) !== account.passwordHash) return 'errSignIn';
-    startSession(account.id);
+    startSession(account.id, remember);
     return null;
   }, [accounts, startSession]);
 
@@ -136,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (existing) { startSession(existing.id); return; }
     const salt = randomId();
     const guest: Account = {
-      id: `U-guest`, ...DEMO_GUEST, avatar: '', notifications: { ...DEFAULT_NOTIFICATIONS }, createdAt: new Date().toISOString(),
+      id: `U-guest`, ...DEMO_GUEST, fullName: '', phone: '', companyLogo: '', companyAddress: '', companyWebsite: '', avatar: '', notifications: { ...DEFAULT_NOTIFICATIONS }, createdAt: new Date().toISOString(),
       salt, passwordHash: await hashPassword(randomId() + randomId(), salt),
     };
     setAccounts([...accounts, guest]);
@@ -145,23 +182,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => startSession(null), [startSession]);
 
-  const updateProfile = useCallback((patch: Partial<Pick<Account, 'username' | 'company' | 'email' | 'avatar' | 'notifications'>>): AuthError | null => {
+  const updateProfile = useCallback((patch: ProfilePatch): AuthError | null => {
     if (!current) return null;
-    if (patch.email !== undefined) {
-      if (!isValidEmail(patch.email)) return 'errEmail';
-      if (accounts.some(a => a.id !== current.id && a.email.toLowerCase() === patch.email!.trim().toLowerCase())) return 'errEmailTaken';
-    }
     if (patch.username !== undefined) {
       if (!isValidUsername(patch.username)) return 'errUsername';
       if (accounts.some(a => a.id !== current.id && a.username.toLowerCase() === patch.username!.trim().toLowerCase())) return 'errUsernameTaken';
     }
     if (patch.company !== undefined && !patch.company.trim()) return 'errCompany';
-    const cleaned = {
-      ...patch,
-      ...(patch.email !== undefined ? { email: patch.email.trim() } : {}),
-      ...(patch.username !== undefined ? { username: patch.username.trim() } : {}),
-      ...(patch.company !== undefined ? { company: patch.company.trim() } : {}),
-    };
+    if (patch.phone !== undefined && !isValidPhone(patch.phone)) return 'errPhone';
+    if (patch.companyWebsite !== undefined && !isValidWebsite(patch.companyWebsite)) return 'errWebsite';
+    const cleaned: ProfilePatch = { ...patch };
+    for (const k of ['username', 'fullName', 'phone', 'company', 'companyAddress', 'companyWebsite'] as const) {
+      if (cleaned[k] !== undefined) cleaned[k] = cleaned[k]!.trim();
+    }
     setAccounts(accounts.map(a => (a.id === current.id ? { ...a, ...cleaned } : a)));
     return null;
   }, [accounts, current, setAccounts]);
@@ -177,17 +210,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   }, [accounts, current, setAccounts]);
 
-  /** Demo stand-in for an emailed reset link: sets a new password for an existing account. */
-  const resetPassword = useCallback(async (email: string, next: string, confirm: string): Promise<AuthError | null> => {
-    const account = accounts.find(a => a.email.toLowerCase() === email.trim().toLowerCase());
+  /** Changing the sign-in email needs the current password, as in most apps. */
+  const changeEmail = useCallback(async (email: string, password: string): Promise<AuthError | null> => {
+    if (!current) return null;
+    if (!isValidEmail(email)) return 'errEmail';
+    if (email.trim().toLowerCase() === current.email.toLowerCase()) return 'errSameEmail';
+    if (accounts.some(a => a.id !== current.id && a.email.toLowerCase() === email.trim().toLowerCase())) return 'errEmailTaken';
+    if ((await hashPassword(password, current.salt)) !== current.passwordHash) return 'errCurrentPassword';
+    setAccounts(accounts.map(a => (a.id === current.id ? { ...a, email: email.trim() } : a)));
+    return null;
+  }, [accounts, current, setAccounts]);
+
+  const requestResetCode = useCallback((email: string): { code: string } | { error: AuthError } => {
+    if (!isValidEmail(email)) return { error: 'errEmail' };
+    const key = email.trim().toLowerCase();
+    if (!accounts.some(a => a.email.toLowerCase() === key)) return { error: 'errNoAccount' };
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    setResetCodes(c => ({ ...c, [key]: { code, expires: Date.now() + RESET_CODE_MINUTES * 60_000 } }));
+    return { code };
+  }, [accounts]);
+
+  /** Demo stand-in for an emailed reset code: checks the code, then sets a new password. */
+  const resetPassword = useCallback(async (email: string, code: string, next: string, confirm: string): Promise<AuthError | null> => {
+    const key = email.trim().toLowerCase();
+    const account = accounts.find(a => a.email.toLowerCase() === key);
     if (!account) return 'errNoAccount';
+    const issued = resetCodes[key];
+    if (!issued || issued.expires < Date.now() || issued.code !== code.trim()) return 'errResetCode';
     if (!isValidPassword(next)) return 'errPasswordRules';
     if (next !== confirm) return 'errPasswordMatch';
     const salt = randomId() + randomId();
     const passwordHash = await hashPassword(next, salt);
     setAccounts(accounts.map(a => (a.id === account.id ? { ...a, salt, passwordHash } : a)));
+    setResetCodes(({ [key]: _used, ...rest }) => rest);
     return null;
-  }, [accounts, setAccounts]);
+  }, [accounts, resetCodes, setAccounts]);
 
   const deleteAccount = useCallback(() => {
     if (!current) return;
@@ -196,8 +253,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [accounts, current, setAccounts, startSession]);
 
   const value = useMemo(() => ({
-    user, signedOutByUser, signUp, signIn, signInAsGuest, signOut, updateProfile, changePassword, resetPassword, deleteAccount,
-  }), [user, signedOutByUser, signUp, signIn, signInAsGuest, signOut, updateProfile, changePassword, resetPassword, deleteAccount]);
+    user, signedOutByUser, signUp, signIn, signInAsGuest, signOut, updateProfile, changeEmail, changePassword, requestResetCode, resetPassword, deleteAccount,
+  }), [user, signedOutByUser, signUp, signIn, signInAsGuest, signOut, updateProfile, changeEmail, changePassword, requestResetCode, resetPassword, deleteAccount]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

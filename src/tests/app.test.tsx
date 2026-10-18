@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProviders, AppRoutes } from '../App';
 
@@ -232,15 +232,22 @@ describe('accounts', () => {
     await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' });
 
     click('Account menu');
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Profile' }));
     expect(heading()).toHaveTextContent('Settings');
     fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'agent2' } });
+    fireEvent.change(screen.getByLabelText('Full name'), { target: { value: 'Sample Agent' } });
+    click('Save changes');
+    click('Company');
     fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Renamed Co.' } });
+    fireEvent.change(screen.getByLabelText('Website (optional)'), { target: { value: 'not a site' } });
+    click('Save changes');
+    expect(screen.getByRole('alert')).toHaveTextContent('valid website');
+    fireEvent.change(screen.getByLabelText('Website (optional)'), { target: { value: 'www.renamed.example' } });
     click('Save changes');
     click('Account menu');
-    expect(screen.getByRole('menu')).toHaveTextContent('agent2');
+    expect(screen.getByRole('menu')).toHaveTextContent('Sample Agent');
     expect(screen.getByRole('menu')).toHaveTextContent('Renamed Co.');
-    click('Account menu');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Security & password' }));
 
     fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'wrongpass1' } });
     fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'secondpass2' } });
@@ -251,6 +258,7 @@ describe('accounts', () => {
     click('Update password');
     await screen.findByText('Password updated.');
 
+    click('Account');
     fireEvent.click(screen.getAllByRole('button', { name: 'Sign out' })[0]);
     expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Email or username'), { target: { value: 'agent2' } });
@@ -258,6 +266,56 @@ describe('accounts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('incorrect');
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secondpass2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
+  });
+
+  async function signUpAs(email: string, username: string, password: string) {
+    renderSignedOut('/');
+    click(/^Create an account$/);
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: username } });
+    fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Example Marine Co.' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: password } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' });
+  }
+
+  test('settings: change email needs the current password', async () => {
+    await signUpAs('first@example.test', 'emailer', 'harbour2026');
+    click('Account menu');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Security & password' }));
+    fireEvent.change(screen.getByLabelText('New email'), { target: { value: 'second@example.test' } });
+    fireEvent.change(screen.getByLabelText('Current password (to confirm)'), { target: { value: 'wrongpass1' } });
+    click('Change email');
+    expect(await screen.findByText('Current password is incorrect.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Current password (to confirm)'), { target: { value: 'harbour2026' } });
+    click('Change email');
+    expect(await screen.findByText('second@example.test')).toBeInTheDocument();
+    expect(localStorage.getItem('gm-demo-accounts')).toContain('second@example.test');
+  });
+
+  test('forgot password: a reset code is required to set a new password', async () => {
+    await signUpAs('reset@example.test', 'resetter', 'harbour2026');
+    click('Account menu');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    await screen.findByRole('heading', { level: 1, name: 'Sign in' });
+    click('Forgot password?');
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'reset@example.test' } });
+    click('Send reset code');
+    const code = (await screen.findByText(/^\d{6}$/)).textContent!;
+    fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: code === '000000' ? '111111' : '000000' } });
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'newpass2027' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'newpass2027' } });
+    click('Set new password');
+    expect(await screen.findByRole('alert')).toHaveTextContent('wrong or has expired');
+    fireEvent.change(screen.getByLabelText('6-digit code'), { target: { value: code } });
+    click('Set new password');
+    await screen.findByRole('heading', { level: 1, name: 'Sign in' });
+    await waitFor(() => expect(screen.queryByLabelText('6-digit code')).not.toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText('Email or username'), { target: { value: 'resetter' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'newpass2027' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
   });

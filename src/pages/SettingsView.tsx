@@ -1,196 +1,335 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth, type NotificationPrefs } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
 import { Avatar } from '../components/Avatar';
+import { CompanyLogo, ImageUpload } from '../components/ImageUpload';
 
-const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+export const SETTINGS_TABS = ['profile', 'company', 'security', 'notifications', 'preferences', 'account'] as const;
+type Tab = typeof SETTINGS_TABS[number];
 
-/** Shrinks an uploaded image to a 160px square data URL so it fits comfortably in browser storage. */
-function toAvatarDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error);
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('image'));
-      img.onload = () => {
-        const size = 160;
-        const canvas = document.createElement('canvas');
-        canvas.width = size; canvas.height = size;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { resolve(String(reader.result)); return; }
-        const side = Math.min(img.width, img.height);
-        ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
-      };
-      img.src = String(reader.result);
-    };
-    reader.readAsDataURL(file);
-  });
+const TAB_LABEL: Record<Tab, string> = {
+  profile: 'profile', company: 'companyTitle', security: 'securityTab', notifications: 'notificationsTitle',
+  preferences: 'preferencesTitle', account: 'accountTitle',
+};
+
+function PasswordInput({ id, label, value, onChange, autoComplete, hint }: {
+  id: string; label: string; value: string; onChange: (v: string) => void; autoComplete: string; hint?: string;
+}) {
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <input id={id} type="password" autoComplete={autoComplete} value={value} onChange={e => onChange(e.target.value)} />
+      {hint && <small>{hint}</small>}
+    </div>
+  );
 }
 
-export default function SettingsView() {
-  const { t, lang, setLang } = useLanguage();
-  const { user, updateProfile, changePassword, signOut, deleteAccount } = useAuth();
-  const { toast, openModal } = useUi();
-  const navigate = useNavigate();
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const [profile, setProfile] = useState({ username: user?.username ?? '', email: user?.email ?? '', company: user?.company ?? '' });
-  const [profileError, setProfileError] = useState('');
-  const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
-  const [pwError, setPwError] = useState('');
-  const [photoError, setPhotoError] = useState('');
-
-  useEffect(() => {
-    if (user) setProfile({ username: user.username, email: user.email, company: user.company });
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
+function ProfileTab() {
+  const { t } = useLanguage();
+  const { user, updateProfile } = useAuth();
+  const { toast } = useUi();
+  const [form, setForm] = useState({ fullName: '', username: '', phone: '' });
+  const [error, setError] = useState('');
+  useEffect(() => { if (user) setForm({ fullName: user.fullName, username: user.username, phone: user.phone }); }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!user) return null;
 
-  const saveProfile = (e: FormEvent) => {
+  const save = (e: FormEvent) => {
     e.preventDefault();
-    const err = updateProfile(profile);
-    setProfileError(err ?? '');
+    const err = updateProfile(form);
+    setError(err ?? '');
     if (!err) toast(t('saved'));
   };
+  const setImage = (avatar: string) => { updateProfile({ avatar }); toast(t('saved')); };
 
+  return (
+    <section className="card card-pad" aria-labelledby="set-profile">
+      <h2 id="set-profile" className="card-title">{t('profile')}</h2>
+      <p className="card-desc">{t('profileSub')}</p>
+      <ImageUpload label={t('profilePicture')} preview={<Avatar user={user} size={72} />} hasImage={!!user.avatar} size={160} crop onChange={setImage} />
+      <form className="grid" onSubmit={save} noValidate style={{ marginTop: 18 }}>
+        {error && <div className="notice danger" role="alert">{t(error)}</div>}
+        <div className="form-grid">
+          <div className="field">
+            <label htmlFor="set-fullname">{t('fullName')}</label>
+            <input id="set-fullname" autoComplete="name" value={form.fullName} onChange={e => setForm(f => ({ ...f, fullName: e.target.value }))} />
+          </div>
+          <div className="field">
+            <label htmlFor="set-username">{t('username')}</label>
+            <input id="set-username" autoComplete="username" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+            <small>{t('usernameHint')}</small>
+          </div>
+          <div className="field">
+            <label htmlFor="set-phone">{t('phoneOptional')}</label>
+            <input id="set-phone" type="tel" autoComplete="tel" dir="ltr" placeholder="+966 5X XXX XXXX" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            <small>{t('phoneHint')}</small>
+          </div>
+        </div>
+        <div className="between">
+          <span className="small muted">{t('memberSince')}: <span className="mono">{user.createdAt.slice(0, 10)}</span></span>
+          <button type="submit" className="btn btn-primary">{t('saveChanges')}</button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+function CompanyTab() {
+  const { t } = useLanguage();
+  const { user, updateProfile } = useAuth();
+  const { toast } = useUi();
+  const [form, setForm] = useState({ company: '', companyAddress: '', companyWebsite: '' });
+  const [error, setError] = useState('');
+  useEffect(() => { if (user) setForm({ company: user.company, companyAddress: user.companyAddress, companyWebsite: user.companyWebsite }); }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!user) return null;
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    const err = updateProfile(form);
+    setError(err ?? '');
+    if (!err) toast(t('saved'));
+  };
+  const setLogo = (companyLogo: string) => { updateProfile({ companyLogo }); toast(t('saved')); };
+
+  return (
+    <section className="card card-pad" aria-labelledby="set-company">
+      <h2 id="set-company" className="card-title">{t('companyTitle')}</h2>
+      <p className="card-desc">{t('companySub')}</p>
+      <ImageUpload label={t('companyLogo')} preview={<CompanyLogo company={user.company} logo={user.companyLogo} size={72} />}
+        hasImage={!!user.companyLogo} size={240} crop={false} onChange={setLogo} removeKey="removeLogo" uploadKey="uploadLogo" />
+      <form className="grid" onSubmit={save} noValidate style={{ marginTop: 18 }}>
+        {error && <div className="notice danger" role="alert">{t(error)}</div>}
+        <div className="field">
+          <label htmlFor="set-company-name">{t('companyName')}</label>
+          <input id="set-company-name" autoComplete="organization" value={form.company} onChange={e => setForm(f => ({ ...f, company: e.target.value }))} />
+        </div>
+        <div className="form-grid">
+          <div className="field">
+            <label htmlFor="set-company-address">{t('companyAddress')}</label>
+            <input id="set-company-address" autoComplete="street-address" value={form.companyAddress} onChange={e => setForm(f => ({ ...f, companyAddress: e.target.value }))} />
+          </div>
+          <div className="field">
+            <label htmlFor="set-company-website">{t('companyWebsite')}</label>
+            <input id="set-company-website" type="url" dir="ltr" placeholder="www.example.com" value={form.companyWebsite} onChange={e => setForm(f => ({ ...f, companyWebsite: e.target.value }))} />
+          </div>
+        </div>
+        <div><button type="submit" className="btn btn-primary">{t('saveChanges')}</button></div>
+      </form>
+    </section>
+  );
+}
+
+function SecurityTab() {
+  const { t } = useLanguage();
+  const { user, changeEmail, changePassword, requestResetCode, resetPassword } = useAuth();
+  const { toast } = useUi();
+  const [email, setEmail] = useState({ next: '', password: '' });
+  const [emailError, setEmailError] = useState('');
+  const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
+  const [pwError, setPwError] = useState('');
+  const [reset, setReset] = useState({ sent: '', code: '', next: '', confirm: '' });
+  const [resetError, setResetError] = useState('');
+  if (!user) return null;
+
+  const saveEmail = async (e: FormEvent) => {
+    e.preventDefault();
+    const err = await changeEmail(email.next, email.password);
+    setEmailError(err ?? '');
+    if (!err) { setEmail({ next: '', password: '' }); toast(t('emailChanged')); }
+  };
   const savePassword = async (e: FormEvent) => {
     e.preventDefault();
     const err = await changePassword(pw.current, pw.next, pw.confirm);
     setPwError(err ?? '');
     if (!err) { setPw({ current: '', next: '', confirm: '' }); toast(t('passwordChanged')); }
   };
-
-  const onPhoto = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) { setPhotoError('photoType'); return; }
-    if (file.size > MAX_PHOTO_BYTES) { setPhotoError('photoTooBig'); return; }
-    setPhotoError('');
-    try {
-      updateProfile({ avatar: await toAvatarDataUrl(file) });
-      toast(t('saved'));
-    } catch {
-      setPhotoError('photoType');
-    }
+  const sendCode = () => {
+    const res = requestResetCode(user.email);
+    if ('error' in res) { setResetError(res.error); return; }
+    setResetError('');
+    setReset(r => ({ ...r, sent: res.code, code: '' }));
+    toast(t('codeSent'));
+  };
+  const doReset = async (e: FormEvent) => {
+    e.preventDefault();
+    const err = await resetPassword(user.email, reset.code, reset.next, reset.confirm);
+    setResetError(err ?? '');
+    if (!err) { setReset({ sent: '', code: '', next: '', confirm: '' }); toast(t('passwordChanged')); }
   };
 
-  const toggle = (key: keyof NotificationPrefs) => {
-    updateProfile({ notifications: { ...user.notifications, [key]: !user.notifications[key] } });
-  };
+  return (
+    <>
+      <section className="card card-pad" aria-labelledby="set-email">
+        <h2 id="set-email" className="card-title">{t('emailTitle')}</h2>
+        <p className="card-desc">{t('currentEmail')}: <strong dir="ltr">{user.email}</strong></p>
+        <form className="grid" onSubmit={saveEmail} noValidate style={{ marginTop: 14 }}>
+          {emailError && <div className="notice danger" role="alert">{t(emailError)}</div>}
+          <div className="form-grid">
+            <div className="field">
+              <label htmlFor="set-email-new">{t('newEmail')}</label>
+              <input id="set-email-new" type="email" autoComplete="email" dir="ltr" value={email.next} onChange={e => setEmail(v => ({ ...v, next: e.target.value }))} />
+            </div>
+            <PasswordInput id="set-email-pw" label={t('confirmWithPassword')} value={email.password} onChange={v => setEmail(s => ({ ...s, password: v }))} autoComplete="current-password" />
+          </div>
+          <div><button type="submit" className="btn btn-primary">{t('changeEmailBtn')}</button></div>
+        </form>
+      </section>
 
+      <section className="card card-pad" aria-labelledby="set-password">
+        <h2 id="set-password" className="card-title">{t('securityTitle')}</h2>
+        <p className="card-desc">{t('securitySub')}</p>
+        <form className="grid" onSubmit={savePassword} noValidate style={{ marginTop: 14 }}>
+          {pwError && <div className="notice danger" role="alert">{t(pwError)}</div>}
+          <PasswordInput id="set-pw-current" label={t('currentPassword')} value={pw.current} onChange={v => setPw(p => ({ ...p, current: v }))} autoComplete="current-password" />
+          <div className="form-grid">
+            <PasswordInput id="set-pw-new" label={t('newPassword')} value={pw.next} onChange={v => setPw(p => ({ ...p, next: v }))} autoComplete="new-password" hint={t('passwordHint')} />
+            <PasswordInput id="set-pw-confirm" label={t('confirmPassword')} value={pw.confirm} onChange={v => setPw(p => ({ ...p, confirm: v }))} autoComplete="new-password" />
+          </div>
+          <div><button type="submit" className="btn btn-primary">{t('changePasswordBtn')}</button></div>
+        </form>
+      </section>
+
+      <section className="card card-pad" aria-labelledby="set-reset">
+        <h2 id="set-reset" className="card-title">{t('resetTitle')}</h2>
+        <p className="card-desc">{t('resetSettingsSub')}</p>
+        {resetError && <div className="notice danger" role="alert" style={{ marginTop: 14 }}>{t(resetError)}</div>}
+        {!reset.sent ? (
+          <div style={{ marginTop: 14 }}><button type="button" className="btn btn-outline" onClick={sendCode}>{t('sendCode')}</button></div>
+        ) : (
+          <form className="grid" onSubmit={doReset} noValidate style={{ marginTop: 14 }}>
+            <div className="notice blue" role="status">
+              <strong>{t('demoCodeTitle')}</strong>
+              {t('demoCodeBody')} <span className="mono code-chip">{reset.sent}</span>
+            </div>
+            <div className="field">
+              <label htmlFor="set-reset-code">{t('resetCode')}</label>
+              <input id="set-reset-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={reset.code} onChange={e => setReset(r => ({ ...r, code: e.target.value.replace(/\D/g, '') }))} />
+            </div>
+            <div className="form-grid">
+              <PasswordInput id="set-reset-new" label={t('resetNewPassword')} value={reset.next} onChange={v => setReset(r => ({ ...r, next: v }))} autoComplete="new-password" hint={t('passwordHint')} />
+              <PasswordInput id="set-reset-confirm" label={t('resetConfirmPassword')} value={reset.confirm} onChange={v => setReset(r => ({ ...r, confirm: v }))} autoComplete="new-password" />
+            </div>
+            <div className="row" style={{ flexWrap: 'wrap' }}>
+              <button type="submit" className="btn btn-primary">{t('resetBtn')}</button>
+              <button type="button" className="btn btn-outline" onClick={sendCode}>{t('resendCode')}</button>
+            </div>
+          </form>
+        )}
+      </section>
+    </>
+  );
+}
+
+function NotificationsTab() {
+  const { t } = useLanguage();
+  const { user, updateProfile } = useAuth();
+  if (!user) return null;
+  const toggle = (key: keyof NotificationPrefs) => updateProfile({ notifications: { ...user.notifications, [key]: !user.notifications[key] } });
+  const rows: Array<[keyof NotificationPrefs, string]> = [
+    ['emailBookings', 'nEmailBookings'], ['smsSchedule', 'nSmsSchedule'], ['whatsapp', 'nWhatsapp'], ['productNews', 'nProductNews'],
+  ];
+  return (
+    <section className="card card-pad" aria-labelledby="set-notifications">
+      <h2 id="set-notifications" className="card-title">{t('notificationsTitle')}</h2>
+      <p className="card-desc">{t('notificationsSub')}</p>
+      <div className="toggle-list">
+        {rows.map(([key, label]) => (
+          <label key={key} className="toggle-row">
+            <span>{t(label)}</span>
+            <input type="checkbox" role="switch" checked={user.notifications[key]} onChange={() => toggle(key)} />
+          </label>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PreferencesTab() {
+  const { t, lang, setLang } = useLanguage();
+  return (
+    <section className="card card-pad" aria-labelledby="set-language">
+      <h2 id="set-language" className="card-title">{t('preferencesTitle')}</h2>
+      <p className="card-desc">{t('preferencesSub')}</p>
+      <div className="field" style={{ marginTop: 14, maxWidth: 320 }}>
+        <label htmlFor="set-lang">{t('languagePref')}</label>
+        <select id="set-lang" value={lang} onChange={e => setLang(e.target.value as 'en' | 'ar')}>
+          <option value="en">English</option>
+          <option value="ar">العربية</option>
+        </select>
+      </div>
+      <div className="inset small" style={{ marginTop: 16 }}>
+        <div className="between"><span className="muted">{t('timeFormat')}</span><strong>{t('timeFormat12')}</strong></div>
+        <div className="between" style={{ marginTop: 8 }}><span className="muted">{t('timeZone')}</span><strong>{t('timeZoneValue')}</strong></div>
+      </div>
+    </section>
+  );
+}
+
+function AccountTab() {
+  const { t } = useLanguage();
+  const { signOut, deleteAccount } = useAuth();
+  const { toast, openModal } = useUi();
+  const navigate = useNavigate();
   const doSignOut = () => { signOut(); toast(t('signedOut')); navigate('/signin', { replace: true }); };
-
   const askDelete = () => openModal({
     title: t('deleteAccount'), desc: t('deleteConfirm'), confirmText: t('deleteAccount'), requireReason: true,
     onConfirm: () => { deleteAccount(); toast(t('accountDeleted')); navigate('/signin', { replace: true }); },
   });
+  return (
+    <>
+      <section className="card card-pad" aria-labelledby="set-signout">
+        <h2 id="set-signout" className="card-title">{t('signOut')}</h2>
+        <p className="card-desc">{t('signOutSub')}</p>
+        <div style={{ marginTop: 14 }}><button type="button" className="btn btn-navy" onClick={doSignOut}>{t('signOut')}</button></div>
+      </section>
+      <section className="card card-pad danger-zone" aria-labelledby="set-delete">
+        <h2 id="set-delete" className="card-title">{t('deleteAccount')}</h2>
+        <p className="card-desc">{t('deleteSub')}</p>
+        <div style={{ marginTop: 14 }}><button type="button" className="btn btn-danger" onClick={askDelete}>{t('deleteAccount')}</button></div>
+      </section>
+    </>
+  );
+}
 
-  const notificationRows: Array<[keyof NotificationPrefs, string]> = [
-    ['emailBookings', 'nEmailBookings'], ['smsSchedule', 'nSmsSchedule'], ['whatsapp', 'nWhatsapp'], ['productNews', 'nProductNews'],
-  ];
+export default function SettingsView() {
+  const { t } = useLanguage();
+  const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const requested = params.get('tab') as Tab | null;
+  const tab: Tab = requested && SETTINGS_TABS.includes(requested) ? requested : 'profile';
+  if (!user) return null;
 
   return (
     <>
       <PageHeader titleKey="settingsTitle" subKey="settingsSub" />
-      <div className="settings-grid">
-        <section className="card card-pad" aria-labelledby="set-profile">
-          <h2 id="set-profile" className="card-title">{t('profile')}</h2>
-          <p className="card-desc">{t('profileSub')}</p>
-          <div className="avatar-row">
-            <Avatar user={user} size={72} />
-            <div className="grid" style={{ gap: 8 }}>
-              <span className="label">{t('profilePicture')}</span>
-              <div className="row" style={{ flexWrap: 'wrap' }}>
-                <button type="button" className="btn btn-outline btn-small" onClick={() => fileRef.current?.click()}>{t('uploadPhoto')}</button>
-                {user.avatar && <button type="button" className="btn btn-outline btn-small" onClick={() => updateProfile({ avatar: '' })}>{t('removePhoto')}</button>}
-              </div>
-              <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={onPhoto} aria-label={t('uploadPhoto')} />
-              <small className="muted small">{t('photoHint')}</small>
-              {photoError && <small className="error-text" role="alert">{t(photoError)}</small>}
+      <div className="settings-layout">
+        <aside className="card settings-nav">
+          <div className="settings-who">
+            <Avatar user={user} size={44} />
+            <div style={{ minWidth: 0 }}>
+              <strong>{user.fullName || user.username}</strong>
+              <span className="settings-co"><CompanyLogo company={user.company} logo={user.companyLogo} size={18} />{user.company}</span>
             </div>
           </div>
-          <form className="grid" onSubmit={saveProfile} noValidate style={{ marginTop: 16 }}>
-            {profileError && <div className="notice danger" role="alert">{t(profileError)}</div>}
-            <div className="field">
-              <label htmlFor="set-username">{t('username')}</label>
-              <input id="set-username" autoComplete="username" value={profile.username} onChange={e => setProfile(p => ({ ...p, username: e.target.value }))} />
-              <small>{t('usernameHint')}</small>
-            </div>
-            <div className="field">
-              <label htmlFor="set-email">{t('emailLabel')}</label>
-              <input id="set-email" type="email" autoComplete="email" value={profile.email} onChange={e => setProfile(p => ({ ...p, email: e.target.value }))} />
-            </div>
-            <div className="field">
-              <label htmlFor="set-company">{t('companyName')}</label>
-              <input id="set-company" autoComplete="organization" value={profile.company} onChange={e => setProfile(p => ({ ...p, company: e.target.value }))} />
-            </div>
-            <div className="between">
-              <span className="small muted">{t('memberSince')}: {user.createdAt.slice(0, 10)}</span>
-              <button type="submit" className="btn btn-primary">{t('saveChanges')}</button>
-            </div>
-          </form>
-        </section>
-
-        <section className="card card-pad" aria-labelledby="set-password">
-          <h2 id="set-password" className="card-title">{t('securityTitle')}</h2>
-          <p className="card-desc">{t('securitySub')}</p>
-          <form className="grid" onSubmit={savePassword} noValidate style={{ marginTop: 14 }}>
-            {pwError && <div className="notice danger" role="alert">{t(pwError)}</div>}
-            <div className="field">
-              <label htmlFor="set-pw-current">{t('currentPassword')}</label>
-              <input id="set-pw-current" type="password" autoComplete="current-password" value={pw.current} onChange={e => setPw(p => ({ ...p, current: e.target.value }))} />
-            </div>
-            <div className="field">
-              <label htmlFor="set-pw-new">{t('newPassword')}</label>
-              <input id="set-pw-new" type="password" autoComplete="new-password" value={pw.next} onChange={e => setPw(p => ({ ...p, next: e.target.value }))} />
-              <small>{t('passwordHint')}</small>
-            </div>
-            <div className="field">
-              <label htmlFor="set-pw-confirm">{t('confirmPassword')}</label>
-              <input id="set-pw-confirm" type="password" autoComplete="new-password" value={pw.confirm} onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} />
-            </div>
-            <div><button type="submit" className="btn btn-primary">{t('changePasswordBtn')}</button></div>
-          </form>
-        </section>
-
-        <section className="card card-pad" aria-labelledby="set-notifications">
-          <h2 id="set-notifications" className="card-title">{t('notificationsTitle')}</h2>
-          <p className="card-desc">{t('notificationsSub')}</p>
-          <div className="toggle-list">
-            {notificationRows.map(([key, label]) => (
-              <label key={key} className="toggle-row">
-                <span>{t(label)}</span>
-                <input type="checkbox" role="switch" checked={user.notifications[key]} onChange={() => toggle(key)} />
-              </label>
+          <nav className="settings-tabs" aria-label={t('settingsTitle')}>
+            {SETTINGS_TABS.map(key => (
+              <button key={key} type="button" className={`settings-tab${tab === key ? ' active' : ''}`} aria-current={tab === key ? 'page' : undefined}
+                onClick={() => setParams(key === 'profile' ? {} : { tab: key }, { replace: true })}>
+                {t(TAB_LABEL[key])}
+              </button>
             ))}
-          </div>
-        </section>
-
-        <section className="card card-pad" aria-labelledby="set-language">
-          <h2 id="set-language" className="card-title">{t('languageTitle')}</h2>
-          <div className="field" style={{ marginTop: 12, maxWidth: 320 }}>
-            <label htmlFor="set-lang">{t('languagePref')}</label>
-            <select id="set-lang" value={lang} onChange={e => setLang(e.target.value as 'en' | 'ar')}>
-              <option value="en">English</option>
-              <option value="ar">العربية</option>
-            </select>
-          </div>
-        </section>
-
-        <section className="card card-pad" aria-labelledby="set-account">
-          <h2 id="set-account" className="card-title">{t('accountTitle')}</h2>
-          <p className="card-desc">{t('accountSub')}</p>
-          <div className="row" style={{ flexWrap: 'wrap', marginTop: 14 }}>
-            <button type="button" className="btn btn-navy" onClick={doSignOut}>{t('signOut')}</button>
-            <button type="button" className="btn btn-danger" onClick={askDelete}>{t('deleteAccount')}</button>
-          </div>
-        </section>
+          </nav>
+        </aside>
+        <div className="grid settings-body">
+          {tab === 'profile' && <ProfileTab />}
+          {tab === 'company' && <CompanyTab />}
+          {tab === 'security' && <SecurityTab />}
+          {tab === 'notifications' && <NotificationsTab />}
+          {tab === 'preferences' && <PreferencesTab />}
+          {tab === 'account' && <AccountTab />}
+        </div>
       </div>
     </>
   );

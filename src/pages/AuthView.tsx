@@ -27,25 +27,37 @@ function PasswordField({ id, label, value, onChange, autoComplete, hint }: {
 
 export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mode }) {
   const { t, lang, setLang } = useLanguage();
-  const { user, signIn, signUp, signInAsGuest, resetPassword } = useAuth();
+  const { user, signIn, signUp, signInAsGuest, requestResetCode, resetPassword } = useAuth();
   const { toast } = useUi();
   const navigate = useNavigate();
   const location = useLocation();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ login: '', email: '', username: '', company: '', password: '', confirm: '' });
+  const [form, setForm] = useState({ login: '', email: '', username: '', company: '', password: '', confirm: '', code: '' });
+  const [remember, setRemember] = useState(true);
+  // Reset step 2 starts once a (demo) code has been issued; the code is shown on screen instead of emailed.
+  const [sentCode, setSentCode] = useState('');
   const set = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }));
   const from = (location.state as { from?: string } | null)?.from ?? '/';
 
-  const switchMode = (m: Mode) => { setMode(m); setError(''); setForm(f => ({ ...f, password: '', confirm: '' })); };
+  const switchMode = (m: Mode) => { setMode(m); setError(''); setSentCode(''); setForm(f => ({ ...f, password: '', confirm: '', code: '' })); };
+
+  const sendCode = () => {
+    const res = requestResetCode(form.email);
+    if ('error' in res) { setError(res.error); return; }
+    setError('');
+    setSentCode(res.code);
+    toast(t('codeSent'));
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (mode === 'reset' && !sentCode) { sendCode(); return; }
     setBusy(true);
-    const err = mode === 'signin' ? await signIn(form.login, form.password)
+    const err = mode === 'signin' ? await signIn(form.login, form.password, remember)
       : mode === 'signup' ? await signUp({ email: form.email, username: form.username, company: form.company, password: form.password, confirm: form.confirm })
-        : await resetPassword(form.email, form.password, form.confirm);
+        : await resetPassword(form.email, form.code, form.password, form.confirm);
     setBusy(false);
     if (err) { setError(err); return; }
     if (mode === 'reset') { toast(t('pwResetDone')); switchMode('signin'); return; }
@@ -87,8 +99,21 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
             {mode !== 'signin' && (
               <div className="field">
                 <label htmlFor="auth-email">{t('emailLabel')}</label>
-                <input id="auth-email" type="email" autoComplete="email" value={form.email} onChange={e => set('email')(e.target.value)} />
+                <input id="auth-email" type="email" autoComplete="email" value={form.email} readOnly={mode === 'reset' && !!sentCode} onChange={e => set('email')(e.target.value)} />
               </div>
+            )}
+            {mode === 'reset' && sentCode && (
+              <>
+                <div className="notice blue" role="status">
+                  <strong>{t('demoCodeTitle')}</strong>
+                  {t('demoCodeBody')} <span className="mono code-chip">{sentCode}</span>
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-code">{t('resetCode')}</label>
+                  <input id="auth-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={form.code} onChange={e => set('code')(e.target.value.replace(/\D/g, ''))} />
+                  <small><button type="button" className="link-btn" style={{ padding: 0 }} onClick={sendCode}>{t('resendCode')}</button></small>
+                </div>
+              </>
             )}
             {mode === 'signup' && (
               <>
@@ -103,16 +128,22 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
                 </div>
               </>
             )}
-            <PasswordField id="auth-password" label={mode === 'reset' ? t('newPassword') : t('password')} value={form.password} onChange={set('password')}
-              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} hint={mode === 'signin' ? undefined : t('passwordHint')} />
-            {mode !== 'signin' && (
+            {(mode !== 'reset' || sentCode) && (
+              <PasswordField id="auth-password" label={mode === 'reset' ? t('newPassword') : t('password')} value={form.password} onChange={set('password')}
+                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} hint={mode === 'signin' ? undefined : t('passwordHint')} />
+            )}
+            {(mode === 'signup' || (mode === 'reset' && sentCode)) && (
               <PasswordField id="auth-confirm" label={t('confirmPassword')} value={form.confirm} onChange={set('confirm')} autoComplete="new-password" />
             )}
             {mode === 'signin' && (
-              <button type="button" className="link-btn auth-link" onClick={() => switchMode('reset')}>{t('forgot')}</button>
+              <div className="between auth-row">
+                <label className="checkrow"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />{t('keepSignedIn')}</label>
+                <button type="button" className="link-btn auth-link" onClick={() => switchMode('reset')}>{t('forgot')}</button>
+              </div>
             )}
+            {mode === 'signup' && <p className="small muted" style={{ margin: 0 }}>{t('termsNote')}</p>}
             <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
-              {mode === 'signin' ? t('signInBtn') : mode === 'signup' ? t('signUpBtn') : t('resetBtn')}
+              {mode === 'signin' ? t('signInBtn') : mode === 'signup' ? t('signUpBtn') : sentCode ? t('resetBtn') : t('sendCode')}
             </button>
           </form>
           <div className="auth-switch">
