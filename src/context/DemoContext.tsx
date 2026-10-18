@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  initialAudit, initialBookings, initialMaterials, initialSailings, nowTime, today,
+  initialAudit, initialBoatSlots, initialBookings, initialMaterials, initialSailings, nowTime, today,
   type AuditEvent, type Booking, type MaterialRequest, type Sailing,
 } from '../data/demoData';
+import { boatAvailability, canBookPassengers, canCharter, findSlot, type BoatSlot } from '../domain/fleet';
 
 export type ServiceType = 'passenger' | 'material' | 'combined' | 'charter';
 export type PaymentChoice = '' | 'recorded' | 'pending' | 'failed';
@@ -14,6 +15,8 @@ export interface WizardState {
   addReturn: boolean;
   selectedOut: string;
   selectedRet: string;
+  selectedBoat: string;
+  selectedRetBoat: string;
   journeyDate: string;
   returnDate: string;
   chosenDestination: string;
@@ -41,7 +44,7 @@ export interface BoardingState {
 }
 
 export const initialWizard = (): WizardState => ({
-  bookStep: 1, service: 'passenger', addReturn: false, selectedOut: '07:00', selectedRet: '09:30',
+  bookStep: 1, service: 'passenger', addReturn: false, selectedOut: '07:00', selectedRet: '09:30', selectedBoat: 'B-01', selectedRetBoat: 'B-01',
   journeyDate: today(), returnDate: today(), chosenDestination: 'Approved Anchorage A (Demo)', paxCount: 1,
   passengerName: '', passengerEmail: '', passengerPhone: '', passengerCompany: '', vessel: '', imo: '',
   formError: '', policyAck: false, accessAck: false, paymentChoice: '', currentBooking: null,
@@ -65,7 +68,13 @@ interface DemoContextValue {
   addBooking: (booking: Booking) => void;
   addMaterial: (material: MaterialRequest) => void;
   /** Adds tickets to an outbound sailing's shared count (the minimum is aggregated across bookings). */
-  addTicketsToSailing: (time: string, tickets: number) => void;
+  addTicketsToSailing: (time: string, boatId: string, tickets: number) => void;
+  boatSlots: BoatSlot[];
+  /** Books seats on a boat's shared sailing. Fails if the boat is chartered for that slot. */
+  reservePassengers: (boatId: string, date: string, time: string, passengers: number, ref: string) => boolean;
+  /** Reserves the whole boat. Fails unless the boat is completely free for that slot. */
+  requestCharter: (boatId: string, date: string, time: string, passengers: number, ref: string, holder: string) => boolean;
+  releaseSlot: (id: string, reason: string) => void;
   suspendSailing: (id: string, reason: string) => void;
   decideMaterial: (id: string, decision: MaterialDecision, reason: string) => void;
   overrideBoarding: (ref: string, reason: string) => void;
@@ -81,6 +90,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   const [audit, setAudit] = useState(initialAudit);
   const [wizard, setWizard] = useState(initialWizard);
   const [boarding, setBoarding] = useState(initialBoarding);
+  const [boatSlots, setBoatSlotsState] = useState(initialBoatSlots);
+  // Mirror of boatSlots so a booking check always sees the latest reservations (prevents double booking).
+  const slotsRef = useRef<BoatSlot[]>(boatSlots);
+  const setBoatSlots = useCallback((next: BoatSlot[]) => { slotsRef.current = next; setBoatSlotsState(next); }, []);
 
   const addAudit = useCallback((actor: string, action: string) => {
     setAudit(prev => [...prev, { time: nowTime(), actor, action }]);
@@ -93,9 +106,33 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   const addBooking = useCallback((booking: Booking) => setBookings(prev => [booking, ...prev]), []);
   const addMaterial = useCallback((material: MaterialRequest) => setMaterials(prev => [material, ...prev]), []);
 
-  const addTicketsToSailing = useCallback((time: string, tickets: number) => {
-    setSailings(prev => prev.map(s => (s.time === time && s.dir === 'Outbound' ? { ...s, count: s.count + tickets } : s)));
+  const addTicketsToSailing = useCallback((time: string, boatId: string, tickets: number) => {
+    setSailings(prev => prev.map(s => (s.time === time && s.boatId === boatId && s.dir === 'Outbound' ? { ...s, count: s.count + tickets } : s)));
   }, []);
+
+  const reservePassengers = useCallback((boatId: string, date: string, time: string, passengers: number, ref: string) => {
+    const current = slotsRef.current;
+    if (!canBookPassengers(boatAvailability(current, boatId, date, time))) return false;
+    const existing = findSlot(current, boatId, date, time);
+    setBoatSlots(existing
+      ? current.map(s => (s === existing ? { ...s, passengers: s.passengers + passengers, refs: [...s.refs, ref] } : s))
+      : [...current, { id: `BS-${String(current.length + 101)}`, boatId, date, time, kind: 'scheduled', passengers, refs: [ref], holder: 'Shared scheduled sailing', status: 'Seats booked (demo)' }]);
+    return true;
+  }, [setBoatSlots]);
+
+  const requestCharter = useCallback((boatId: string, date: string, time: string, passengers: number, ref: string, holder: string) => {
+    const current = slotsRef.current;
+    if (!canCharter(boatAvailability(current, boatId, date, time))) return false;
+    setBoatSlots([...current, { id: `BS-${String(current.length + 101)}`, boatId, date, time, kind: 'charter', passengers, refs: [ref], holder, status: 'Reserved — pending ATCO approval' }]);
+    addAudit('Prototype', `Charter ${ref} reserved ${boatId} ${date} ${time} (demo)`);
+    return true;
+  }, [setBoatSlots, addAudit]);
+
+  const releaseSlot = useCallback((id: string, reason: string) => {
+    const slot = slotsRef.current.find(s => s.id === id);
+    setBoatSlots(slotsRef.current.filter(s => s.id !== id));
+    if (slot) addAudit('Demo operations user', `Released ${slot.boatId} ${slot.date} ${slot.time} (demo): ${reason}`);
+  }, [setBoatSlots, addAudit]);
 
   const suspendSailing = useCallback((id: string, reason: string) => {
     setSailings(prev => prev.map(s => (s.id === id ? { ...s, ops: 'Suspended (demo)' } : s)));
@@ -121,13 +158,16 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     setAudit(initialAudit());
     setWizard(initialWizard());
     setBoarding(initialBoarding());
-  }, []);
+    setBoatSlots(initialBoatSlots());
+  }, [setBoatSlots]);
 
   const value = useMemo<DemoContextValue>(() => ({
     sailings, bookings, materials, audit, wizard, updateWizard, resetWizard, boarding, updateBoarding,
-    addAudit, addBooking, addMaterial, addTicketsToSailing, suspendSailing, decideMaterial, overrideBoarding, resetDemoData,
+    addAudit, addBooking, addMaterial, addTicketsToSailing, boatSlots, reservePassengers, requestCharter, releaseSlot,
+    suspendSailing, decideMaterial, overrideBoarding, resetDemoData,
   }), [sailings, bookings, materials, audit, wizard, updateWizard, resetWizard, boarding, updateBoarding,
-    addAudit, addBooking, addMaterial, addTicketsToSailing, suspendSailing, decideMaterial, overrideBoarding, resetDemoData]);
+    addAudit, addBooking, addMaterial, addTicketsToSailing, boatSlots, reservePassengers, requestCharter, releaseSlot,
+    suspendSailing, decideMaterial, overrideBoarding, resetDemoData]);
 
   return <DemoContext.Provider value={value}>{children}</DemoContext.Provider>;
 }

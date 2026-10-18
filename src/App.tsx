@@ -10,11 +10,17 @@ import CorporateView from './pages/CorporateView';
 import OperationsView from './pages/OperationsView';
 import BoardingView from './pages/BoardingView';
 import MaterialsView from './pages/MaterialsView';
+import FleetView from './pages/FleetView';
+import SettingsView from './pages/SettingsView';
+import AuthView from './pages/AuthView';
+import { AuthProvider } from './context/AuthContext';
 import './styles/index.css';
 
 export function AppRoutes() {
   return (
     <Routes>
+      <Route path="/signin" element={<AuthView />} />
+      <Route path="/signup" element={<AuthView initialMode="signup" />} />
       <Route element={<Layout />}>
         <Route path="/" element={<BookingView />} />
         <Route path="/bookings" element={<MyBookingsView />} />
@@ -22,6 +28,8 @@ export function AppRoutes() {
         <Route path="/operations" element={<OperationsView />} />
         <Route path="/boarding" element={<BoardingView />} />
         <Route path="/materials" element={<MaterialsView />} />
+        <Route path="/fleet" element={<FleetView />} />
+        <Route path="/settings" element={<SettingsView />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
@@ -31,9 +39,11 @@ export function AppRoutes() {
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <LanguageProvider>
-      <DemoProvider>
-        <UiProvider>{children}</UiProvider>
-      </DemoProvider>
+      <AuthProvider>
+        <DemoProvider>
+          <UiProvider>{children}</UiProvider>
+        </DemoProvider>
+      </AuthProvider>
     </LanguageProvider>
   );
 }

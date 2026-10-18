@@ -1,9 +1,9 @@
-import { describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProviders, AppRoutes } from '../App';
 
-function renderApp(path = '/') {
+function renderSignedOut(path = '/') {
   return render(
     <AppProviders>
       <MemoryRouter initialEntries={[path]}>
@@ -13,16 +13,30 @@ function renderApp(path = '/') {
   );
 }
 
+/** Opens the app at `path` signed in as the built-in demo guest. */
+async function renderApp(path = '/') {
+  const view = renderSignedOut(path);
+  fireEvent.click(screen.getByRole('button', { name: 'Explore as demo guest' }));
+  await screen.findAllByRole('navigation', { name: 'Main navigation' });
+  return view;
+}
+
+beforeEach(() => {
+  localStorage.clear();
+  document.documentElement.dir = 'ltr';
+  document.documentElement.lang = 'en';
+});
+
 const heading = () => screen.getByRole('heading', { level: 1 });
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
 
 describe('navigation', () => {
-  test('every sidebar link opens its view', () => {
-    renderApp();
+  test('every sidebar link opens its view', async () => {
+    await renderApp();
     const nav = screen.getAllByRole('navigation', { name: 'Main navigation' })[0];
     const expected: Array<[string, string]> = [
       ['My Bookings', 'My bookings'], ['Corporate / Agent', 'Corporate & agent workspace'], ['Operations', 'Operations overview'],
-      ['Boarding Desk', 'Boarding desk'], ['Materials', 'Materials review'], ['Book Transfer', 'Book a marine transfer'],
+      ['Boarding Desk', 'Boarding desk'], ['Materials', 'Materials review'], ['Fleet', 'Fleet & boat bookings'], ['Book Transfer', 'Book a marine transfer'],
     ];
     for (const [link, title] of expected) {
       fireEvent.click(within(nav).getByRole('link', { name: link }));
@@ -30,15 +44,15 @@ describe('navigation', () => {
     }
   });
 
-  test('unknown routes fall back to booking', () => {
-    renderApp('/nope');
-    expect(heading()).toHaveTextContent('Book a marine transfer');
+  test('unknown routes fall back to booking', async () => {
+    await renderApp('/nope');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
   });
 });
 
 describe('language toggle', () => {
-  test('Arabic translates the UI and switches to RTL; English restores it', () => {
-    renderApp('/operations');
+  test('Arabic translates the UI and switches to RTL; English restores it', async () => {
+    await renderApp('/operations');
     click('العربية');
     expect(document.documentElement.dir).toBe('rtl');
     expect(document.documentElement.lang).toBe('ar');
@@ -50,8 +64,8 @@ describe('language toggle', () => {
     expect(heading()).toHaveTextContent('Operations overview');
   });
 
-  test('demo state survives a language switch', () => {
-    renderApp('/');
+  test('demo state survives a language switch', async () => {
+    await renderApp('/');
     click(/Material transfer/);
     click('العربية');
     expect(screen.getByRole('button', { name: /نقل مواد/ })).toHaveAttribute('aria-pressed', 'true');
@@ -59,8 +73,8 @@ describe('language toggle', () => {
 });
 
 describe('booking flow', () => {
-  test('return leg doubles the fare and statuses stay separate', () => {
-    renderApp('/');
+  test('return leg doubles the fare and statuses stay separate', async () => {
+    await renderApp('/');
     click(/Continue/);
     fireEvent.change(screen.getByLabelText(/Passengers/), { target: { value: '2' } });
     fireEvent.click(screen.getByLabelText('Add a return leg'));
@@ -94,8 +108,8 @@ describe('booking flow', () => {
 });
 
 describe('boarding', () => {
-  test('a repeated scan is rejected and does not board twice', () => {
-    renderApp('/boarding');
+  test('a repeated scan is rejected and does not board twice', async () => {
+    await renderApp('/boarding');
     click('Simulate valid QR scan');
     click('Scan the same ticket again');
     expect(screen.getAllByText(/Already scanned — exception required/).length).toBeGreaterThan(0);
@@ -105,8 +119,8 @@ describe('boarding', () => {
 });
 
 describe('materials', () => {
-  test('a decision requires a reason before it is recorded', () => {
-    renderApp('/materials');
+  test('a decision requires a reason before it is recorded', async () => {
+    await renderApp('/materials');
     click('Approve with conditions');
     click('Confirm');
     expect(screen.getByText('Please enter a reason to continue.')).toBeInTheDocument();
@@ -117,13 +131,134 @@ describe('materials', () => {
 });
 
 describe('reset demo data', () => {
-  test('restores the initial sample after a change', () => {
-    renderApp('/operations');
+  test('restores the initial sample after a change', async () => {
+    await renderApp('/operations');
     fireEvent.click(screen.getAllByRole('button', { name: 'Suspend sailing' })[0]);
     fireEvent.change(screen.getByLabelText('Reason / notes'), { target: { value: 'Weather (demo)' } });
     click('Confirm');
     expect(screen.getAllByText('Suspended (demo)').length).toBeGreaterThan(0);
     click('Reset demo data');
-    expect(screen.queryAllByText('Suspended (demo)').filter(el => el.tagName === 'SPAN')).toHaveLength(0);
+    expect(screen.queryAllByText('Suspended (demo)').filter((el: HTMLElement) => el.tagName === 'SPAN')).toHaveLength(0);
+  });
+});
+
+describe('boats cannot be double-booked', () => {
+  const boat = (name: string) => screen.getByRole('button', { name: new RegExp(name) });
+
+  test('a chartered boat cannot be booked, and a new charter takes the boat', async () => {
+    await renderApp('/');
+    click(/Dedicated trip \/ charter/);
+    click(/Continue/);
+    fireEvent.change(screen.getByLabelText(/Departure time/), { target: { value: '13:00' } });
+    // Boat 3 is already chartered at 1:00 PM; Boat 1 already has passengers; Boat 2 is free.
+    expect(boat('Boat 3')).toBeDisabled();
+    expect(boat('Boat 3')).toHaveTextContent('Taken — chartered');
+    expect(boat('Boat 1')).toBeDisabled();
+    expect(boat('Boat 2')).toBeEnabled();
+    fireEvent.click(boat('Boat 2'));
+    click(/Continue/);
+    fireEvent.change(screen.getByLabelText(/Full name/), { target: { value: 'Demo Charterer' } });
+    fireEvent.change(screen.getByLabelText(/Email address/), { target: { value: 'charter@example.test' } });
+    fireEvent.change(screen.getByLabelText(/Phone number/), { target: { value: '+966 500 000 001' } });
+    click(/Continue/);
+    fireEvent.click(screen.getByLabelText('I have reviewed the demo policy placeholder.'));
+    fireEvent.click(screen.getByLabelText('I understand a booking/ticket does not authorize port entry or sailing.'));
+    click(/Submit charter request/);
+    expect(heading()).toHaveTextContent('Fleet & boat bookings');
+
+    // Now a passenger booking for Boat 2 at the same time is blocked.
+    const nav = screen.getAllByRole('navigation', { name: 'Main navigation' })[0];
+    fireEvent.click(within(nav).getByRole('link', { name: 'Book Transfer' }));
+    click(/Passenger transfer/);
+    click(/Continue/);
+    fireEvent.change(screen.getByLabelText(/Departure time/), { target: { value: '13:00' } });
+    expect(boat('Boat 2')).toBeDisabled();
+    expect(boat('Boat 1')).toBeEnabled();
+  });
+
+  test('departure times cover 24 hours in AM/PM', async () => {
+    await renderApp('/');
+    click(/Continue/);
+    const options = within(screen.getByLabelText(/Departure time/)).getAllByRole('option');
+    expect(options).toHaveLength(25);
+    expect(options[0]).toHaveTextContent('12:00 AM');
+    expect(options.some(o => /1:00 PM/.test(o.textContent ?? ''))).toBe(true);
+    expect(options.some(o => /11:00 PM/.test(o.textContent ?? ''))).toBe(true);
+  });
+
+  test('fleet page lists each boat and its bookings', async () => {
+    await renderApp('/fleet');
+    expect(screen.getAllByText('Boat 1 (name pending)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Boat 3 (name pending)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Demo Charter Client (fictional)').length).toBeGreaterThan(0);
+  });
+});
+
+describe('accounts', () => {
+  test('signed-out visitors see the sign-in page', () => {
+    renderSignedOut('/operations');
+    expect(heading()).toHaveTextContent('Sign in');
+  });
+
+  test('sign up validates input, then signs the user in', async () => {
+    renderSignedOut('/');
+    click(/^Create an account$/);
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'not-an-email' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter a valid email address.');
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ops@example.test' } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'ops.user' } });
+    fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Example Marine Co.' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'short' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('at least 8 characters');
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'harbour2026' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'harbour2026' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
+    expect(localStorage.getItem('gm-demo-accounts')).not.toContain('harbour2026');
+  });
+
+  test('settings: edit profile, change password, sign out and sign back in', async () => {
+    renderSignedOut('/');
+    click(/^Create an account$/);
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'agent@example.test' } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'agent1' } });
+    fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Agent Demo Co.' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'firstpass1' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'firstpass1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' });
+
+    click('Account menu');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    expect(heading()).toHaveTextContent('Settings');
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'agent2' } });
+    fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Renamed Co.' } });
+    click('Save changes');
+    click('Account menu');
+    expect(screen.getByRole('menu')).toHaveTextContent('agent2');
+    expect(screen.getByRole('menu')).toHaveTextContent('Renamed Co.');
+    click('Account menu');
+
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'wrongpass1' } });
+    fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'secondpass2' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'secondpass2' } });
+    click('Update password');
+    expect(await screen.findByText('Current password is incorrect.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'firstpass1' } });
+    click('Update password');
+    await screen.findByText('Password updated.');
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sign out' })[0]);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Email or username'), { target: { value: 'agent2' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'firstpass1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('incorrect');
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secondpass2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
   });
 });

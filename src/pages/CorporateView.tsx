@@ -5,12 +5,13 @@ import { useDemo } from '../context/DemoContext';
 import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusPill } from '../components/StatusPill';
+import { formatTime } from '../domain/fleet';
 
 const TABS = ['overview', 'bookings', 'passengerList', 'invoices', 'po', 'settlements'] as const;
 type Tab = typeof TABS[number];
 
 export default function CorporateView() {
-  const { t, tx } = useLanguage();
+  const { t, tx, lang } = useLanguage();
   const { bookings, updateWizard } = useDemo();
   const { toast } = useUi();
   const navigate = useNavigate();
@@ -59,7 +60,7 @@ export default function CorporateView() {
                   <tr key={b.ref}>
                     <td data-label={t('bookingRef')} className="mono">{b.ref}</td>
                     <td data-label={tx('Client scope')}>{isAgent ? tx('Assigned demo client') : t('corpOrg')}</td>
-                    <td data-label={t('leg')}>{tx(b.leg)} · {b.time}</td>
+                    <td data-label={t('leg')}>{tx(b.leg)} · {formatTime(b.time, lang)}</td>
                     <td data-label={t('amount')}>SAR {b.amount} <span className="tiny muted">{tx('demo')}</span></td>
                     <td data-label={t('status')}><StatusPill text={b.payment} /></td>
                   </tr>

@@ -7,9 +7,11 @@ import { PageHeader } from '../components/PageHeader';
 import { StatusPill } from '../components/StatusPill';
 import { Icon, type IconName } from '../components/Icon';
 import { isMinimumMet, thresholdLabel } from '../domain/rules';
+import { formatTime } from '../domain/fleet';
+import { BOATS } from '../data/demoData';
 
 export default function OperationsView() {
-  const { t, tx } = useLanguage();
+  const { t, tx, lang } = useLanguage();
   const { sailings, materials, audit, suspendSailing } = useDemo();
   const { toast, openModal } = useUi();
   const navigate = useNavigate();
@@ -70,13 +72,14 @@ export default function OperationsView() {
         <div className="table-wrap">
           <table>
             <thead><tr>
-              <th>{t('time')}</th><th>{t('route')}</th><th>{t('tickets')}</th><th>{t('threshold')}</th>
+              <th>{t('time')}</th><th>{t('boat')}</th><th>{t('route')}</th><th>{t('tickets')}</th><th>{t('threshold')}</th>
               <th>{t('readiness')}</th><th>{t('manifest')}</th><th>{t('actions')}</th>
             </tr></thead>
             <tbody>
               {list.map(s => (
                 <tr key={s.id}>
-                  <td data-label={t('time')}><strong className="mono">{s.time}</strong><div className="tiny muted">{tx(s.dir)} · {tx('demo')}</div></td>
+                  <td data-label={t('time')}><strong className="mono">{formatTime(s.time, lang)}</strong><div className="tiny muted">{tx(s.dir)} · {tx('demo')}</div></td>
+                  <td data-label={t('boat')}>{BOATS.find(b => b.id === s.boatId)?.name[lang]}</td>
                   <td data-label={t('route')}><strong>{tx(s.dest)}</strong><div className="tiny muted">{s.id}</div></td>
                   <td data-label={t('tickets')}>{s.count} / {s.minimum} <div className="bar"><span style={{ width: `${Math.min(100, (s.count / s.minimum) * 100)}%` }} /></div></td>
                   <td data-label={t('threshold')}><StatusPill text={thresholdLabel(s.count)} /></td>
@@ -99,7 +102,7 @@ export default function OperationsView() {
             <div className="between">
               <div>
                 <div className="eyebrow">{tx('DEMO SAILING DETAIL')}</div>
-                <h2 className="card-title"><span className="mono">{selected.id}</span> · {selected.time} · {tx(selected.dest)}</h2>
+                <h2 className="card-title"><span className="mono">{selected.id}</span> · {formatTime(selected.time, lang)} · {tx(selected.dest)} · {BOATS.find(b => b.id === selected.boatId)?.name[lang]}</h2>
                 <p className="card-desc">{tx('Passenger list is a placeholder; no real manifest is present.')}</p>
               </div>
               <button type="button" className="btn btn-outline btn-small" onClick={() => setSelectedId(null)}>{tx('Close')}</button>

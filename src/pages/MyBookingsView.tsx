@@ -6,9 +6,10 @@ import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusPill } from '../components/StatusPill';
 import { ArrowIcon, Icon } from '../components/Icon';
+import { formatTime } from '../domain/fleet';
 
 export default function MyBookingsView() {
-  const { t, tx } = useLanguage();
+  const { t, tx, lang } = useLanguage();
   const { bookings } = useDemo();
   const { toast, openModal } = useUi();
   const navigate = useNavigate();
@@ -60,7 +61,7 @@ export default function MyBookingsView() {
                 <tr key={b.ref}>
                   <td data-label={t('bookingRef')}><strong className="mono">{b.ref}</strong><div className="tiny muted">{tx(b.service)}</div></td>
                   <td data-label={t('date')}>{b.date}</td>
-                  <td data-label={t('leg')}>{tx(b.leg)} · <span className="mono">{b.time}</span></td>
+                  <td data-label={t('leg')}>{tx(b.leg)} · <span className="mono">{formatTime(b.time, lang)}</span></td>
                   <td data-label={t('amount')}><strong>SAR {Number(b.amount).toLocaleString('en-US')}</strong><div className="tiny muted">{tx('VAT treatment pending')}</div></td>
                   <td data-label={t('paymentStatus')}><StatusPill text={b.payment} /></td>
                   <td data-label={t('opsStatus')}><StatusPill text={b.ops} /></td>

@@ -15,11 +15,81 @@
 .btn svg{width:16px;height:16px}
 [dir="rtl"] .btn svg.dir-icon{transform:scaleX(-1)}
 .mobile-reset{display:none}
+/* Card title on its own line, description underneath (all screen sizes) */
+.service-name,.service-desc{display:block}
+.service-desc{margin-top:4px}
 .nav-short{display:none}
+
+/* Boat choices (booking) and fleet timeline */
+.boat-option{border:1px solid var(--line);background:#fff;border-radius:14px;padding:14px;display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:start;color:var(--ink)}
+.boat-option:hover:not(:disabled){border-color:#8ab8b5}
+.boat-option.selected{border:2px solid var(--teal);background:#f3fbfa;padding:13px}
+.boat-option.taken{background:#f7f9fa;cursor:not-allowed;opacity:.8}
+.boat-body{display:grid;gap:7px;justify-items:start}
+.boat-name{font-size:14px;font-weight:850;color:var(--navy)}
+.boat-option .fare-cell{text-align:end}
+.boat-option .pill{white-space:normal;text-align:start}
+.boat-card-name{font-size:16px;font-weight:850;color:var(--navy);margin:6px 0 8px}
+.boat-card .metric-foot strong{color:var(--navy)}
+.legend i.cell-free{background:#fff;border:1px solid var(--line)}
+.legend i.cell-shared{background:#fff4d6;border:1px solid #f1dfad}
+.legend i.cell-charter{background:#fbe1de;border:1px solid #efb8b3}
+.legend i{width:12px;height:12px;border-radius:3px}
+.timeline-wrap{overflow-x:auto;margin-top:14px;border:1px solid var(--line);border-radius:12px}
+.timeline{min-width:0;width:max-content;border-collapse:separate;border-spacing:0;font-size:11px}
+.timeline th,.timeline td{padding:8px 6px;border-bottom:1px solid #eef2f5;border-inline-end:1px solid #eef2f5;text-align:center;white-space:nowrap}
+.timeline thead th{position:sticky;top:0;font-size:10px;letter-spacing:0;text-transform:none;min-width:58px}
+.timeline tbody th{position:sticky;inset-inline-start:0;z-index:1;background:#fff;text-align:start;font-size:12px;color:var(--navy);text-transform:none;letter-spacing:0;min-width:170px}
+.timeline thead th:first-child{inset-inline-start:0;z-index:2}
+.timeline td{height:38px;font-weight:800}
+.timeline td.cell-shared{background:#fff4d6;color:#704a0c}
+.timeline td.cell-charter{background:#fbe1de;color:var(--red)}
+.timeline tbody tr:last-child th,.timeline tbody tr:last-child td{border-bottom:0}
+
+/* Accounts: sign-in page, account menu and settings */
+.auth-page{min-height:100vh;display:flex;flex-direction:column;background:var(--ice)}
+.auth-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 28px;background:#fff;border-bottom:1px solid var(--line)}
+.auth-main{flex:1;display:grid;place-items:start center;padding:40px 16px 60px}
+.auth-card{width:min(460px,100%)}
+.auth-link{justify-self:start;padding:0}
+.auth-switch{margin-top:16px;text-align:center;font-size:13px;color:var(--muted)}
+.auth-or{display:flex;align-items:center;gap:12px;margin:18px 0 14px;color:#8a9aa7;font-size:12px}
+.auth-or:before,.auth-or:after{content:"";flex:1;height:1px;background:var(--line)}
+.pw-wrap{position:relative}
+.pw-wrap input{padding-inline-end:72px}
+.pw-toggle{position:absolute;inset-inline-end:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--teal);font-size:12px;font-weight:800;padding:6px 8px;border-radius:8px}
+.account-menu{position:relative}
+.account-btn{border:0;background:transparent;padding:0;border-radius:50%;display:grid}
+.account-btn:focus-visible{outline:3px solid #007f83;outline-offset:2px}
+.avatar-img{border-radius:50%;object-fit:cover;display:block}
+.account-pop{position:absolute;inset-inline-end:0;top:calc(100% + 8px);min-width:230px;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 40px rgba(11,31,51,.16);padding:6px;z-index:60}
+.account-who{display:grid;gap:2px;padding:10px 12px 12px;border-bottom:1px solid var(--line);margin-bottom:6px;font-size:12px;color:#425b6d}
+.account-who strong{font-size:14px;color:var(--navy)}
+.account-item{display:block;width:100%;text-align:start;padding:10px 12px;border:0;background:transparent;border-radius:10px;color:var(--navy);font-size:13px;font-weight:750;text-decoration:none}
+.account-item:hover{background:var(--ice)}
+.settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.avatar-row{display:flex;gap:16px;align-items:center;margin-top:14px}
+.error-text{color:var(--red);font-size:12px;font-weight:700}
+.toggle-list{display:grid;margin-top:10px}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid #eef2f5;font-size:13px;color:#385163;cursor:pointer}
+.toggle-row:last-child{border-bottom:0}
+.toggle-row input{appearance:none;-webkit-appearance:none;flex:none;width:42px;height:24px;border-radius:999px;background:#cbd8e0;position:relative;cursor:pointer;transition:background .15s}
+.toggle-row input:after{content:"";position:absolute;top:3px;inset-inline-start:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:inset-inline-start .15s}
+.toggle-row input:checked{background:var(--teal)}
+.toggle-row input:checked:after{inset-inline-start:21px}
+@media(max-width:1150px){.settings-grid{grid-template-columns:1fr}}
 
 /* Phone layout: roomier spacing and larger touch targets. Desktop is unchanged. */
 @media(max-width:780px){
   .side-reset{display:none}
+  .account-btn .avatar{display:grid}
+  .auth-top{padding:10px 16px}
+  .auth-main{padding:20px 16px 40px}
+  .avatar-row{align-items:flex-start}
+  .toggle-row{font-size:14px}
+  .boat-option{grid-template-columns:22px minmax(0,1fr);}
+  .boat-option .fare-cell{grid-column:2;text-align:start}
+  .timeline tbody th{min-width:130px}
   body{font-size:15px}
   /* Banner scrolls away; only the compact header stays pinned */
   .demo-banner{position:static;font-size:10.5px;line-height:1.35;padding:7px 14px}
@@ -155,3 +225,4 @@
   .nav-btn svg{width:20px;height:20px}
   .shell{padding-inline:12px}
 }
+.nowrap{white-space:nowrap}

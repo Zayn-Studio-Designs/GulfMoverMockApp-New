@@ -3,9 +3,10 @@ import { useDemo } from '../context/DemoContext';
 import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
 import { Icon } from '../components/Icon';
+import { formatTime } from '../domain/fleet';
 
 export default function BoardingView() {
-  const { t, tx } = useLanguage();
+  const { t, tx, lang } = useLanguage();
   const { sailings, bookings, audit, boarding, updateBoarding, addAudit, overrideBoarding } = useDemo();
   const { toast, openModal } = useUi();
   const sailing = sailings.find(s => s.id === boarding.selectedSailingId) ?? sailings[0];
@@ -54,7 +55,7 @@ export default function BoardingView() {
             <label htmlFor="board-sailing">{t('selectSailing')}</label>
             <select id="board-sailing" value={boarding.selectedSailingId}
               onChange={e => updateBoarding({ selectedSailingId: e.target.value, lastScanUsed: false, scanCount: 0, boardingMessage: null })}>
-              {sailings.map(s => <option key={s.id} value={s.id}>{s.time} · {tx(s.dest)}</option>)}
+              {sailings.map(s => <option key={s.id} value={s.id}>{formatTime(s.time, lang)} · {tx(s.dest)}</option>)}
             </select>
           </div>
           <div className="grid grid-3" style={{ marginTop: 15 }}>

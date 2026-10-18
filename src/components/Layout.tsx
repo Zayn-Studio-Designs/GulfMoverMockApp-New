@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { Avatar } from './Avatar';
 import { useLanguage } from '../context/LanguageContext';
 import { useDemo } from '../context/DemoContext';
 import { useUi } from '../context/UiContext';
@@ -12,15 +14,55 @@ export const NAV_ITEMS: ReadonlyArray<{ to: string; key: string; icon: IconName 
   { to: '/operations', key: 'navOps', icon: 'navOps' },
   { to: '/boarding', key: 'navBoarding', icon: 'board' },
   { to: '/materials', key: 'navMaterials', icon: 'box' },
+  { to: '/fleet', key: 'navFleet', icon: 'ship' },
 ];
+
+/** Profile button with a small menu: account details, Settings and Sign out. */
+function AccountMenu() {
+  const { t } = useLanguage();
+  const { user, signOut } = useAuth();
+  const { toast } = useUi();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close); };
+  }, [open]);
+
+  if (!user) return null;
+  return (
+    <div className="account-menu" ref={ref}>
+      <button type="button" className="account-btn" aria-haspopup="menu" aria-expanded={open} aria-label={t('accountMenu')} onClick={() => setOpen(o => !o)}>
+        <Avatar user={user} />
+      </button>
+      {open && (
+        <div className="account-pop" role="menu">
+          <div className="account-who"><strong>{user.username}</strong><span>{user.company}</span><span className="muted">{user.email}</span></div>
+          <Link role="menuitem" className="account-item" to="/settings" onClick={() => setOpen(false)}>{t('settingsLink')}</Link>
+          <button role="menuitem" type="button" className="account-item" onClick={() => { setOpen(false); signOut(); toast(t('signedOut')); navigate('/signin'); }}>{t('signOut')}</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Layout() {
   const { lang, setLang, t } = useLanguage();
+  const { user, signedOutByUser } = useAuth();
   const { resetDemoData } = useDemo();
   const { toast } = useUi();
   const { pathname } = useLocation();
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [pathname]);
+
+  if (!user) return <Navigate to="/signin" replace state={signedOutByUser ? undefined : { from: pathname }} />;
 
   const onReset = () => {
     resetDemoData();
@@ -46,7 +88,7 @@ export function Layout() {
               <button type="button" className={lang === 'en' ? 'active' : ''} aria-pressed={lang === 'en'} onClick={() => setLang('en')}>EN</button>
               <button type="button" className={lang === 'ar' ? 'active' : ''} aria-pressed={lang === 'ar'} onClick={() => setLang('ar')} lang="ar">العربية</button>
             </div>
-            <div className="avatar" aria-label={t('prototypeUser')}>GM</div>
+            <AccountMenu />
           </div>
         </div>
       </header>

@@ -35,8 +35,8 @@ export type PillTone = 'pill-neutral' | 'pill-green' | 'pill-gold' | 'pill-red';
 /** Status colour, always paired with the status text (never colour alone). */
 export function pillTone(text: string): PillTone {
   let tone: PillTone = 'pill-neutral';
-  if (/met|recorded|boarded|approved/i.test(text) && !/pending/i.test(text)) tone = 'pill-green';
+  if (/met|recorded|boarded|approved|booked|available/i.test(text) && !/pending/i.test(text)) tone = 'pill-green';
   if (/pending|collecting|preparation|review|awaiting|not ready/i.test(text)) tone = 'pill-gold';
-  if (/suspend|failed|rejected|duplicate/i.test(text)) tone = 'pill-red';
+  if (/suspend|failed|rejected|duplicate|taken|chartered/i.test(text)) tone = 'pill-red';
   return tone;
 }

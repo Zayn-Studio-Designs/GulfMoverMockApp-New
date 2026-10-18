@@ -5,8 +5,9 @@ import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusPill } from '../components/StatusPill';
 import { ArrowIcon, Icon, type IconName } from '../components/Icon';
-import { DESTINATIONS, ORIGIN, today } from '../data/demoData';
-import { DEPARTURE_TIMES, FARE_PER_PASSENGER_LEG, fareTotal, legCount, thresholdLabel } from '../domain/rules';
+import { BOATS, DESTINATIONS, ORIGIN, today } from '../data/demoData';
+import { FARE_PER_PASSENGER_LEG, fareTotal, legCount, thresholdLabel } from '../domain/rules';
+import { BRIEF_TIMES, TIME_SLOTS, boatAvailability, canBookPassengers, canCharter, findSlot, formatTime, type Availability } from '../domain/fleet';
 
 const SERVICES: ReadonlyArray<{ value: ServiceType; title: string; desc: string; icon: IconName }> = [
   { value: 'passenger', title: 'servicePassenger', desc: 'servicePassengerDesc', icon: 'user' },
@@ -35,19 +36,7 @@ function Stepper({ step }: { step: number }) {
 
 function ServiceStep() {
   const { t } = useLanguage();
-  const { wizard, updateWizard, addAudit } = useDemo();
-  const { openModal, toast } = useUi();
-
-  const next = () => {
-    if (wizard.service === 'charter') {
-      openModal({
-        title: t('serviceCharter'), desc: t('serviceCharterDesc'), confirmText: t('confirm'), requireReason: false,
-        onConfirm: () => { addAudit('Prototype', 'Charter inquiry created (demo)'); toast(t('inquiryCreated')); },
-      });
-      return;
-    }
-    updateWizard({ bookStep: 2 });
-  };
+  const { wizard, updateWizard } = useDemo();
 
   return (
     <div className="card card-pad">
@@ -59,64 +48,107 @@ function ServiceStep() {
         {SERVICES.map(s => (
           <button key={s.value} type="button" aria-pressed={wizard.service === s.value}
             className={`service-card${wizard.service === s.value ? ' selected' : ''}`}
-            onClick={() => updateWizard({ service: s.value, bookStep: 1, formError: '' })}>
+            onClick={() => updateWizard({ service: s.value, bookStep: 1, formError: '', ...(s.value === 'charter' ? { addReturn: false } : {}) })}>
             <span className="service-icon"><Icon name={s.icon} /></span>
             <span><span className="service-name">{t(s.title)}</span><span className="service-desc">{t(s.desc)}</span></span>
           </button>
         ))}
       </div>
       {wizard.service === 'charter' && (
-        <div className="notice warn" style={{ marginTop: 15 }}><strong>{t('serviceCharter')}</strong>{t('serviceCharterDesc')}</div>
+        <div className="notice warn" style={{ marginTop: 15 }}><strong>{t('serviceCharter')}</strong>{t('charterWholeBoat')}</div>
       )}
       <div className="between" style={{ marginTop: 20 }}>
         <span className="small muted">{t('briefFare')}: <strong>SAR 500</strong> {t('perTrip')}</span>
-        <button type="button" className="btn btn-primary" onClick={next}>{t('continue')} <ArrowIcon /></button>
+        <button type="button" className="btn btn-primary" onClick={() => updateWizard({ bookStep: 2 })}>{t('continue')} <ArrowIcon /></button>
       </div>
     </div>
   );
 }
 
-function SailingChoices({ leg }: { leg: 'outbound' | 'return' }) {
-  const { t, tx, lang } = useLanguage();
-  const { wizard, updateWizard, sailings } = useDemo();
-  const current = leg === 'return' ? wizard.selectedRet : wizard.selectedOut;
+const SLOT_GROUPS: ReadonlyArray<{ key: string; from: number; to: number }> = [
+  { key: 'slotNight', from: 0, to: 5 }, { key: 'slotMorning', from: 6, to: 11 },
+  { key: 'slotAfternoon', from: 12, to: 17 }, { key: 'slotEvening', from: 18, to: 23 },
+];
+
+/** Whether a boat can be picked for this service at the given slot. */
+function boatAllowed(service: ServiceType, av: Availability): boolean {
+  return service === 'charter' ? canCharter(av) : canBookPassengers(av);
+}
+
+function TimeSelect({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
+  const { t, lang } = useLanguage();
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label} *</label>
+      <select id={id} value={value} onChange={e => onChange(e.target.value)}>
+        {SLOT_GROUPS.map(g => (
+          <optgroup key={g.key} label={t(g.key)}>
+            {TIME_SLOTS.filter(s => { const h = Number(s.slice(0, 2)); return h >= g.from && h <= g.to; }).map(s => (
+              <option key={s} value={s}>{formatTime(s, lang)}{BRIEF_TIMES.includes(s) ? ` · ${t('briefTimeTag')}` : ''}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <small>{t('localTime')}</small>
+    </div>
+  );
+}
+
+function BoatChoices({ leg }: { leg: 'outbound' | 'return' }) {
+  const { t, lang } = useLanguage();
+  const { wizard, updateWizard, boatSlots } = useDemo();
+  const date = leg === 'return' ? wizard.returnDate : wizard.journeyDate;
+  const time = leg === 'return' ? wizard.selectedRet : wizard.selectedOut;
+  const current = leg === 'return' ? wizard.selectedRetBoat : wizard.selectedBoat;
   return (
     <div style={{ marginTop: 15 }}>
       <div className="between" style={{ marginBottom: 9 }}>
-        <strong className="card-title">{leg === 'return' ? t('returnSailing') : t('departure')}</strong>
-        <span className="tiny muted">{t('demoAvailability')}</span>
+        <strong className="card-title">{leg === 'return' ? t('returnBoat') : t('chooseBoat')}</strong>
+        <span className="tiny muted">{date} · {formatTime(time, lang)}</span>
       </div>
-      {DEPARTURE_TIMES.map(time => {
-        const sailing = sailings.find(s => s.time === time);
-        const count = sailing?.count ?? 0;
-        const selected = current === time;
-        return (
-          <button key={time} type="button" aria-pressed={selected} className={`sailing-option${selected ? ' selected' : ''}`}
-            onClick={() => updateWizard(leg === 'return' ? { selectedRet: time } : { selectedOut: time })}>
-            <span className={`radio${selected ? ' on' : ''}`} />
-            <span className="time-cell"><span className="time-big mono">{time}</span><br />
-              <span className="route-small">{tx(leg === 'return' ? 'Return (demo)' : 'Departure (demo)')}</span></span>
-            <span className="route-cell"><span className="route-badge">{tx(sailing?.dest ?? DESTINATIONS[0])}</span><br />
-              <span className="route-small">{t('demoAvailability')}: {count >= 4 ? tx('4+ eligible tickets (demo)') : t('ticketsOfMin').replace('{n}', String(count))}</span></span>
-            <span className="fare-cell"><span className="fare">SAR {FARE_PER_PASSENGER_LEG}</span><br /><span className="fare-note">{t('perPassenger')}</span></span>
-            <span className="select-cell">{selected ? <StatusPill text={lang === 'ar' ? 'محدد' : 'Selected'} /> : <span className="route-badge">{tx('Select')}</span>}</span>
-          </button>
-        );
-      })}
+      <div className="grid grid-3">
+        {BOATS.map(boat => {
+          const av = boatAvailability(boatSlots, boat.id, date, time);
+          const slot = findSlot(boatSlots, boat.id, date, time);
+          const allowed = boatAllowed(wizard.service, av);
+          const selected = current === boat.id && allowed;
+          const label = av === 'free' ? t('avFree')
+            : av === 'chartered' ? t('avChartered')
+              : wizard.service === 'charter' ? t('avHasPassengers') : t('avShared').replace('{n}', String(slot?.passengers ?? 0));
+          return (
+            <button key={boat.id} type="button" disabled={!allowed} aria-pressed={selected}
+              className={`boat-option${selected ? ' selected' : ''}${allowed ? '' : ' taken'}`}
+              onClick={() => updateWizard(leg === 'return' ? { selectedRetBoat: boat.id } : { selectedBoat: boat.id })}>
+              <span className={`radio${selected ? ' on' : ''}`} />
+              <span className="boat-body">
+                <span className="boat-name">{boat.name[lang]}</span>
+                <span className={`pill ${!allowed ? 'pill-red' : av === 'shared' ? 'pill-gold' : 'pill-green'}`}>{label}</span>
+              </span>
+              <span className="fare-cell">{wizard.service === 'charter'
+                ? <span className="fare-note">{t('charterNoPrice')}</span>
+                : <><span className="fare">SAR {FARE_PER_PASSENGER_LEG}</span><br /><span className="fare-note">{t('perPassenger')}</span></>}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 function JourneyStep() {
   const { t, tx } = useLanguage();
-  const { wizard, updateWizard } = useDemo();
+  const { wizard, updateWizard, boatSlots } = useDemo();
   const { toast } = useUi();
+  const isCharter = wizard.service === 'charter';
+  const legOk = (boatId: string, date: string, time: string) => boatAllowed(wizard.service, boatAvailability(boatSlots, boatId, date, time));
 
   const next = () => {
     if (!wizard.journeyDate) { toast(t('chooseDate')); return; }
+    if (!legOk(wizard.selectedBoat, wizard.journeyDate, wizard.selectedOut)) { toast(t('boatTaken')); return; }
     if (wizard.addReturn) {
       if (!wizard.returnDate) { toast(t('chooseReturnDate')); return; }
       if (wizard.returnDate < wizard.journeyDate) { toast(t('returnAfter')); return; }
+      if (!legOk(wizard.selectedRetBoat, wizard.returnDate, wizard.selectedRet)) { toast(t('boatTaken')); return; }
     }
     updateWizard({ bookStep: 3 });
   };
@@ -132,6 +164,7 @@ function JourneyStep() {
           <label htmlFor="journey-date">{t('departureDate')} *</label>
           <input id="journey-date" type="date" value={wizard.journeyDate} min={today()} onChange={e => updateWizard({ journeyDate: e.target.value })} />
         </div>
+        <TimeSelect id="departure-time" label={t('departureTime')} value={wizard.selectedOut} onChange={v => updateWizard({ selectedOut: v })} />
         <div className="field">
           <label htmlFor="dest-select">{t('destination')} *</label>
           <select id="dest-select" value={wizard.chosenDestination} onChange={e => updateWizard({ chosenDestination: e.target.value })}>
@@ -150,24 +183,30 @@ function JourneyStep() {
           <div className="inset row"><span className="pill pill-blue">{t('outbound')}</span><span className="small muted">{tx(ORIGIN)}</span></div>
         </div>
       </div>
-      <SailingChoices leg="outbound" />
+      <BoatChoices leg="outbound" />
       <div className="divider" />
-      <label className="switch">
-        <input type="checkbox" id="return-toggle" checked={wizard.addReturn} onChange={e => updateWizard({ addReturn: e.target.checked })} />
-        <span>{t('returnToggle')}</span>
-      </label>
-      {wizard.addReturn ? (
+      {isCharter ? <p className="card-desc">{t('charterWholeBoat')}</p> : (
         <>
-          <div className="form-grid" style={{ marginTop: 13 }}>
-            <div className="field">
-              <label htmlFor="return-date">{t('returnDate')} *</label>
-              <input type="date" id="return-date" value={wizard.returnDate} min={today()} onChange={e => updateWizard({ returnDate: e.target.value })} />
-            </div>
-            <div className="field"><label>{t('destination')}</label><div className="inset">{tx(wizard.chosenDestination)}</div></div>
-          </div>
-          <SailingChoices leg="return" />
+          <label className="switch">
+            <input type="checkbox" id="return-toggle" checked={wizard.addReturn} onChange={e => updateWizard({ addReturn: e.target.checked })} />
+            <span>{t('returnToggle')}</span>
+          </label>
+          {wizard.addReturn ? (
+            <>
+              <h3 className="card-title" style={{ marginTop: 14 }}>{t('returnSailing')}</h3>
+              <div className="form-grid" style={{ marginTop: 10 }}>
+                <div className="field">
+                  <label htmlFor="return-date">{t('returnDate')} *</label>
+                  <input type="date" id="return-date" value={wizard.returnDate} min={today()} onChange={e => updateWizard({ returnDate: e.target.value })} />
+                </div>
+                <TimeSelect id="return-time" label={t('returnTime')} value={wizard.selectedRet} onChange={v => updateWizard({ selectedRet: v })} />
+                <div className="field"><label>{t('destination')}</label><div className="inset">{tx(wizard.chosenDestination)}</div></div>
+              </div>
+              <BoatChoices leg="return" />
+            </>
+          ) : <p className="card-desc" style={{ marginTop: 10 }}>{t('returnHint')}</p>}
         </>
-      ) : <p className="card-desc" style={{ marginTop: 10 }}>{t('returnHint')}</p>}
+      )}
       {(wizard.service === 'material' || wizard.service === 'combined') && (
         <div className="notice warn" style={{ marginTop: 16 }}><strong>{t('materialPending')}</strong>{t('serviceMaterialDesc')} {t('capacityNotSet')}</div>
       )}
@@ -175,7 +214,7 @@ function JourneyStep() {
         <button type="button" className="btn btn-outline" onClick={() => updateWizard({ bookStep: 1 })}>{t('back')}</button>
         <button type="button" className="btn btn-primary" onClick={next}>{t('continue')} <ArrowIcon /></button>
       </div>
-      <p className="footer-note">{t('fareFormula')}. {t('vatPending')}.</p>
+      <p className="footer-note">{isCharter ? t('charterNoPrice') : `${t('fareFormula')}. ${t('vatPending')}.`}</p>
     </div>
   );
 }
@@ -226,23 +265,39 @@ function DetailsStep() {
 }
 
 function ReviewStep() {
-  const { t, tx } = useLanguage();
-  const { wizard, updateWizard, materials, addMaterial, addAudit } = useDemo();
+  const { t, tx, lang } = useLanguage();
+  const { wizard, updateWizard, resetWizard, materials, addMaterial, addAudit, requestCharter, bookings } = useDemo();
   const { toast } = useUi();
   const navigate = useNavigate();
   const pax = Math.max(1, wizard.paxCount);
   const materialOnly = wizard.service === 'material';
-  const total = materialOnly ? 0 : fareTotal(pax, wizard.addReturn);
-  const legLine = (labelKey: string, date: string, time: string) => (
+  const isCharter = wizard.service === 'charter';
+  const noPayment = materialOnly || isCharter;
+  const total = noPayment ? 0 : fareTotal(pax, wizard.addReturn);
+  const boatName = (id: string) => BOATS.find(b => b.id === id)?.name[lang] ?? id;
+  const legLine = (labelKey: string, date: string, time: string, boatId: string) => (
     <>
       <div className="between"><strong>{t(labelKey)}</strong><StatusPill text="DEMO DATA" /></div>
-      <p className="small muted">{date} · <b className="mono">{time}</b> · {tx(wizard.chosenDestination)}</p>
-      <div className="between"><span>{pax} × {t('perPassenger')}</span><strong>SAR {pax * FARE_PER_PASSENGER_LEG}</strong></div>
+      <p className="small muted">{date} · <b className="mono">{formatTime(time, lang)}</b> · {tx(wizard.chosenDestination)} · {boatName(boatId)}</p>
+      {!isCharter && <div className="between"><span>{pax} × {t('perPassenger')}</span><strong>SAR {pax * FARE_PER_PASSENGER_LEG}</strong></div>}
     </>
   );
 
   const next = () => {
     if (!wizard.policyAck || !wizard.accessAck) { toast(t('ackFirst')); return; }
+    if (isCharter) {
+      const ref = `CH-DEMO-${String(100 + bookings.length + 1).padStart(4, '0')}`;
+      const holder = wizard.passengerCompany || wizard.passengerName || 'Demo requestor';
+      if (!requestCharter(wizard.selectedBoat, wizard.journeyDate, wizard.selectedOut, pax, ref, holder)) {
+        toast(t('boatTaken'));
+        updateWizard({ bookStep: 2 });
+        return;
+      }
+      toast(t('charterReserved'));
+      resetWizard();
+      navigate('/fleet');
+      return;
+    }
     if (materialOnly) {
       const id = `MR-DEMO-${String(materials.length + 1).padStart(2, '0')}`;
       addMaterial({ id, name: 'New material request (demo)', qty: 'To be reviewed', weight: 'Not provided', size: 'Not provided', status: 'Pending review',
@@ -264,14 +319,14 @@ function ReviewStep() {
           <span className="pill pill-blue">{t('stepReview')} 4/5</span>
         </div>
         <div className="divider" />
-        {legLine('outboundLeg', wizard.journeyDate, wizard.selectedOut)}
-        {wizard.addReturn && <><div className="divider" />{legLine('returnLeg', wizard.returnDate, wizard.selectedRet)}</>}
+        {legLine('outboundLeg', wizard.journeyDate, wizard.selectedOut, wizard.selectedBoat)}
+        {wizard.addReturn && <><div className="divider" />{legLine('returnLeg', wizard.returnDate, wizard.selectedRet, wizard.selectedRetBoat)}</>}
         <div className="divider" />
         <div className="price-line"><span>{t('subtotal')}</span><strong>SAR {total.toLocaleString('en-US')}</strong></div>
         <div className="price-line"><span>{t('vat')}</span><strong>{t('vatPending')}</strong></div>
         <div className="price-line price-total"><span>{t('total')}</span>
-          <strong>{materialOnly ? t('materialNoPayment') : `SAR ${total.toLocaleString('en-US')} + ${tx('VAT/approved charges TBD')}`}</strong></div>
-        <p className="footer-note">{materialOnly ? t('materialNoTariff') : t('fareFormula')}</p>
+          <strong>{isCharter ? t('charterNoPrice') : materialOnly ? t('materialNoPayment') : `SAR ${total.toLocaleString('en-US')} + ${tx('VAT/approved charges TBD')}`}</strong></div>
+        <p className="footer-note">{isCharter ? t('charterWholeBoat') : materialOnly ? t('materialNoTariff') : t('fareFormula')}</p>
         <div className="divider" />
         <h3 className="card-title" style={{ marginBottom: 9 }}>{t('policyTitle')}</h3>
         <div className="notice warn"><strong>{t('policyDemo')}</strong>{t('ackAccess')}</div>
@@ -281,7 +336,7 @@ function ReviewStep() {
         </div>
         <div className="between" style={{ marginTop: 20 }}>
           <button type="button" className="btn btn-outline" onClick={() => updateWizard({ bookStep: 3 })}>{t('back')}</button>
-          <button type="button" className="btn btn-primary" onClick={next}>{materialOnly ? t('materialSubmit') : t('simulatePayment')} <ArrowIcon /></button>
+          <button type="button" className="btn btn-primary" onClick={next}>{isCharter ? t('charterSubmit') : materialOnly ? t('materialSubmit') : t('simulatePayment')} <ArrowIcon /></button>
         </div>
       </div>
       <aside className="card card-pad">
@@ -300,7 +355,7 @@ function ReviewStep() {
 
 function PaymentStep() {
   const { t, tx } = useLanguage();
-  const { wizard, updateWizard, bookings, sailings, addBooking, addMaterial, materials, addTicketsToSailing } = useDemo();
+  const { wizard, updateWizard, bookings, boatSlots, addBooking, addMaterial, materials, addTicketsToSailing, reservePassengers } = useDemo();
   const { toast } = useUi();
   const choices: ReadonlyArray<{ value: PaymentChoice; title: string; desc: string; icon: IconName }> = [
     { value: 'recorded', title: 'payRecorded', desc: 'Local demo state only.', icon: 'check' },
@@ -312,19 +367,27 @@ function PaymentStep() {
   const finish = () => {
     if (!wizard.paymentChoice) { toast(t('paymentNotice')); return; }
     const pax = Math.max(1, wizard.paxCount);
-    // Minimum is aggregated across all bookings on the sailing, not per booking.
-    const existing = sailings.find(s => s.time === wizard.selectedOut && s.dir === 'Outbound')?.count ?? 0;
+    const ref = `GM-DEMO-${String(3200 + bookings.length + 1).padStart(4, '0')}`;
+    // Minimum is aggregated across all bookings on the same boat and sailing, not per booking.
+    const existing = findSlot(boatSlots, wizard.selectedBoat, wizard.journeyDate, wizard.selectedOut)?.passengers ?? 0;
+    // A chartered boat cannot take passengers: re-check at the moment of booking.
+    if (!reservePassengers(wizard.selectedBoat, wizard.journeyDate, wizard.selectedOut, pax, ref)) {
+      toast(t('boatTaken')); updateWizard({ bookStep: 2 }); return;
+    }
+    if (wizard.addReturn && !reservePassengers(wizard.selectedRetBoat, wizard.returnDate, wizard.selectedRet, pax, `${ref}-R`)) {
+      toast(t('boatTaken')); updateWizard({ bookStep: 2 }); return;
+    }
     const booking = {
-      ref: `GM-DEMO-${String(3200 + bookings.length + 1).padStart(4, '0')}`,
+      ref,
       date: wizard.journeyDate, leg: wizard.addReturn ? 'Outbound + return' : 'Outbound', time: wizard.selectedOut,
       dest: wizard.chosenDestination, passengers: pax, amount: fareTotal(pax, wizard.addReturn),
       payment: wizard.paymentChoice === 'recorded' ? 'Payment recorded (demo)' : wizard.paymentChoice === 'pending' ? 'Payment pending (demo)' : 'Payment failed / uncertain (demo)',
       threshold: thresholdLabel(existing + pax), ops: 'Awaiting ATCO decision', boarding: 'Not started',
-      service: SERVICE_LABEL[wizard.service],
-      return: wizard.addReturn ? { date: wizard.returnDate, time: wizard.selectedRet, dest: wizard.chosenDestination } : null,
+      service: SERVICE_LABEL[wizard.service], boatId: wizard.selectedBoat,
+      return: wizard.addReturn ? { date: wizard.returnDate, time: wizard.selectedRet, dest: wizard.chosenDestination, boatId: wizard.selectedRetBoat } : null,
     };
     addBooking(booking);
-    addTicketsToSailing(wizard.selectedOut, pax);
+    if (wizard.journeyDate === today()) addTicketsToSailing(wizard.selectedOut, wizard.selectedBoat, pax);
     if (wizard.service !== 'passenger') {
       addMaterial({ id: `MR-DEMO-${String(materials.length + 1).padStart(2, '0')}`, name: 'New fictional material request', qty: 'To confirm',
         weight: 'Not provided', size: 'Not provided', status: 'Pending review', sender: 'Demo requestor', receiver: wizard.chosenDestination,
@@ -362,7 +425,7 @@ function PaymentStep() {
 }
 
 function ResultStep() {
-  const { t, tx } = useLanguage();
+  const { t, tx, lang } = useLanguage();
   const { wizard, bookings, resetWizard } = useDemo();
   const navigate = useNavigate();
   const b = wizard.currentBooking ?? bookings[0];
@@ -376,11 +439,12 @@ function ResultStep() {
       <div className="hero-panel" style={{ marginTop: 18, minHeight: 0 }}>
         <div className="eyebrow" style={{ color: '#a7e5e0' }}>{tx('BOOKING REFERENCE · FICTIONAL')}</div>
         <h2 style={{ fontSize: 27 }} className="mono">{b.ref}</h2>
-        <p>{tx(b.service)} · {b.date} · {b.time}</p>
+        <p>{tx(b.service)} · {b.date} · {formatTime(b.time, lang)}</p>
         <div className="hero-meta">
           <span>{b.passengers} {tx('passenger(s) demo')}</span>
           <span>SAR {Number(b.amount).toLocaleString('en-US')} {tx('before unconfirmed taxes')}</span>
           <span>{tx('Destination')}: {tx(b.dest)}</span>
+          {b.boatId && <span>{t('boat')}: {BOATS.find(x => x.id === b.boatId)?.name[lang]}</span>}
         </div>
       </div>
       <div className="status-grid" style={{ marginTop: 17 }}>
@@ -390,7 +454,7 @@ function ResultStep() {
       </div>
       {b.return && (
         <div className="inset" style={{ marginTop: 14 }}>
-          <strong>{t('returnLeg')} · {b.return.date} · <span className="mono">{b.return.time}</span></strong>
+          <strong>{t('returnLeg')} · {b.return.date} · <span className="mono">{formatTime(b.return.time, lang)}</span>{b.return.boatId && <> · {BOATS.find(x => x.id === b.return?.boatId)?.name[lang]}</>}</strong>
           <div className="small muted">{tx(b.return.dest)} — {tx('separate sailing and ticket.')}</div>
         </div>
       )}
@@ -407,7 +471,7 @@ function ResultStep() {
 }
 
 export default function BookingView() {
-  const { t, tx } = useLanguage();
+  const { t, tx, lang } = useLanguage();
   const { wizard } = useDemo();
   const step = wizard.bookStep;
   return (
@@ -419,8 +483,9 @@ export default function BookingView() {
         <p>{t('homeCopy')}</p>
         <div className="hero-meta">
           <span>{t('briefFare')}: <b>SAR 500</b> {t('perTrip')}</span>
-          <span>{t('schedule')}: <b className="mono">07:00 · 09:30 · 13:00</b></span>
+          <span>{t('schedule')}: <b className="mono">{BRIEF_TIMES.map(x => formatTime(x, lang)).join(' · ')}</b></span>
           <span>{t('localTime')}</span>
+          <span>{t('allDaySlots')}</span>
         </div>
       </div>
       <Stepper step={step} />
