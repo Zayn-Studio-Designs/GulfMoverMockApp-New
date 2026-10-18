@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Avatar } from './Avatar';
+import { Brand } from './Brand';
 import { CompanyLogo } from './ImageUpload';
 import { useLanguage } from '../context/LanguageContext';
 import { useDemo } from '../context/DemoContext';
@@ -87,13 +88,7 @@ export function Layout() {
       <div className="demo-banner"><span className="dot" /><span>{t('demoBanner')}</span></div>
       <header className="app-header">
         <div className="header-inner">
-          <div className="brand">
-            <div className="brand-mark">GM</div>
-            <div>
-              <div className="brand-name">Gulf Mover</div>
-              <div className="brand-sub">{t('brandSub')}</div>
-            </div>
-          </div>
+          <Brand />
           <div className="header-tag">{t('productTag')}</div>
           <div className="header-spacer" />
           <div className="head-actions">

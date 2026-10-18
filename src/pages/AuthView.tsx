@@ -3,6 +3,8 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
+import { Brand } from '../components/Brand';
+import { ContactCard } from '../components/ContactCard';
 
 type Mode = 'signin' | 'signup' | 'reset';
 
@@ -74,10 +76,7 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
     <div className="auth-page">
       <div className="demo-banner"><span className="dot" /><span>{t('demoBanner')}</span></div>
       <div className="auth-top">
-        <div className="brand">
-          <div className="brand-mark">GM</div>
-          <div><div className="brand-name">Gulf Mover</div><div className="brand-sub">{t('brandSub')}</div></div>
-        </div>
+        <Brand />
         <div className="lang-toggle">
           <button type="button" className={lang === 'en' ? 'active' : ''} aria-pressed={lang === 'en'} onClick={() => setLang('en')}>EN</button>
           <button type="button" className={lang === 'ar' ? 'active' : ''} aria-pressed={lang === 'ar'} onClick={() => setLang('ar')} lang="ar">العربية</button>
@@ -158,6 +157,7 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
             </>
           )}
         </div>
+        <div className="auth-contact"><ContactCard compact /></div>
       </main>
     </div>
   );

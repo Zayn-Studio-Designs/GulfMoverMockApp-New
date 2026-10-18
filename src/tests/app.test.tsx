@@ -320,3 +320,18 @@ describe('accounts', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
   });
 });
+
+describe('ATCO branding', () => {
+  test('booking page shows ATCO branding, the Dammam city choice and ATCO contacts', async () => {
+    await renderApp('/');
+    expect(screen.getAllByText('ATCO Marine').length).toBeGreaterThan(0);
+    expect(screen.getByText('ATCO Marine transfers, booked in minutes.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '+966 13 833 5588' })).toHaveAttribute('href', 'tel:+966138335588');
+    expect(screen.getByRole('link', { name: 'marine.info@atco.com.sa' })).toBeInTheDocument();
+    click(/Passenger transfer/);
+    click(/Continue/);
+    const city = screen.getByLabelText(/^City/) as HTMLSelectElement;
+    expect([...city.options].map(o => o.textContent)).toEqual(['Dammam']);
+  });
+});
+

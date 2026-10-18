@@ -19,6 +19,7 @@ export interface WizardState {
   selectedRetBoat: string;
   journeyDate: string;
   returnDate: string;
+  city: string;
   chosenDestination: string;
   paxCount: number;
   passengerName: string;
@@ -45,7 +46,7 @@ export interface BoardingState {
 
 export const initialWizard = (): WizardState => ({
   bookStep: 1, service: 'passenger', addReturn: false, selectedOut: '07:00', selectedRet: '09:30', selectedBoat: 'B-01', selectedRetBoat: 'B-01',
-  journeyDate: today(), returnDate: today(), chosenDestination: 'Approved Anchorage A (Demo)', paxCount: 1,
+  journeyDate: today(), returnDate: today(), city: 'dammam', chosenDestination: 'Approved Anchorage A (Demo)', paxCount: 1,
   passengerName: '', passengerEmail: '', passengerPhone: '', passengerCompany: '', vessel: '', imo: '',
   formError: '', policyAck: false, accessAck: false, paymentChoice: '', currentBooking: null,
 });

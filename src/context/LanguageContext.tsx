@@ -20,7 +20,7 @@ export function LanguageProvider({ children, initialLang = 'en' }: { children: R
     const root = document.documentElement;
     root.lang = lang;
     root.dir = lang === 'ar' ? 'rtl' : 'ltr';
-    document.title = lang === 'ar' ? 'جلف موفر — النموذج الأولي لواجهة المستخدم' : 'Gulf Mover — UX/UI Prototype';
+    document.title = lang === 'ar' ? 'أتكو البحرية — تطبيق النقل البحري (نموذج تجريبي)' : 'ATCO Marine — Marine Transfer App (demo)';
   }, [lang]);
 
   const t = useCallback((key: string) => translateKey(lang, key), [lang]);

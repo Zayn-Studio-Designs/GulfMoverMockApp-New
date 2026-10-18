@@ -6,6 +6,24 @@ import type { BoatSlot } from '../domain/fleet';
 export const DESTINATIONS = ['Approved Anchorage A (Demo)', 'Offshore Vessel Demo-01'] as const;
 export const ORIGIN = 'Ras Tanura Service Pier';
 
+/** Service cities. Only Dammam is enabled for now; add Riyadh/Jeddah here when ATCO confirms them. */
+export const CITIES: ReadonlyArray<{ id: string; name: { en: string; ar: string } }> = [
+  { id: 'dammam', name: { en: 'Dammam', ar: 'الدمام' } },
+];
+
+/**
+ * ATCO contact details as listed on the ATCO Group contact page (atcogroup.com/contact-atco),
+ * found via web search on 2026-10-18 — the site itself could not be opened from the build environment.
+ * Confirm with ATCO before go-live.
+ */
+export const ATCO_CONTACT = {
+  company: { en: 'ATCO Group (A. A. Turki Group)', ar: 'مجموعة أتكو (مجموعة عبدالعزيز التركي)' },
+  address: { en: '8069, 4th Street, Prince Muhammad Ibn Saud District, Dammam, Saudi Arabia', ar: '8069، الشارع الرابع، حي الأمير محمد بن سعود، الدمام، المملكة العربية السعودية' },
+  phone: '+966 13 833 5588',
+  marineEmail: 'marine.info@atco.com.sa',
+  website: 'www.atcogroup.com',
+} as const;
+
 export interface Boat {
   id: string;
   name: { en: string; ar: string };

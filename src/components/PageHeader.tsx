@@ -1,6 +1,6 @@
 import { useLanguage } from '../context/LanguageContext';
 
-export function PageHeader({ titleKey, subKey, eyebrow = 'GULF MOVER / DEMO' }: { titleKey: string; subKey: string; eyebrow?: string }) {
+export function PageHeader({ titleKey, subKey, eyebrow = 'ATCO MARINE / DEMO' }: { titleKey: string; subKey: string; eyebrow?: string }) {
   const { t, tx } = useLanguage();
   return (
     <div className="page-header">

@@ -5,7 +5,8 @@ import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusPill } from '../components/StatusPill';
 import { ArrowIcon, Icon, type IconName } from '../components/Icon';
-import { BOATS, DESTINATIONS, ORIGIN, today } from '../data/demoData';
+import { BOATS, CITIES, DESTINATIONS, ORIGIN, today } from '../data/demoData';
+import { ContactCard } from '../components/ContactCard';
 import { FARE_PER_PASSENGER_LEG, fareTotal, legCount, thresholdLabel } from '../domain/rules';
 import { BRIEF_TIMES, TIME_SLOTS, boatAvailability, canBookPassengers, canCharter, findSlot, formatTime, type Availability } from '../domain/fleet';
 
@@ -136,7 +137,7 @@ function BoatChoices({ leg }: { leg: 'outbound' | 'return' }) {
 }
 
 function JourneyStep() {
-  const { t, tx } = useLanguage();
+  const { t, tx, lang } = useLanguage();
   const { wizard, updateWizard, boatSlots } = useDemo();
   const { toast } = useUi();
   const isCharter = wizard.service === 'charter';
@@ -160,6 +161,13 @@ function JourneyStep() {
         <StatusPill text={t('demoOnly')} />
       </div>
       <div className="form-grid">
+        <div className="field">
+          <label htmlFor="city-select">{t('city')} *</label>
+          <select id="city-select" value={wizard.city} onChange={e => updateWizard({ city: e.target.value })}>
+            {CITIES.map(c => <option key={c.id} value={c.id}>{c.name[lang]}</option>)}
+          </select>
+          <small>{t('cityHint')}</small>
+        </div>
         <div className="field">
           <label htmlFor="journey-date">{t('departureDate')} *</label>
           <input id="journey-date" type="date" value={wizard.journeyDate} min={today()} onChange={e => updateWizard({ journeyDate: e.target.value })} />
@@ -275,10 +283,11 @@ function ReviewStep() {
   const noPayment = materialOnly || isCharter;
   const total = noPayment ? 0 : fareTotal(pax, wizard.addReturn);
   const boatName = (id: string) => BOATS.find(b => b.id === id)?.name[lang] ?? id;
+  const cityName = CITIES.find(c => c.id === wizard.city)?.name[lang] ?? wizard.city;
   const legLine = (labelKey: string, date: string, time: string, boatId: string) => (
     <>
       <div className="between"><strong>{t(labelKey)}</strong><StatusPill text="DEMO DATA" /></div>
-      <p className="small muted">{date} · <b className="mono">{formatTime(time, lang)}</b> · {tx(wizard.chosenDestination)} · {boatName(boatId)}</p>
+      <p className="small muted">{cityName} · {date} · <b className="mono">{formatTime(time, lang)}</b> · {tx(wizard.chosenDestination)} · {boatName(boatId)}</p>
       {!isCharter && <div className="between"><span>{pax} × {t('perPassenger')}</span><strong>SAR {pax * FARE_PER_PASSENGER_LEG}</strong></div>}
     </>
   );
@@ -476,12 +485,13 @@ export default function BookingView() {
   const step = wizard.bookStep;
   return (
     <>
-      <PageHeader titleKey="bookTitle" subKey="bookSub" eyebrow="GULF MOVER / CUSTOMER" />
+      <PageHeader titleKey="bookTitle" subKey="bookSub" eyebrow="ATCO MARINE / CUSTOMER" />
       <div className="hero-panel" style={{ marginBottom: 18 }}>
-        <div className="eyebrow" style={{ color: '#8ee1dc' }}>{t('customer')}</div>
+        <div className="eyebrow hero-eyebrow">{t('heroEyebrow')}</div>
         <h2>{t('quick')}</h2>
         <p>{t('homeCopy')}</p>
         <div className="hero-meta">
+          <span>{t('city')}: <b>{CITIES.map(c => c.name[lang]).join(' · ')}</b></span>
           <span>{t('briefFare')}: <b>SAR 500</b> {t('perTrip')}</span>
           <span>{t('schedule')}: <b className="mono">{BRIEF_TIMES.map(x => formatTime(x, lang)).join(' · ')}</b></span>
           <span>{t('localTime')}</span>
@@ -490,6 +500,7 @@ export default function BookingView() {
       </div>
       <Stepper step={step} />
       {step === 1 ? <ServiceStep /> : step === 2 ? <JourneyStep /> : step === 3 ? <DetailsStep /> : step === 4 ? <ReviewStep /> : step === 5 ? <PaymentStep /> : <ResultStep />}
+      <ContactCard />
       <p className="footer-note">{tx('All sample records, availability and statuses are fictional. Initial fare and departure times are taken from the client brief; final tariffs, tax, capacities, routes, permits and policies require ATCO confirmation.')}</p>
     </>
   );
