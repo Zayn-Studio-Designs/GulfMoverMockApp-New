@@ -36,7 +36,7 @@ export default function MaterialsView() {
           </div>
           {materials.map(m => (
             <button key={m.id} type="button" className="request-row" aria-pressed={m.id === selected.id}
-              style={{ width: '100%', textAlign: 'start', border: 0, background: m.id === selected.id ? '#f1faf9' : 'transparent', cursor: 'pointer' }}
+              style={{ width: '100%', textAlign: 'start', border: 0, background: m.id === selected.id ? '#f1f8f3' : 'transparent', cursor: 'pointer' }}
               onClick={() => setSelectedId(m.id)}>
               <div>
                 <div className="request-title">{tx(m.name)}</div>
