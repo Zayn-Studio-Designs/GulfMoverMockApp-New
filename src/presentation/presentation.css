@@ -1,0 +1,307 @@
+/* Gulf Mover — client presentation shell.
+   Presentation chrome only: the hosted app keeps its own ATCO Marine styling. */
+
+:root {
+  --pres-navy: #12345A;
+  --pres-green: #03643C;
+  --pres-ink: #22303c;
+  --pres-muted: #6a7885;
+  --pres-canvas: #eef0f2;
+  --pres-chrome: #ffffff;
+  --pres-line: #dde2e7;
+  --pres-bezel: #171a1e;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #presentation-root { height: 100%; }
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 0%, #f4f6f7 0%, var(--pres-canvas) 70%, #e4e7ea 100%);
+  color: var(--pres-ink);
+  font: 14px/1.45 Arial, Helvetica, ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+button { cursor: pointer; font: inherit; }
+button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px; }
+
+.pres-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.pres-shell:fullscreen,
+.pres-shell:-webkit-full-screen {
+  background: radial-gradient(120% 90% at 50% 0%, #f4f6f7 0%, var(--pres-canvas) 70%, #e4e7ea 100%);
+}
+
+/* ---------- Toolbar ---------- */
+
+.pres-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 20px;
+  background: var(--pres-chrome);
+  border-bottom: 1px solid var(--pres-line);
+  z-index: 2;
+}
+
+.pres-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pres-brand-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--pres-green);
+  flex: none;
+}
+
+.pres-brand-name {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: .07em;
+  color: var(--pres-navy);
+}
+
+.pres-brand-sub {
+  font-size: 10.5px;
+  color: var(--pres-muted);
+  letter-spacing: .02em;
+  margin-top: 1px;
+}
+
+.pres-center {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1;
+  justify-content: center;
+  min-width: 0;
+}
+
+.pres-seg {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 12px;
+  background: #e9edf1;
+  border: 1px solid var(--pres-line);
+}
+
+.pres-seg-btn {
+  border: 0;
+  background: transparent;
+  color: var(--pres-muted);
+  font-size: 13px;
+  font-weight: 750;
+  padding: 7px 18px;
+  border-radius: 9px;
+  min-height: 34px;
+  transition: background .15s, color .15s;
+}
+
+.pres-seg-btn:hover { color: var(--pres-navy); }
+
+.pres-seg-btn.active {
+  background: var(--pres-navy);
+  color: #fff;
+}
+
+.pres-status {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--pres-muted);
+  white-space: nowrap;
+}
+
+.pres-status strong { color: var(--pres-navy); font-weight: 800; }
+
+.pres-dims {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 7px;
+  border: 1px solid var(--pres-line);
+  border-radius: 6px;
+  background: #f6f8fa;
+}
+
+.pres-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pres-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 15px;
+  border: 1px solid var(--pres-line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--pres-navy);
+  font-size: 13px;
+  font-weight: 750;
+  transition: background .15s, border-color .15s;
+}
+
+.pres-btn:hover { background: #f4f7f9; border-color: #c8d1d8; }
+
+.pres-btn-primary {
+  background: var(--pres-green);
+  border-color: var(--pres-green);
+  color: #fff;
+}
+
+.pres-btn-primary:hover { background: #02492C; border-color: #02492C; }
+
+/* ---------- Stage ---------- */
+
+.pres-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* No filter here on purpose: a drop-shadow on this scaled ancestor lets the
+   scrolling iframe's composited layer repaint over the bezel. The shadow is
+   painted by .pres-frame instead (a normal box-shadow never escapes). */
+.pres-device {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  will-change: transform;
+}
+
+.pres-frame {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background: var(--pres-bezel);
+  overflow: hidden;
+}
+
+/* Single clipping layer for the screen: rounded, paint-contained, so the
+   iframe's own scrolling can never overlap the bezel, island or camera. */
+.pres-viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: #fff;
+  contain: paint;
+  isolation: isolate;
+}
+
+.pres-screen {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+
+/* Mac window: thin chassis, small radius. */
+.pres-device-mac .pres-frame {
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 26px 44px rgba(16, 24, 34, .28), inset 0 0 0 1px rgba(255, 255, 255, .07);
+}
+.pres-device-mac .pres-viewport { border-radius: 4px; }
+
+/* iPhone: rounded portrait chassis with a dynamic island. */
+.pres-device-iphone .pres-frame {
+  border-radius: 54px;
+  padding: 12px;
+  box-shadow: 0 26px 44px rgba(16, 24, 34, .28), inset 0 0 0 2px rgba(255, 255, 255, .09);
+}
+.pres-device-iphone .pres-viewport { border-radius: 42px; }
+
+.pres-island {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 98px;
+  height: 27px;
+  border-radius: 15px;
+  background: #0c0e11;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Android: straighter chassis with a punch-hole camera. */
+.pres-device-android .pres-frame {
+  border-radius: 30px;
+  padding: 10px;
+  box-shadow: 0 26px 44px rgba(16, 24, 34, .28), inset 0 0 0 1px rgba(255, 255, 255, .1);
+}
+.pres-device-android .pres-viewport { border-radius: 21px; }
+
+.pres-cam {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #04060a;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* ---------- Presenter hints ---------- */
+
+.pres-help {
+  position: absolute;
+  left: 18px;
+  bottom: 12px;
+  margin: 0;
+  max-width: 70%;
+  font-size: 11.5px;
+  color: var(--pres-muted);
+  opacity: .85;
+  pointer-events: none;
+}
+
+.pres-fs-note {
+  position: absolute;
+  right: 18px;
+  bottom: 12px;
+  margin: 0;
+  padding: 7px 12px;
+  font-size: 12px;
+  border: 1px solid var(--pres-line);
+  border-radius: 9px;
+  background: var(--pres-chrome);
+  color: var(--pres-muted);
+}
+
+/* Toolbar stays usable at narrow window sizes while file:// sized previews shrink. */
+@media (max-width: 900px) {
+  .pres-status { display: none; }
+  .pres-toolbar { gap: 10px; padding: 8px 12px; }
+  .pres-help { max-width: 60%; }
+}

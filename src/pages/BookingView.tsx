@@ -500,7 +500,7 @@ export default function BookingView() {
       </div>
       <Stepper step={step} />
       {step === 1 ? <ServiceStep /> : step === 2 ? <JourneyStep /> : step === 3 ? <DetailsStep /> : step === 4 ? <ReviewStep /> : step === 5 ? <PaymentStep /> : <ResultStep />}
-      <ContactCard />
+      <div className="booking-contact"><ContactCard /></div>
       <p className="footer-note">{tx('All sample records, availability and statuses are fictional. Initial fare and departure times are taken from the client brief; final tariffs, tax, capacities, routes, permits and policies require ATCO confirmation.')}</p>
     </>
   );

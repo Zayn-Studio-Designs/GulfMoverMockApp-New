@@ -6,11 +6,16 @@ import { Brand } from './Brand';
 import { CompanyLogo } from './ImageUpload';
 import { useLanguage } from '../context/LanguageContext';
 import { useDemo } from '../context/DemoContext';
+import { useWorkMode } from '../context/WorkModeContext';
 import { useUi } from '../context/UiContext';
 import { Icon, type IconName } from './Icon';
 
+/**
+ * Navigation shown to each demo view. Navigation filtering is UI-only: every route
+ * stays reachable by URL and the demo banner carries the no-real-permissions notice.
+ */
 export const NAV_ITEMS: ReadonlyArray<{ to: string; key: string; icon: IconName }> = [
-  { to: '/', key: 'navBook', icon: 'navBook' },
+  { to: '/book', key: 'navBook', icon: 'navBook' },
   { to: '/bookings', key: 'navBookings', icon: 'navBookings' },
   { to: '/corporate', key: 'navCorporate', icon: 'navCorporate' },
   { to: '/operations', key: 'navOps', icon: 'navOps' },
@@ -19,10 +24,19 @@ export const NAV_ITEMS: ReadonlyArray<{ to: string; key: string; icon: IconName 
   { to: '/fleet', key: 'navFleet', icon: 'ship' },
 ];
 
+/** Customer destinations: only what a booking customer needs every day. */
+const CUSTOMER_NAV: ReadonlyArray<{ to: string; key: string; icon: IconName }> = [
+  { to: '/', key: 'navHome', icon: 'home' },
+  { to: '/book', key: 'navBook', icon: 'navBook' },
+  { to: '/bookings', key: 'navBookings', icon: 'navBookings' },
+  { to: '/settings', key: 'navAccount', icon: 'user' },
+];
+
 /** Profile button with a small menu: account details, Settings and Sign out. */
 function AccountMenu() {
   const { t } = useLanguage();
   const { user, signOut } = useAuth();
+  const { isCustomer, setMode } = useWorkMode();
   const { toast } = useUi();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -59,6 +73,9 @@ function AccountMenu() {
           <Link role="menuitem" className="account-item" to="/settings?tab=security" onClick={() => setOpen(false)}>{t('securityTab')}</Link>
           <Link role="menuitem" className="account-item" to="/settings?tab=notifications" onClick={() => setOpen(false)}>{t('notificationsTitle')}</Link>
           <Link role="menuitem" className="account-item" to="/settings?tab=preferences" onClick={() => setOpen(false)}>{t('settingsLink')}</Link>
+          <button role="menuitem" type="button" className="account-item" onClick={() => { setOpen(false); setMode(isCustomer ? 'staff' : 'customer'); }}>
+            {isCustomer ? t('wsSwitchStaff') : t('wsSwitchCustomer')}
+          </button>
           <div className="account-sep" />
           <button role="menuitem" type="button" className="account-item account-signout" onClick={() => { setOpen(false); signOut(); toast(t('signedOut')); navigate('/signin'); }}>{t('signOut')}</button>
         </div>
@@ -70,6 +87,7 @@ function AccountMenu() {
 export function Layout() {
   const { lang, setLang, t } = useLanguage();
   const { user, signedOutByUser } = useAuth();
+  const { isCustomer, setMode } = useWorkMode();
   const { resetDemoData } = useDemo();
   const { toast } = useUi();
   const { pathname } = useLocation();
@@ -103,8 +121,15 @@ export function Layout() {
       <div className="shell">
         <aside className="sidebar" aria-label={t('mainNavigation')}>
           <div className="side-label">{t('workspace')}</div>
+          <div className="ws-switch" role="group" aria-label={t('wsSwitchGroup')}>
+            <div className="ws-seg">
+              <button type="button" className={`ws-btn${isCustomer ? ' active' : ''}`} aria-pressed={isCustomer} onClick={() => setMode('customer')}>{t('wsCustomerLabel')}</button>
+              <button type="button" className={`ws-btn${isCustomer ? '' : ' active'}`} aria-pressed={!isCustomer} onClick={() => setMode('staff')}>{t('wsStaffLabel')}</button>
+            </div>
+            <small>{t('wsDemoHint')}</small>
+          </div>
           <nav className="nav-list" aria-label={t('mainNavigation')}>
-            {NAV_ITEMS.map(item => (
+            {(isCustomer ? CUSTOMER_NAV : NAV_ITEMS).map(item => (
               <NavLink key={item.to} to={item.to} end className={({ isActive }) => `nav-btn${isActive ? ' active' : ''}`}>
                 <Icon name={item.icon} />
                 <span className="nav-full">{t(item.key)}</span>

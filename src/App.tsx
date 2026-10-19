@@ -3,7 +3,9 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { LanguageProvider } from './context/LanguageContext';
 import { DemoProvider } from './context/DemoContext';
 import { UiProvider } from './context/UiContext';
+import { WorkModeProvider } from './context/WorkModeContext';
 import { Layout } from './components/Layout';
+import CustomerHome from './pages/CustomerHome';
 import BookingView from './pages/BookingView';
 import MyBookingsView from './pages/MyBookingsView';
 import CorporateView from './pages/CorporateView';
@@ -22,7 +24,8 @@ export function AppRoutes() {
       <Route path="/signin" element={<AuthView />} />
       <Route path="/signup" element={<AuthView initialMode="signup" />} />
       <Route element={<Layout />}>
-        <Route path="/" element={<BookingView />} />
+        <Route path="/" element={<CustomerHome />} />
+        <Route path="/book" element={<BookingView />} />
         <Route path="/bookings" element={<MyBookingsView />} />
         <Route path="/corporate" element={<CorporateView />} />
         <Route path="/operations" element={<OperationsView />} />
@@ -39,11 +42,13 @@ export function AppRoutes() {
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <LanguageProvider>
-      <AuthProvider>
-        <DemoProvider>
-          <UiProvider>{children}</UiProvider>
-        </DemoProvider>
-      </AuthProvider>
+      <WorkModeProvider>
+        <AuthProvider>
+          <DemoProvider>
+            <UiProvider>{children}</UiProvider>
+          </DemoProvider>
+        </AuthProvider>
+      </WorkModeProvider>
     </LanguageProvider>
   );
 }

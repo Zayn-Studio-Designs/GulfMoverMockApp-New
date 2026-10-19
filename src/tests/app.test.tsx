@@ -31,8 +31,20 @@ const heading = () => screen.getByRole('heading', { level: 1 });
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
 
 describe('navigation', () => {
-  test('every sidebar link opens its view', async () => {
+  test('customer view shows only customer destinations', async () => {
     await renderApp();
+    const nav = screen.getAllByRole('navigation', { name: 'Main navigation' })[0];
+    for (const name of ['Home', 'Book Transfer', 'My Bookings', 'Account']) {
+      expect(within(nav).getByRole('link', { name })).toBeInTheDocument();
+    }
+    expect(within(nav).queryByRole('link', { name: 'Operations' })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'Boarding Desk' })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'Materials' })).toBeNull();
+  });
+
+  test('staff view exposes management destinations', async () => {
+    await renderApp();
+    click('ATCO staff (demo)');
     const nav = screen.getAllByRole('navigation', { name: 'Main navigation' })[0];
     const expected: Array<[string, string]> = [
       ['My Bookings', 'My bookings'], ['Corporate / Agent', 'Corporate & agent workspace'], ['Operations', 'Operations overview'],
@@ -44,9 +56,37 @@ describe('navigation', () => {
     }
   });
 
-  test('unknown routes fall back to booking', async () => {
+  test('demo view choice persists across a reload', async () => {
+    const view = await renderApp();
+    click('ATCO staff (demo)');
+    expect(localStorage.getItem('gm-demo-workspace')).toBe('staff');
+    view.unmount();
+    renderSignedOut();
+    const nav = (await screen.findAllByRole('navigation', { name: 'Main navigation' }))[0];
+    expect(within(nav).getByRole('link', { name: 'Operations' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Boarding Desk' })).toBeInTheDocument();
+  });
+
+  test('unknown routes fall back to the customer home', async () => {
     await renderApp('/nope');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+  });
+});
+
+describe('customer home', () => {
+  test('shows the booking CTA and the next demo trip', async () => {
+    await renderApp('/');
+    expect(screen.getByRole('button', { name: 'Book a marine transfer' })).toBeInTheDocument();
+    // The sample bookings habit is fictional but present: next-trip card shows the first ref.
+    expect(screen.getByText('GM-DEMO-0248')).toBeInTheDocument();
+    expect(screen.getAllByText('Awaiting ATCO decision').length).toBeGreaterThan(0);
+  });
+
+  test('the CTA opens the booking wizard', async () => {
+    await renderApp('/');
+    click('Book a marine transfer');
     expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
+    expect(screen.getByText('What do you need to arrange?')).toBeInTheDocument();
   });
 });
 
@@ -65,7 +105,7 @@ describe('language toggle', () => {
   });
 
   test('demo state survives a language switch', async () => {
-    await renderApp('/');
+    await renderApp('/book');
     click(/Material transfer/);
     click('العربية');
     expect(screen.getByRole('button', { name: /نقل مواد/ })).toHaveAttribute('aria-pressed', 'true');
@@ -75,6 +115,8 @@ describe('language toggle', () => {
 describe('booking flow', () => {
   test('return leg doubles the fare and statuses stay separate', async () => {
     await renderApp('/');
+    click('Book a marine transfer');
+    await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' });
     click(/Continue/);
     fireEvent.change(screen.getByLabelText(/Passengers/), { target: { value: '2' } });
     fireEvent.click(screen.getByLabelText('Add a return leg'));
@@ -104,6 +146,28 @@ describe('booking flow', () => {
     expect(screen.getAllByText('Awaiting ATCO decision').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Not started').length).toBeGreaterThan(0);
     expect(screen.getByText(/separate sailing and ticket/)).toBeInTheDocument();
+  });
+
+  test('demo bookings persist in localStorage across an app remount', async () => {
+    const view = await renderApp('/');
+    click('Book a marine transfer');
+    await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' });
+    click(/Continue/);
+    click(/Continue/);
+    fireEvent.change(screen.getByLabelText(/Full name/), { target: { value: 'Persist Passenger' } });
+    fireEvent.change(screen.getByLabelText(/Email address/), { target: { value: 'persist@example.test' } });
+    fireEvent.change(screen.getByLabelText(/Phone number/), { target: { value: '+966 500 000 009' } });
+    click(/Continue/);
+    fireEvent.click(screen.getByLabelText('I have reviewed the demo policy placeholder.'));
+    fireEvent.click(screen.getByLabelText('I understand a booking/ticket does not authorize port entry or sailing.'));
+    click(/Continue to payment simulation/);
+    click(/Simulate payment recorded/);
+    click('Show booking result');
+    expect(screen.getByText('GM-DEMO-3203')).toBeInTheDocument();
+    view.unmount();
+    renderSignedOut('/bookings');
+    await screen.findAllByRole('navigation', { name: 'Main navigation' });
+    expect(await screen.findByText('GM-DEMO-3203')).toBeInTheDocument();
   });
 });
 
@@ -147,6 +211,8 @@ describe('boats cannot be double-booked', () => {
 
   test('a chartered boat cannot be booked, and a new charter takes the boat', async () => {
     await renderApp('/');
+    click('Book a marine transfer');
+    await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' });
     click(/Dedicated trip \/ charter/);
     click(/Continue/);
     fireEvent.change(screen.getByLabelText(/Departure time/), { target: { value: '13:00' } });
@@ -169,7 +235,6 @@ describe('boats cannot be double-booked', () => {
     // Now a passenger booking for Boat 2 at the same time is blocked.
     const nav = screen.getAllByRole('navigation', { name: 'Main navigation' })[0];
     fireEvent.click(within(nav).getByRole('link', { name: 'Book Transfer' }));
-    click(/Passenger transfer/);
     click(/Continue/);
     fireEvent.change(screen.getByLabelText(/Departure time/), { target: { value: '13:00' } });
     expect(boat('Boat 2')).toBeDisabled();
@@ -178,6 +243,8 @@ describe('boats cannot be double-booked', () => {
 
   test('departure times cover 24 hours in AM/PM', async () => {
     await renderApp('/');
+    click('Book a marine transfer');
+    await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' });
     click(/Continue/);
     const options = within(screen.getByLabelText(/Departure time/)).getAllByRole('option');
     expect(options).toHaveLength(25);
@@ -216,7 +283,7 @@ describe('accounts', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'harbour2026' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'harbour2026' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
     expect(localStorage.getItem('gm-demo-accounts')).not.toContain('harbour2026');
   });
 
@@ -229,7 +296,7 @@ describe('accounts', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'firstpass1' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'firstpass1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' });
+    await screen.findByRole('heading', { level: 1, name: 'Home' });
 
     click('Account menu');
     fireEvent.click(screen.getByRole('menuitem', { name: 'Profile' }));
@@ -267,7 +334,7 @@ describe('accounts', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('incorrect');
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secondpass2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
   });
 
   async function signUpAs(email: string, username: string, password: string) {
@@ -279,7 +346,11 @@ describe('accounts', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: password } });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
-    await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' });
+    await screen.findByRole('heading', { level: 1, name: 'Home' });
+    // From the customer home, go through the account menu like a real user.
+    click('Account menu');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to ATCO staff view' }));
+    expect(await screen.findByRole('link', { name: 'Operations' })).toBeInTheDocument();
   }
 
   test('settings: change email needs the current password', async () => {
@@ -317,13 +388,13 @@ describe('accounts', () => {
     fireEvent.change(screen.getByLabelText('Email or username'), { target: { value: 'resetter' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'newpass2027' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
   });
 });
 
 describe('ATCO branding', () => {
   test('booking page shows ATCO branding, the Dammam city choice and ATCO contacts', async () => {
-    await renderApp('/');
+    await renderApp('/book');
     expect(screen.getAllByText('ATCO Marine').length).toBeGreaterThan(0);
     expect(screen.getByText('ATCO Marine transfers, booked in minutes.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '+966 13 833 5588' })).toHaveAttribute('href', 'tel:+966138335588');

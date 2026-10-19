@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   initialAudit, initialBoatSlots, initialBookings, initialMaterials, initialSailings, nowTime, today,
   type AuditEvent, type Booking, type MaterialRequest, type Sailing,
@@ -55,6 +55,34 @@ const initialBoarding = (): BoardingState => ({
   selectedSailingId: 'S-0700', scanCount: 0, lastScanUsed: false, boardingMessage: null, manualRef: '', manualFound: null,
 });
 
+/**
+ * Demo bookings etc. previously lived only in memory and vanished on refresh.
+ * They now persist per browser (same day) through localStorage, like accounts.
+ * A saved state from an earlier day is discarded so the sample dates stay current.
+ */
+const PERSIST_KEY = 'gm-demo-state-v1';
+
+interface PersistedState {
+  savedAt: string;
+  sailings: Sailing[];
+  bookings: Booking[];
+  materials: MaterialRequest[];
+  audit: AuditEvent[];
+  boatSlots: BoatSlot[];
+}
+
+function loadPersisted(): PersistedState | null {
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedState;
+    if (parsed?.savedAt !== today() || !Array.isArray(parsed.bookings) || !Array.isArray(parsed.boatSlots)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
 interface DemoContextValue {
   sailings: Sailing[];
   bookings: Booking[];
@@ -85,16 +113,26 @@ interface DemoContextValue {
 const DemoContext = createContext<DemoContextValue | undefined>(undefined);
 
 export function DemoProvider({ children }: { children: ReactNode }) {
-  const [sailings, setSailings] = useState(initialSailings);
-  const [bookings, setBookings] = useState(initialBookings);
-  const [materials, setMaterials] = useState(initialMaterials);
-  const [audit, setAudit] = useState(initialAudit);
+  const persisted = useRef<PersistedState | null>(loadPersisted());
+  const [sailings, setSailings] = useState(() => persisted.current?.sailings ?? initialSailings());
+  const [bookings, setBookings] = useState(() => persisted.current?.bookings ?? initialBookings());
+  const [materials, setMaterials] = useState(() => persisted.current?.materials ?? initialMaterials());
+  const [audit, setAudit] = useState(() => persisted.current?.audit ?? initialAudit());
   const [wizard, setWizard] = useState(initialWizard);
   const [boarding, setBoarding] = useState(initialBoarding);
-  const [boatSlots, setBoatSlotsState] = useState(initialBoatSlots);
+  const [boatSlots, setBoatSlotsState] = useState(() => persisted.current?.boatSlots ?? initialBoatSlots());
   // Mirror of boatSlots so a booking check always sees the latest reservations (prevents double booking).
   const slotsRef = useRef<BoatSlot[]>(boatSlots);
   const setBoatSlots = useCallback((next: BoatSlot[]) => { slotsRef.current = next; setBoatSlotsState(next); }, []);
+
+  // Keep the saved demo data in sync after every change (same-day persistence).
+  useEffect(() => {
+    try {
+      localStorage.setItem(PERSIST_KEY, JSON.stringify({ savedAt: today(), sailings, bookings, materials, audit, boatSlots }));
+    } catch {
+      // Storage unavailable (private mode): data lasts for the session only.
+    }
+  }, [sailings, bookings, materials, audit, boatSlots]);
 
   const addAudit = useCallback((actor: string, action: string) => {
     setAudit(prev => [...prev, { time: nowTime(), actor, action }]);
@@ -153,6 +191,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   }, [addAudit]);
 
   const resetDemoData = useCallback(() => {
+    try { localStorage.removeItem(PERSIST_KEY); } catch { /* ignore */ }
     setSailings(initialSailings());
     setBookings(initialBookings());
     setMaterials(initialMaterials());

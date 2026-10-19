@@ -21,6 +21,7 @@ The terminal prints `Local: http://localhost:3000/`. The server only listens on 
 | Command | What it does |
 |---|---|
 | `npm run dev` | Start the dev server at http://localhost:3000/ |
+| `npm run presentation` | Start the dev server and open the **client presentation** page (`/presentation.html`) |
 | `npm run build` | Production build into `dist/` |
 | `npm run preview` | Serve the production build (Vite prints the URL, normally http://localhost:4173/) |
 | `npm run typecheck` | TypeScript check |
@@ -31,6 +32,15 @@ The terminal prints `Local: http://localhost:3000/`. The server only listens on 
 ## Quick look without installing
 
 `previews/atco-marine-app.html` (full app) and `previews/atco-marine-phone-preview.html` (same app in an iPhone / Android frame) are self-contained builds. Download one and double-click it; no internet or install needed. They are snapshots for viewing only — after changing `src/`, test with `npm run dev`, not the previews.
+
+## Client presentation mode
+
+During a client meeting, run `npm run presentation` and present from the page that opens (the terminal prints the `Local:` URL; open `<that URL>/presentation.html` manually if the browser does not pop up).
+
+- **Toolbar:** Gulf Mover branding · **Mac / iPhone / Android** selector · "Showing" indicator · **Home** (restart the demo) · **Full screen** (browser native full screen; if unavailable, a note appears and the window view keeps working).
+- The **same running app** is shown in each preview — switching devices only resizes the preview window, so the booking you made or the language you selected carries across, and mobile/RTL layout inside the frame is real.
+- Sign in once (“Explore as demo guest”) inside the preview; the session then carries across device switches. Use **Reset demo data** inside the app to clear demo changes.
+- Presentation chrome never ships to customers: it is a local page (`presentation.html`) shown only through your dev server.
 
 ## Using the demo
 - **Sign in:** create a demo account or press **Explore as demo guest**. Accounts are stored only in this browser (no server); never use a real password.
