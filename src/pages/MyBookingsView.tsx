@@ -57,8 +57,8 @@ export default function MyBookingsView() {
         </div>
         {isCustomer ? (
           <div className="booking-cards" role="list">
-            {filtered.map(b => (
-              <div key={b.ref} className="booking-card" role="listitem">
+            {filtered.map((b, i) => (
+              <div key={b.ref} className="booking-card" role="listitem" data-tour={i === 0 ? 'booking-card' : undefined}>
                 <div className="between">
                   <strong className="mono">{b.ref}</strong>
                   <StatusPill text={b.payment} />

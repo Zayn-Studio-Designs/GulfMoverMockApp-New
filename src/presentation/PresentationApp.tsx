@@ -108,7 +108,9 @@ export function PresentationApp() {
       style.id = ID;
       style.textContent =
         'html{scrollbar-width:none;-ms-overflow-style:none}' +
-        'html::-webkit-scrollbar,body::-webkit-scrollbar{width:0;height:0;display:none}';
+        'html::-webkit-scrollbar,body::-webkit-scrollbar{width:0;height:0;display:none}' +
+        // No rubber-band bounce at the top/bottom edge inside the device frame.
+        'html,body{overscroll-behavior:none}';
       (doc.head || doc.documentElement).appendChild(style);
     } catch {
       /* Cross-origin or still loading: next load event will retry. */
@@ -182,6 +184,17 @@ export function PresentationApp() {
         >
           <div className="pres-frame">
             <div className="pres-viewport">
+              {deviceId !== 'mac' && (
+                /* Phone status bar: keeps the island / camera clear of the app, like a real phone browser. */
+                <div className="pres-statusbar" aria-hidden="true">
+                  <span>9:41</span>
+                  <span className="pres-statusbar-icons">
+                    <svg viewBox="0 0 18 12" width="18" height="12"><path fill="currentColor" d="M1 9h3v3H1zM6 6h3v6H6zM11 3h3v9h-3zM16 0h2v12h-2z" /></svg>
+                    <svg viewBox="0 0 16 12" width="16" height="12"><path fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" d="M1.5 4.5a9.5 9.5 0 0 1 13 0M4 7.2a6 6 0 0 1 8 0" /><circle cx="8" cy="10" r="1.4" fill="currentColor" /></svg>
+                    <svg viewBox="0 0 27 13" width="25" height="12"><rect x="1" y="1" width="22" height="11" rx="3" fill="none" stroke="currentColor" strokeOpacity=".5" /><rect x="3" y="3" width="16" height="7" rx="1.5" fill="currentColor" /><path d="M25 4.5v4" stroke="currentColor" strokeOpacity=".5" strokeWidth="1.6" strokeLinecap="round" /></svg>
+                  </span>
+                </div>
+              )}
               <iframe
                 ref={iframeRef}
                 className="pres-screen"

@@ -406,3 +406,105 @@ describe('ATCO branding', () => {
   });
 });
 
+
+describe('guided tour', () => {
+  const progress = (n: number, total = 9) => screen.getByText(`Step ${n} of ${total}`);
+  const tourOpen = () => screen.queryByText(/^Step \d+ of \d+$/) !== null;
+  const tourTitle = () => document.getElementById('tour-title') as HTMLElement;
+  const next = () => click(/^Next/);
+
+  async function signUpNewUser() {
+    renderSignedOut('/');
+    click(/^Create an account$/);
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.test' } });
+    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'new.user' } });
+    fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'New Marine Co.' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'harbour2026' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'harbour2026' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    await screen.findByRole('heading', { level: 1, name: 'Home' });
+  }
+
+  test('customer tour starts once after sign-up and walks through the real customer pages', async () => {
+    await signUpNewUser();
+    expect(progress(1)).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Welcome to ATCO Marine' })).toBeInTheDocument();
+    next();
+    expect(screen.getByRole('dialog', { name: 'Your home screen' })).toBeInTheDocument();
+    expect(heading()).toHaveTextContent('Home');
+    next();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'First, choose a service' })).toBeInTheDocument();
+    click('Back');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    next(); next(); next();
+    expect(await screen.findByRole('heading', { level: 1, name: 'My bookings' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Find your bookings' })).toBeInTheDocument();
+    next(); next(); next(); next();
+    expect(screen.getByRole('dialog', { name: 'You are ready' })).toBeInTheDocument();
+    expect(screen.getByText(/no real payment is made/)).toBeInTheDocument();
+    click('Finish');
+    expect(tourOpen()).toBe(false);
+
+    click('Account menu');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    fireEvent.change(await screen.findByLabelText('Email or username'), { target: { value: 'new.user' } });
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'harbour2026' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    await screen.findByRole('heading', { level: 1, name: 'Home' });
+    expect(tourOpen()).toBe(false);
+  });
+
+  test('the customer tour never opens a staff page; the guest can start and skip it', async () => {
+    await renderApp('/');
+    expect(tourOpen()).toBe(false);
+    click('Take the tour');
+    const staffTitles = ['Operations overview', 'Boarding desk', 'Materials review', 'Fleet & boat bookings', 'Corporate & agent workspace'];
+    for (let n = 1; n <= 9; n++) {
+      expect(progress(n)).toBeInTheDocument();
+      expect(staffTitles).not.toContain(heading().textContent);
+      expect(tourTitle().textContent).not.toMatch(/staff|Operations|Boarding|Fleet/);
+      if (n < 9) next();
+    }
+    click('Back');
+    expect(progress(8)).toBeInTheDocument();
+    click('Skip tour');
+    expect(tourOpen()).toBe(false);
+  });
+
+  test('staff view has its own tour through the management pages', async () => {
+    await renderApp('/');
+    click('ATCO staff (demo)');
+    click('Take the tour');
+    expect(screen.getByRole('dialog', { name: 'ATCO staff tools' })).toBeInTheDocument();
+    next();
+    expect(screen.getByText(/demo display filter only: it is not a login and gives no real permissions/)).toBeInTheDocument();
+    const pages: Array<[string, string]> = [
+      ['Operations', 'Operations overview'], ['Boarding Desk', 'Boarding desk'], ['Materials', 'Materials review'],
+      ['Fleet', 'Fleet & boat bookings'], ['Corporate / Agent', 'Corporate & agent workspace'],
+    ];
+    for (const [title, page] of pages) {
+      next();
+      expect(screen.getByRole('dialog', { name: title })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { level: 1, name: page })).toBeInTheDocument();
+    }
+    next(); next();
+    expect(progress(9)).toBeInTheDocument();
+    click('Finish');
+    expect(tourOpen()).toBe(false);
+  });
+
+  test('replays from the account menu and follows a language switch, in Arabic', async () => {
+    await renderApp('/');
+    click('العربية');
+    click('قائمة الحساب');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'جولة تعريفية' }));
+    expect(screen.getByRole('dialog', { name: 'مرحباً بك في أتكو البحرية' })).toBeInTheDocument();
+    expect(screen.getByText('الخطوة 1 من 9')).toBeInTheDocument();
+    click(/التالي/);
+    expect(screen.getByRole('dialog', { name: 'شاشتك الرئيسية' })).toBeInTheDocument();
+    click('EN');
+    expect(screen.getByRole('dialog', { name: 'Your home screen' })).toBeInTheDocument();
+    expect(progress(2)).toBeInTheDocument();
+  });
+});

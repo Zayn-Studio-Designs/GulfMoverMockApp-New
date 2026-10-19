@@ -25,7 +25,7 @@ function Stepper({ step }: { step: number }) {
   const { t } = useLanguage();
   const names = [t('stepService'), t('stepSearch'), t('stepDetails'), t('stepReview'), t('stepResult')];
   return (
-    <ol className="stepper">
+    <ol className="stepper" data-tour="booking-steps">
       {names.map((n, i) => (
         <li key={n} className={`step${step === i + 1 ? ' active' : ''}${step > i + 1 ? ' done' : ''}`}>
           <span className="step-num">{step > i + 1 ? '✓' : i + 1}</span><span>{n}</span>
@@ -45,7 +45,7 @@ function ServiceStep() {
         <div><h2 className="card-title">{t('serviceTitle')}</h2><p className="card-desc">{t('homeCopy')}</p></div>
         <span className="pill pill-blue">{t('stepService')} 1/5</span>
       </div>
-      <div className="grid grid-2" style={{ marginTop: 18 }}>
+      <div className="grid grid-2" style={{ marginTop: 18 }} data-tour="booking-services">
         {SERVICES.map(s => (
           <button key={s.value} type="button" aria-pressed={wizard.service === s.value}
             className={`service-card${wizard.service === s.value ? ' selected' : ''}`}

@@ -228,7 +228,7 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   padding: 12px;
   box-shadow: 0 26px 44px rgba(16, 24, 34, .28), inset 0 0 0 1px rgba(255, 255, 255, .07);
 }
-.pres-device-mac .pres-viewport { border-radius: 4px; }
+.pres-device-mac .pres-viewport { border-radius: 4px; clip-path: inset(0 round 4px); }
 
 /* iPhone: rounded portrait chassis with a dynamic island. */
 .pres-device-iphone .pres-frame {
@@ -236,7 +236,7 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   padding: 12px;
   box-shadow: 0 26px 44px rgba(16, 24, 34, .28), inset 0 0 0 2px rgba(255, 255, 255, .09);
 }
-.pres-device-iphone .pres-viewport { border-radius: 42px; }
+.pres-device-iphone .pres-viewport { border-radius: 42px; clip-path: inset(0 round 42px); }
 
 .pres-island {
   position: absolute;
@@ -257,7 +257,7 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   padding: 10px;
   box-shadow: 0 26px 44px rgba(16, 24, 34, .28), inset 0 0 0 1px rgba(255, 255, 255, .1);
 }
-.pres-device-android .pres-viewport { border-radius: 21px; }
+.pres-device-android .pres-viewport { border-radius: 21px; clip-path: inset(0 round 21px); }
 
 .pres-cam {
   position: absolute;
@@ -271,6 +271,31 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   z-index: 2;
   pointer-events: none;
 }
+
+/* Phone status bar (time, signal, battery) in the app's theme colour. The app starts below it,
+   so the island / punch-hole camera never covers the demo banner. clip-path on the viewport
+   above is a hard rounded clip that also holds while the iframe scrolls. */
+.pres-statusbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--pres-statusbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--pres-statusbar-pad);
+  background: #12345A;
+  color: #fff;
+  font: 600 15px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -.01em;
+}
+.pres-statusbar-icons { display: flex; align-items: center; gap: 5px; }
+.pres-device-iphone { --pres-statusbar-h: 50px; --pres-statusbar-pad: 34px; }
+.pres-device-android { --pres-statusbar-h: 32px; --pres-statusbar-pad: 18px; }
+.pres-device-android .pres-statusbar { font-size: 13px; font-weight: 500; }
+.pres-device-iphone .pres-screen,
+.pres-device-android .pres-screen { top: var(--pres-statusbar-h); height: calc(100% - var(--pres-statusbar-h)); }
 
 /* ---------- Presenter hints ---------- */
 
