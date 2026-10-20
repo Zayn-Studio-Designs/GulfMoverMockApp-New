@@ -6,11 +6,13 @@ import { PageHeader } from '../components/PageHeader';
 import { StatusPill } from '../components/StatusPill';
 import { ArrowIcon, Icon, type IconName } from '../components/Icon';
 import { BOATS, CITIES, DESTINATIONS, ORIGIN, today, nowTime } from '../data/demoData';
-import { ContactCard } from '../components/ContactCard';
+import { ContactAtcoLink } from '../components/ContactCard';
 import { FARE_PER_PASSENGER_LEG, fareTotal, legCount } from '../domain/rules';
 import { BRIEF_TIMES, TIME_SLOTS, boatAvailability, canBookPassengers, canCharter, findSlot, formatTime, type Availability } from '../domain/fleet';
 import { DEMO_POLICY_VERSION, type Ticket } from '../domain/tickets';
 import { QRCodeTicket } from '../components/QRCodeTicket';
+import { DeviceWalletButton } from '../components/wallet/WalletHostBridge';
+import { useTicketIndex, type TicketEntry } from '../hooks/useTicketIndex';
 
 const SERVICES: ReadonlyArray<{ value: ServiceType; title: string; desc: string; icon: IconName }> = [
   { value: 'passenger', title: 'servicePassenger', desc: 'servicePassengerDesc', icon: 'user' },
@@ -19,9 +21,11 @@ const SERVICES: ReadonlyArray<{ value: ServiceType; title: string; desc: string;
   { value: 'charter', title: 'serviceCharter', desc: 'serviceCharterDesc', icon: 'ship' },
 ];
 
-function Stepper({ step }: { step: number }) {
+function Stepper({ step: wizardStep }: { step: number }) {
   const { t } = useLanguage();
   const names = [t('stepService'), t('stepSearch'), t('stepDetails'), t('stepReview'), t('stepResult')];
+  // Six wizard screens, five labels: the payment simulation (5) belongs to "Review & pay" (4).
+  const step = wizardStep >= 5 ? wizardStep - 1 : wizardStep;
   return (
     <ol className="stepper">
       {names.map((n, i) => (
@@ -380,7 +384,7 @@ function ReviewStep() {
 }
 
 function PaymentStep() {
-  const { t, tx } = useLanguage();
+  const { t, tx, lang } = useLanguage();
   const { wizard, updateWizard, addMaterial, materials, createBooking } = useDemo();
   const { toast } = useUi();
   const choices: ReadonlyArray<{ value: PaymentChoice; title: string; desc: string; icon: IconName }> = [
@@ -431,27 +435,49 @@ function PaymentStep() {
     updateWizard({ bookStep: 6, currentBooking: booking });
   };
 
+  const pax = Math.max(1, wizard.paxCount);
+  const total = fareTotal(pax, wizard.addReturn);
+  const legs: Array<[string, string, string]> = [['outboundLeg', wizard.journeyDate, wizard.selectedOut]];
+  if (wizard.addReturn && wizard.returnDate) legs.push(['returnLeg', wizard.returnDate, wizard.selectedRet]);
+
   return (
-    <div className="card card-pad" style={{ maxWidth: 880, margin: '0 auto' }}>
-      <div className="eyebrow">{t('stepResult')} / {tx('DEMO')}</div>
-      <h2 className="card-title" style={{ fontSize: 24 }}>{t('paymentTitle')}</h2>
+    <div className="card card-pad pay-card">
+      <div className="eyebrow">{t('stepReview')} · {tx('DEMO')}</div>
+      <h2 className="card-title pay-title">{t('paymentTitle')}</h2>
       <p className="card-desc">{t('paymentSub')}</p>
-      <div className="notice warn" style={{ marginTop: 17 }}><strong>{t('demoOnly')}</strong>{t('paymentNotice')}</div>
-      <div className="grid grid-3" style={{ marginTop: 20 }}>
+
+      {/* What is being paid for: the same fare rule as the review step. */}
+      <section className="pay-summary" aria-label={t('payTripTitle')}>
+        <h3 className="pay-section-title">{t('payTripTitle')}</h3>
+        <p className="pay-route">{tx(ORIGIN)} <span aria-hidden="true" className="dir-flip">→</span> {tx(wizard.chosenDestination)}</p>
+        <ul className="pay-legs">
+          {legs.map(([key, date, time]) => (
+            <li key={key}><span>{t(key)}</span><span>{date} · <b className="mono">{formatTime(time, lang)}</b></span></li>
+          ))}
+          <li><span>{t('passengers')}</span><span>{pax}</span></li>
+        </ul>
+        <div className="price-line"><span>{t('subtotal')}</span><strong>SAR {total.toLocaleString('en-US')}</strong></div>
+        <div className="price-line"><span>{t('vat')}</span><strong>{t('vatPending')}</strong></div>
+        <div className="price-line price-total"><span>{t('total')}</span><strong>SAR {total.toLocaleString('en-US')}</strong></div>
+      </section>
+
+      <h3 className="pay-section-title" id="pay-choice-title">{t('payChoiceTitle')}</h3>
+      <div className="pay-options" role="group" aria-labelledby="pay-choice-title">
         {choices.map(c => (
           <button key={c.value} type="button" aria-pressed={wizard.paymentChoice === c.value}
-            className={`service-card${wizard.paymentChoice === c.value ? ' selected' : ''}`} onClick={() => updateWizard({ paymentChoice: c.value })}>
+            className={`service-card pay-option${wizard.paymentChoice === c.value ? ' selected' : ''}`} onClick={() => updateWizard({ paymentChoice: c.value })}>
             <span className="service-icon"><Icon name={c.icon} /></span>
             <span><span className="service-name">{t(c.title)}</span><span className="service-desc">{tx(c.desc)}</span></span>
           </button>
         ))}
       </div>
-      <div style={{ marginTop: 14 }} aria-live="polite">
+      <div aria-live="polite">
         {wizard.paymentChoice && (
-          <div className={`notice${wizard.paymentChoice === 'recorded' ? '' : ' warn'}`}><strong>{feedback}</strong>{t('paymentNotice')}</div>
+          <div className={`notice pay-feedback${wizard.paymentChoice === 'recorded' ? '' : ' warn'}`}><strong>{feedback}</strong></div>
         )}
       </div>
-      <div className="between" style={{ marginTop: 18 }}>
+      <div className="notice warn pay-note"><strong>{t('demoOnly')}</strong>{t('paymentNotice')}</div>
+      <div className="pay-actions">
         <button type="button" className="btn btn-outline" onClick={() => updateWizard({ bookStep: 4 })}>{t('back')}</button>
         <button type="button" className="btn btn-primary" onClick={finish} disabled={!wizard.paymentChoice}>{t('finish')}</button>
       </div>
@@ -459,7 +485,8 @@ function PaymentStep() {
   );
 }
 
-function TicketQrCard({ ticket, t }: { ticket: Ticket; t: (k: string) => string }) {
+/** `entry` adds the device Wallet button when the app is shown in the mock iPhone / Android. */
+function TicketQrCard({ ticket, t, entry, saved = false }: { ticket: Ticket; t: (k: string) => string; entry?: TicketEntry; saved?: boolean }) {
   return (
     <div className="ticket-qr-card">
       <QRCodeTicket ticketId={ticket.id} size={120} />
@@ -469,15 +496,18 @@ function TicketQrCard({ ticket, t }: { ticket: Ticket; t: (k: string) => string 
         <span className="pill pill-neutral tiny">{ticket.status === 'boarded' ? t('ticketBoarded') : t('ticketNotBoarded')}</span>
       </div>
       <span className="tiny muted" dir="ltr">{t('ticketScanHint')}</span>
+      {entry && <DeviceWalletButton entry={entry} saved={saved} />}
     </div>
   );
 }
 
 function ResultStep() {
   const { t, tx, lang } = useLanguage();
-  const { wizard, bookings, resetWizard } = useDemo();
+  const { wizard, bookings, passes, resetWizard } = useDemo();
   const navigate = useNavigate();
   const b = wizard.currentBooking ?? bookings[0];
+  const { entries } = useTicketIndex(bookings);
+  const savedTicketIds = new Set(passes.map(p => p.ticketId));
   const rows: Array<[string, string]> = [['paymentStatus', b.payment], ['thresholdStatus', b.threshold], ['opsStatus', b.ops], ['boardingStatus', b.boarding]];
   return (
     <div className="card card-pad">
@@ -505,7 +535,8 @@ function ResultStep() {
         <div className="inset" style={{ marginTop: 14 }}>
           <strong>{t('ticketsQrTitle')}</strong>
           <div className="ticket-qr-grid">
-            {b.tickets.map(tk => <TicketQrCard key={tk.id} ticket={tk} t={t} />)}
+            {b.tickets.map(tk => <TicketQrCard key={tk.id} ticket={tk} t={t}
+              entry={entries.find(e => e.ticket.id === tk.id)} saved={savedTicketIds.has(tk.id)} />)}
           </div>
           <p className="small muted">{t('ticketsQrNote')}</p>
         </div>
@@ -533,7 +564,7 @@ export default function BookingView() {
   const { wizard } = useDemo();
   const step = wizard.bookStep;
   return (
-    <>
+    <div className="booking-flow" data-step={step}>
       <PageHeader titleKey="bookTitle" subKey="bookSub" eyebrow="ATCO MARINE / CUSTOMER" />
       <div className="hero-panel" style={{ marginBottom: 18 }}>
         <div className="eyebrow hero-eyebrow">{t('heroEyebrow')}</div>
@@ -549,9 +580,9 @@ export default function BookingView() {
       </div>
       <Stepper step={step} />
       {step === 1 ? <ServiceStep /> : step === 2 ? <JourneyStep /> : step === 3 ? <DetailsStep /> : step === 4 ? <ReviewStep /> : step === 5 ? <PaymentStep /> : <ResultStep />}
-      <div className="booking-contact"><ContactCard /></div>
+      <ContactAtcoLink />
       <p className="footer-note">{tx('All sample records, availability and statuses are fictional. Initial fare and departure times are taken from the client brief; final tariffs, tax, capacities, routes, permits and policies require ATCO confirmation.')}</p>
-    </>
+    </div>
   );
 }
 

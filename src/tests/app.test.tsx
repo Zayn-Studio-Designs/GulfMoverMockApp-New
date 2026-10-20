@@ -398,12 +398,19 @@ describe('accounts', () => {
 });
 
 describe('ATCO branding', () => {
-  test('booking page shows ATCO branding, the Dammam city choice and ATCO contacts', async () => {
+  test('booking page shows ATCO branding, the Dammam city choice and a compact Contact ATCO link', async () => {
     await renderApp('/book');
     expect(screen.getAllByText('ATCO Marine').length).toBeGreaterThan(0);
     expect(screen.getByText('ATCO Marine transfers, booked in minutes.')).toBeInTheDocument();
+    // The full details no longer sit at the bottom of the page…
+    expect(screen.queryByRole('link', { name: '+966 13 833 5588' })).toBeNull();
+    // …Contact ATCO opens Settings → ATCO information, which has them, with a way back.
+    fireEvent.click(screen.getByRole('link', { name: /Contact ATCO/ }));
+    expect(await screen.findByRole('heading', { name: 'ATCO information' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '+966 13 833 5588' })).toHaveAttribute('href', 'tel:+966138335588');
     expect(screen.getByRole('link', { name: 'marine.info@atco.com.sa' })).toBeInTheDocument();
+    click(/Back/);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Book a marine transfer' })).toBeInTheDocument();
     click(/Passenger transfer/);
     click(/Continue/);
     const city = screen.getByLabelText(/^City/) as HTMLSelectElement;
@@ -411,3 +418,13 @@ describe('ATCO branding', () => {
   });
 });
 
+describe('Contact ATCO before sign-in', () => {
+  test('the sign-in page links to Settings → ATCO information without requiring an account', async () => {
+    renderSignedOut('/signin');
+    fireEvent.click(screen.getByRole('link', { name: /Contact ATCO/ }));
+    expect(await screen.findByRole('heading', { name: 'ATCO information' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'marine.info@atco.com.sa' })).toBeInTheDocument();
+    click(/Back/);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+  });
+});

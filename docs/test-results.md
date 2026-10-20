@@ -144,3 +144,30 @@ Per-passenger, per-one-way-leg booking tickets with genuine scannable QR codes, 
 Bugs the new tests caught and fixed: `planReservation` previously dropped newly created boat slots from the returned state (booking success looked reserved but the slot was lost); the scan parser did not accept the QR format (`GM-VERIFY-1|GMTK-…`) the app itself generates. Both covered by `features.test.tsx`.
 
 Not verified this session: real-device rendering; Arabic side-by-side pass of every new screen; Apple Wallet pass on a real device (technically impossible — it is a labelled simulation); server-side QR validation (out of scope for a front-end demo).
+
+## Device Wallet presentation — 2026-10-20 (branch `feature/presentation-device-wallet`)
+
+| Check | Command | Result |
+|---|---|---|
+| Type check | `npm run typecheck` | 0 errors |
+| Tests | `npm test` | 6 files, **69/69 passed** (55 existing + 14 in `src/tests/presentationWallet.test.tsx`: side-button double-click vs single click, open/dismiss/reopen, add sheet confirms once and offers View when already saved, Android Google Wallet flow with no Apple wording, per-ticket QR and separate outbound/return passes from real demo data, persistence and duplicate refusal through DemoContext, device switching, untrusted messages ignored, keyboard + focus return, reduced motion, Arabic/RTL) |
+| Production build | `npm run build` | OK |
+
+Browser walkthrough (Chromium via Playwright against `npm run presentation`, `/presentation.html`, 1500×1000 and 1024×640): iPhone booking with a return leg → both tickets added through the iOS sheet; single side-button click shows only the hint; double-click slides Wallet up inside the screen (status bar turns dark); pass details show each ticket's own QR payload; Done, home bar, side-button press and Esc all close; reopen shows no duplicates; "View in Wallet" opens that pass; Arabic Wallet is RTL. Android: Quick Settings → Google Wallet, pass details, Save sheet → View; no Apple wording. Device switching closes open Wallet layers; Mac preview 1366×800 with no phone controls; passes survive a reload; reduced motion removes the animations; no console errors.
+
+Also fixed: on the handover commit the device frame was positioned with both flex centring and a `translate(-50%, -50%)` transform, so the Mac window sat half off-screen and phones were shifted up and left (verified on the untouched commit). The device is now centred and scaled in its own area above the hint band.
+
+Not verified: real iPhone/Android hardware; Safari and Firefox (Chromium only).
+
+## Wallet polish, typography and Contact ATCO — 2026-10-20 (same branch)
+
+| Check | Command | Result |
+|---|---|---|
+| Type check | `npm run typecheck` | 0 errors |
+| Tests | `npm test` | 6 files, **70/70 passed** (Wallet tests rewritten for the new stack/carousel, add confirmation and guidance; Contact ATCO → Settings → ATCO information, also before sign-in) |
+| Production build | `npm run build` | OK (bundled fonts: Inter latin variable 48 kB, IBM Plex Sans Arabic 4 × ~45 kB, Roboto 3 × ~22 kB) |
+
+Browser walkthrough (Chromium/Playwright, `npm run presentation` and the single-file download opened from disk with network blocked): iPhone booking with a return leg; payment page at 390 × 794 in English and Arabic (summary, three choices, one disclaimer, actions pinned above the tab bar, step bar reads "Review & pay"); Add → drop animation → green "Added to Apple Wallet" → side-button guide with highlighted button; single press does not open Wallet; double-click opens the stack (3 demo cards + 2 passes); mouse-drag swipes 1→5 and back; pass shows its own QR payload; Done/close/reopen keeps 5 items. Android: Save → Saving… → Added → status-bar guide → Quick Settings → Google Wallet carousel (opens on newest pass), swipes both ways, View pass with QR, close/reopen. Contact ATCO on sign-in page (signed out), Home and Booking → Settings → ATCO information → Back; Arabic RTL. Inter / IBM Plex Sans Arabic / Roboto confirmed loaded via `document.fonts`; body/title text rgb(11,22,32), secondary rgb(59,73,85). No console errors.
+
+Not verified: Safari/Firefox and real phones (Chromium only); real touch hardware (pointer events tested with mouse drags and synthetic pointer events in jsdom).
+

@@ -370,7 +370,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     const found = findBookingByTicket(ticketId);
     if (!found) return null;
     const pass: WalletPass = { id: `GMPW-${ticketId.slice(-6)}`, ticketId, ref: found.booking.ref, addedAt: nowTime() };
-    setPasses(prev => [...prev, pass]);
+    setPasses(prev => (prev.some(p => p.ticketId === ticketId) ? prev : [...prev, pass]));
     return pass;
   }, [passes, findBookingByTicket]);
 

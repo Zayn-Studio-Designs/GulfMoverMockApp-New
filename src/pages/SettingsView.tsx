@@ -1,19 +1,41 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth, type NotificationPrefs } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
 import { Avatar } from '../components/Avatar';
 import { CompanyLogo, ImageUpload } from '../components/ImageUpload';
+import { ContactCard } from '../components/ContactCard';
 
-export const SETTINGS_TABS = ['profile', 'company', 'security', 'notifications', 'preferences', 'account'] as const;
+export const SETTINGS_TABS = ['profile', 'company', 'security', 'notifications', 'preferences', 'account', 'atco'] as const;
 type Tab = typeof SETTINGS_TABS[number];
 
 const TAB_LABEL: Record<Tab, string> = {
   profile: 'profile', company: 'companyTitle', security: 'securityTab', notifications: 'notificationsTitle',
-  preferences: 'preferencesTitle', account: 'accountTitle',
+  preferences: 'preferencesTitle', account: 'accountTitle', atco: 'atcoInfoTab',
 };
+
+/** ATCO company information and contact details, moved here from the bottom of the pages. */
+function AtcoInfoTab() {
+  const { t } = useLanguage();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const from = (useLocation().state as { from?: string } | null)?.from;
+  const back = from ?? (user ? null : '/signin');
+  return (
+    <section className="grid" aria-labelledby="atco-info-title" style={{ gap: 14 }}>
+      <div className="card card-pad atco-info-head">
+        <div>
+          <h2 id="atco-info-title" className="card-title">{t('atcoInfoTab')}</h2>
+          <p className="card-desc">{t('atcoInfoSub')}</p>
+        </div>
+        {back && <button type="button" className="btn btn-outline btn-small" onClick={() => navigate(back)}><span className="dir-flip" aria-hidden="true">←</span> {t('back')}</button>}
+      </div>
+      <ContactCard />
+    </section>
+  );
+}
 
 function PasswordInput({ id, label, value, onChange, autoComplete, hint }: {
   id: string; label: string; value: string; onChange: (v: string) => void; autoComplete: string; hint?: string;
@@ -299,7 +321,14 @@ export default function SettingsView() {
   const [params, setParams] = useSearchParams();
   const requested = params.get('tab') as Tab | null;
   const tab: Tab = requested && SETTINGS_TABS.includes(requested) ? requested : 'profile';
-  if (!user) return null;
+  // On phones the tabs scroll sideways: keep the open one (e.g. ATCO information) in view.
+  useEffect(() => {
+    document.querySelector('.settings-tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [tab]);
+  // Before sign-in only the ATCO information is available (Contact ATCO on the sign-in page).
+  if (!user) {
+    return tab === 'atco' ? <><PageHeader titleKey="settingsTitle" subKey="atcoInfoSub" /><AtcoInfoTab /></> : null;
+  }
 
   return (
     <>
@@ -329,6 +358,7 @@ export default function SettingsView() {
           {tab === 'notifications' && <NotificationsTab />}
           {tab === 'preferences' && <PreferencesTab />}
           {tab === 'account' && <AccountTab />}
+          {tab === 'atco' && <AtcoInfoTab />}
         </div>
       </div>
     </>

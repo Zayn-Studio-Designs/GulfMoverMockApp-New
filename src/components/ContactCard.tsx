@@ -1,7 +1,28 @@
+import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { ATCO_CONTACT } from '../data/demoData';
+import { ArrowIcon, Icon } from './Icon';
 
-/** ATCO contact block. Details come from ATCO's public contact page and must be confirmed before go-live. */
+/** Path of the ATCO information panel in Settings (the only place the full details are shown). */
+export const ATCO_INFO_PATH = '/settings?tab=atco';
+
+/**
+ * Compact "Contact ATCO" entry for the bottom of a page. Opens Settings → ATCO information and
+ * remembers where it came from, so that panel can offer a way back.
+ */
+export function ContactAtcoLink() {
+  const { t } = useLanguage();
+  const { pathname, search } = useLocation();
+  return (
+    <div className="contact-atco-row">
+      <Link className="contact-atco-link" to={ATCO_INFO_PATH} state={{ from: pathname + search }}>
+        <Icon name="company" /><span>{t('contactTitle')}</span><ArrowIcon />
+      </Link>
+    </div>
+  );
+}
+
+/** ATCO contact details (Settings → ATCO information). Details come from ATCO's public contact page and must be confirmed before go-live. */
 export function ContactCard({ compact = false }: { compact?: boolean }) {
   const { t, lang } = useLanguage();
   const c = ATCO_CONTACT;

@@ -90,11 +90,12 @@ export function Layout() {
   const { isCustomer, setMode } = useWorkMode();
   const { resetDemoData } = useDemo();
   const { toast } = useUi();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [pathname]);
 
-  if (!user) return <Navigate to="/signin" replace state={signedOutByUser ? undefined : { from: pathname }} />;
+  const publicAtcoInfo = pathname === '/settings' && new URLSearchParams(search).get('tab') === 'atco';
+  if (!user && !publicAtcoInfo) return <Navigate to="/signin" replace state={signedOutByUser ? undefined : { from: pathname }} />;
 
   const onReset = () => {
     resetDemoData();

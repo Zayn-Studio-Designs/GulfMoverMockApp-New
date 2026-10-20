@@ -4,7 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useDemo } from '../context/DemoContext';
 import { StatusPill } from '../components/StatusPill';
 import { ArrowIcon, Icon } from '../components/Icon';
-import { ContactCard } from '../components/ContactCard';
+import { ContactAtcoLink } from '../components/ContactCard';
 import { formatTime } from '../domain/fleet';
 import { BOATS, today } from '../data/demoData';
 
@@ -93,18 +93,16 @@ export default function CustomerHome() {
         </section>
       </div>
 
-      <div className="grid home-grid" style={{ marginTop: 16 }}>
-        <section className="card card-pad" aria-label={t('navBookings')}>
+      <section className="card card-pad home-bookings" aria-label={t('navBookings')} style={{ marginTop: 16 }}>
+        <div>
           <div className="eyebrow">{t('navBookings')}</div>
           <p className="muted">{t('homeBookingsCopy')}</p>
-          <button type="button" className="btn btn-outline" onClick={() => navigate('/bookings')} style={{ marginTop: 12 }}>
-            {t('navBookings')}
-          </button>
-        </section>
-        <section aria-label={t('contactTitle')}>
-          <ContactCard />
-        </section>
-      </div>
+        </div>
+        <button type="button" className="btn btn-outline" onClick={() => navigate('/bookings')}>
+          {t('navBookings')}
+        </button>
+      </section>
+      <ContactAtcoLink />
     </>
   );
 }

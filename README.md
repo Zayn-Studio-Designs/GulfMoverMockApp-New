@@ -42,6 +42,16 @@ During a client meeting, run `npm run presentation` and present from the page th
 - Sign in once (“Explore as demo guest”) inside the preview; the session then carries across device switches. Use **Reset demo data** inside the app to clear demo changes.
 - Presentation chrome never ships to customers: it is a local page (`presentation.html`) shown only through your dev server.
 
+### Wallet demo inside the phones (simulated)
+
+The phone previews have their own simulated Wallet, drawn inside the device screen by the presentation page (`src/presentation/wallet/`). The app supplies the real demo tickets and QR codes; nothing is added to a real Apple or Google Wallet.
+
+- **iPhone:** in the app open a ticket (booking result, or My Bookings → View details) and tap **Add to Apple Wallet** → the iOS-style sheet → **Add**: the pass drops into Wallet and a green **Added to Apple Wallet** appears. A guide then points at the glowing side button. **Double-click the side button** on the right edge of the mock iPhone: Wallet slides up with three fictional example cards and the saved Gulf Mover passes stacked together. Tap any card, then swipe (drag) left/right — or use the dots or arrow keys — to reach the boarding pass with its QR code. **Done** returns to the stack; the home bar, Esc or one side-button press returns to the app. A single press never opens Wallet. Keyboard: focus the side button and press Enter twice.
+- **Android:** tap **Add to Google Wallet** → **Save** → *Saving…* → **Added to Google Wallet** → **Done**. A guide points at the status bar: tap it (Quick Settings) → **Google Wallet**. The card carousel opens on the newest pass; swipe through the example cards, tap **View pass** for the QR code. **View in Google Wallet** on a saved ticket also opens it.
+- Example cards (Meridian Express Gold, Gulf Coast Bank, Dhahran Digital) are fictional, masked and marked DEMO; they cannot pay.
+- One pass per ticket (outbound and return are separate passes with their own QR codes); saved passes persist with the rest of the demo data and are cleared by **Reset demo data**.
+- **Mac:** no phone Wallet; the app keeps its regular in-page Wallet sheet.
+
 ## Using the demo
 - **Sign in:** create a demo account or press **Explore as demo guest**. Accounts are stored only in this browser (no server); never use a real password.
 - **Views:** Book Transfer, My Bookings, Corporate / Agent, Operations, Boarding Desk, Materials, Fleet (sidebar; bottom bar on phones). **Settings** and **Sign out** are under the round profile button, top right.

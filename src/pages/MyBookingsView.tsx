@@ -12,6 +12,7 @@ import { BOATS } from '../data/demoData';
 import { QRCodeTicket } from '../components/QRCodeTicket';
 import type { Lang } from '../i18n/translations';
 import { WalletAddSheet, WalletPassSheet } from '../components/wallet/WalletSheets';
+import { DeviceWalletButton, useHostDevice } from '../components/wallet/WalletHostBridge';
 import { useTicketIndex, type TicketEntry } from '../hooks/useTicketIndex';
 import { toCsv, downloadCsv } from '../domain/csv';
 
@@ -177,6 +178,9 @@ function TicketDetailRow({ entry, saved, t, lang, onAdd, onOpen }: {
   entry: TicketEntry; saved: boolean; t: (k: string) => string; lang: Lang; onAdd: () => void; onOpen: () => void;
 }) {
   const legTicket = entry.booking.tickets?.find(tk => tk.id === entry.ticket.id);
+  // Inside the mock iPhone / Android the device's own Wallet takes over; elsewhere the site's sheet.
+  const device = useHostDevice();
+  const onPhone = device === 'iphone' || device === 'android';
   return (
     <div className="ticket-qr-card">
       <QRCodeTicket ticketId={entry.ticket.id} size={110} />
@@ -190,9 +194,11 @@ function TicketDetailRow({ entry, saved, t, lang, onAdd, onOpen }: {
         </span>
       </div>
       <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        {saved
-          ? <button type="button" className="btn btn-outline btn-small" onClick={onOpen}>{t('walletOpenSaved')}</button>
-          : <button type="button" className="btn btn-primary btn-small" onClick={onAdd}>{t('walletAdd')}</button>}
+        {onPhone
+          ? <DeviceWalletButton entry={entry} saved={saved} />
+          : saved
+            ? <button type="button" className="btn btn-outline btn-small" onClick={onOpen}>{t('walletOpenSaved')}</button>
+            : <button type="button" className="btn btn-primary btn-small" onClick={onAdd}>{t('walletAdd')}</button>}
       </div>
     </div>
   );

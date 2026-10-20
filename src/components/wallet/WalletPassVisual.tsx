@@ -3,9 +3,9 @@ import { useLanguage } from '../../context/LanguageContext';
 import { Icon } from '../Icon';
 import { QRCodeTicket } from '../QRCodeTicket';
 import type { Booking } from '../../data/demoData';
-import { ORIGIN, BOATS } from '../../data/demoData';
 import { formatTime } from '../../domain/fleet';
-import type { Ticket, TicketStatus } from '../../domain/tickets';
+import type { Ticket } from '../../domain/tickets';
+import { legDetails, passStatusKind } from './passView';
 
 /**
  * Visual pass content shared by the add-preview, the saved-pass view and the
@@ -19,12 +19,8 @@ export function WalletPassVisual({ booking, leg, ticket, legDate }: {
   legDate?: string;
 }) {
   const { t, tx, lang } = useLanguage();
-  const from = leg === 'outbound' ? tx(ORIGIN) : tx(booking.dest);
-  const to = leg === 'outbound' ? tx(booking.dest) : tx(ORIGIN);
-  const time = leg === 'return' ? booking.return?.time ?? booking.time : booking.time;
-  const date = legDate ?? (leg === 'return' ? booking.return?.date ?? booking.date : booking.date);
-  const boat = BOATS.find(b => b.id === (leg === 'return' ? booking.return?.boatId ?? booking.boatId : booking.boatId))?.name[lang];
-  const status = passStatus(t, ticket.status, booking.payment);
+  const { from, to, time, date, boat } = legDetails(booking, leg, lang, tx, legDate);
+  const status = passStatus(t, passStatusKind(ticket, booking.payment));
   return (
     <div className="pass-card" dir="ltr">
       <div className="pass-top">
@@ -64,10 +60,10 @@ export function WalletPassVisual({ booking, leg, ticket, legDate }: {
 type StatusChip = { className: string; label: string };
 
 /** Status chip shown on the pass, resolved from the live ticket/payment state. */
-function passStatus(t: (k: string) => string, ticketStatus: TicketStatus, payment: string): ReactElement {
-  const chip: StatusChip = /failed/i.test(payment)
+function passStatus(t: (k: string) => string, kind: ReturnType<typeof passStatusKind>): ReactElement {
+  const chip: StatusChip = kind === 'blocked'
     ? { className: 'blocked', label: t('passNotEligible') }
-    : ticketStatus === 'boarded'
+    : kind === 'boarded'
       ? { className: 'boarded', label: t('passBoardedShort') }
       : { className: 'wait', label: t('passValid') };
   return <span className={`pass-status ${chip.className}`}>{chip.label}</span>;

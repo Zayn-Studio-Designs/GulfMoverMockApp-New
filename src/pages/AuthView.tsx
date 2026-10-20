@@ -4,7 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
 import { Brand } from '../components/Brand';
-import { ContactCard } from '../components/ContactCard';
+import { ContactAtcoLink } from '../components/ContactCard';
 
 type Mode = 'signin' | 'signup' | 'reset';
 
@@ -157,7 +157,7 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
             </>
           )}
         </div>
-        <div className="auth-contact"><ContactCard compact /></div>
+        <div className="auth-contact"><ContactAtcoLink /></div>
       </main>
     </div>
   );

@@ -4,8 +4,8 @@
 :root {
   --pres-navy: #12345A;
   --pres-green: #03643C;
-  --pres-ink: #22303c;
-  --pres-muted: #6a7885;
+  --pres-ink: #0b1620;
+  --pres-muted: #3b4955;
   --pres-canvas: #eef0f2;
   --pres-chrome: #ffffff;
   --pres-line: #dde2e7;
@@ -21,7 +21,8 @@ body {
   overflow: hidden;
   background: radial-gradient(120% 90% at 50% 0%, #f4f6f7 0%, var(--pres-canvas) 70%, #e4e7ea 100%);
   color: var(--pres-ink);
-  font: 14px/1.45 Arial, Helvetica, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font: 14px/1.45 "Inter Variable", "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 button { cursor: pointer; font: inherit; }
@@ -186,14 +187,22 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
    When the space is too short to honor the requested device height, the frame
    is allowed to shrink below full device height (transform keeps proportions)
    rather than collide with the hint band. */
-.pres-device {
+/* Area between the toolbar and the hint band; the device is centred in it and scaled
+   (by PresentationApp) to fit, so it keeps its true logical size (e.g. iPhone 390 × 844). */
+.pres-device-area {
   position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  margin: 0 auto;
+}
+
+.pres-device {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   will-change: transform;
 }
 

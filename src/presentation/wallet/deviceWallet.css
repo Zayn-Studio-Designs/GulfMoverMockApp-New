@@ -1,0 +1,427 @@
+/* Simulated phone software for the presentation previewer only: status bar, hardware buttons,
+   Apple Wallet (iPhone) and Google Wallet (Android) screens and their system sheets.
+   Every layer is positioned inside .pres-viewport, so the screen's rounded clip contains it. */
+
+.pres-device { --sb-h: 0px; }
+.pres-device-iphone { --sb-h: 50px; --sb-pad: 34px; }
+.pres-device-android { --sb-h: 32px; --sb-pad: 18px; }
+
+/* Hard rounded clip that also holds while the app frame scrolls. */
+.pres-device-mac .pres-viewport { clip-path: inset(0 round 4px); }
+.pres-device-iphone .pres-viewport { clip-path: inset(0 round 42px); }
+.pres-device-android .pres-viewport { clip-path: inset(0 round 21px); }
+
+/* ---------- Status bar (phones) ---------- */
+.pres-statusbar {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  height: var(--sb-h); padding: 0 var(--sb-pad);
+  display: flex; align-items: center; justify-content: space-between;
+  border: 0; margin: 0; width: 100%;
+  font: 600 15px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter Variable", "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -.01em;
+  transition: background-color .25s, color .25s;
+}
+.pres-device-android .pres-statusbar { font: 500 13px/1 Roboto, "Segoe UI", sans-serif; cursor: pointer; }
+.pres-statusbar.is-app { background: #12345A; color: #fff; }
+.pres-statusbar.is-dark { background: #000; color: #fff; }
+.pres-statusbar.is-light { background: #fff; color: #1f1f1f; }
+.pres-statusbar-icons { display: flex; align-items: center; gap: 5px; }
+.pres-device-iphone .pres-screen,
+.pres-device-android .pres-screen { top: var(--sb-h); height: calc(100% - var(--sb-h)); }
+
+/* ---------- Hardware buttons on the chassis edge ---------- */
+.pres-hw {
+  position: absolute; width: 4px; border-radius: 2px; z-index: 1;
+  background: linear-gradient(90deg, #2b2f35, #4a4f57);
+}
+.pres-hw-action { left: -3px; top: 150px; height: 30px; }
+.pres-hw-vol-up { left: -3px; top: 205px; height: 56px; }
+.pres-hw-vol-down { left: -3px; top: 272px; height: 56px; }
+.pres-hw-power { right: -3px; top: 200px; height: 62px; }
+.pres-hw-vol { right: -3px; top: 290px; height: 104px; }
+
+/* iPhone side button: a real button with a generous hit area; the visible part is the bar. */
+.pres-side-btn {
+  position: absolute; right: -8px; top: 225px; z-index: 2;
+  width: 16px; height: 92px; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; cursor: pointer;
+}
+.pres-side-btn::before {
+  content: ''; position: absolute; right: 4px; top: 0; bottom: 0; width: 5px;
+  border-radius: 2px 3px 3px 2px;
+  background: linear-gradient(90deg, #4a4f57, #2b2f35);
+  box-shadow: 1px 0 0 rgba(255, 255, 255, .08);
+  transition: transform .08s ease-out, background .15s;
+}
+.pres-side-btn:hover::before { background: linear-gradient(90deg, #626872, #3a3f46); }
+.pres-side-btn.is-pressed::before { transform: translateX(-2px); }
+.pres-side-btn:focus-visible { outline: 3px solid #0a84ff; outline-offset: 2px; }
+
+/* Hint after a single press of the side button. */
+.os-hint {
+  position: absolute; top: calc(var(--sb-h) + 10px); right: 12px; z-index: 7; max-width: 230px;
+  padding: 8px 12px; border-radius: 12px;
+  background: rgba(20, 20, 22, .9); color: #fff;
+  font: 600 12px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  pointer-events: none; animation: os-fade-in .2s ease-out both;
+}
+
+.pres-viewport button:focus-visible { outline: 3px solid #0a84ff; outline-offset: 2px; }
+.pres-device-android .pres-viewport button:focus-visible { outline-color: #0b57d0; }
+
+/* Home indicator (iPhone) / gesture bar (Android): thin bar, larger hit area. */
+.os-home-indicator, .os-gesture-bar {
+  position: absolute; left: 50%; bottom: 2px; transform: translateX(-50%); z-index: 2;
+  height: 21px; padding: 8px 0; border: 0; cursor: pointer; background-clip: content-box;
+}
+.os-home-indicator { width: 134px; background-color: rgba(255, 255, 255, .85); border-radius: 12px; }
+.os-gesture-bar { width: 108px; background-color: rgba(31, 31, 31, .55); border-radius: 12px; }
+
+@keyframes os-fade-in { from { opacity: 0; } }
+@keyframes os-fade-out { to { opacity: 0; } }
+@keyframes os-sheet-up { from { transform: translateY(100%); } }
+@keyframes os-sheet-down { to { transform: translateY(100%); } }
+
+/* ---------- Guidance after a first save ---------- */
+.pres-side-btn.is-hinting::before { background: linear-gradient(90deg, #4fa3ff, #0a84ff); }
+.pres-side-btn.is-hinting::after {
+  content: ''; position: absolute; right: 1px; top: -4px; bottom: -4px; width: 11px; border-radius: 8px;
+  animation: os-side-pulse 1.4s ease-out infinite;
+}
+@keyframes os-side-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(10, 132, 255, .75); }
+  100% { box-shadow: 0 0 0 12px rgba(10, 132, 255, 0); }
+}
+.pres-statusbar.is-hinting { animation: os-bar-glow 1.4s ease-in-out infinite; }
+@keyframes os-bar-glow {
+  0%, 100% { box-shadow: inset 0 -3px 0 rgba(138, 180, 248, 0); }
+  50% { box-shadow: inset 0 -3px 0 rgba(138, 180, 248, 1); }
+}
+.os-coach {
+  position: absolute; z-index: 7; max-width: 236px; padding: 12px 14px 8px;
+  display: flex; flex-direction: column; gap: 3px;
+  border-radius: 14px; background: #fff; color: #111;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .28), 0 0 0 1px rgba(0, 0, 0, .06);
+  font: 400 13px/1.4 var(--coach-font); animation: os-coach-in .35s cubic-bezier(.2, .8, .2, 1) both;
+}
+.os-coach strong { font-size: 14px; font-weight: 650; }
+.os-coach span:not(.os-coach-arrow) { color: #3c3c43; }
+.os-coach-btn { align-self: flex-end; margin-top: 2px; padding: 6px 4px; border: 0; background: none; font: 600 14px var(--coach-font); cursor: pointer; }
+.os-coach-arrow { position: absolute; width: 14px; height: 14px; background: #fff; transform: rotate(45deg); }
+/* iPhone: beside the side button (right edge, at its height). */
+.os-coach.is-iphone {
+  --coach-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter Variable", sans-serif;
+  top: 186px; right: 16px;
+}
+.os-coach.is-iphone .os-coach-arrow { right: -6px; top: 52px; }
+.os-coach.is-iphone .os-coach-btn { color: #007aff; }
+/* Android: under the status bar, pointing up at it. */
+.os-coach.is-android {
+  --coach-font: "Google Sans", Roboto, "Segoe UI", sans-serif;
+  top: calc(var(--sb-h) + 12px); left: 50%; transform: translateX(-50%); width: 260px; max-width: none; border-radius: 16px;
+  animation-name: os-coach-in-centered;
+}
+.os-coach.is-android .os-coach-arrow { top: -6px; left: calc(50% - 7px); }
+.os-coach.is-android .os-coach-btn { color: #0b57d0; }
+@keyframes os-coach-in { from { opacity: 0; transform: translateY(8px) scale(.96); } }
+@keyframes os-coach-in-centered { from { opacity: 0; transform: translate(-50%, 8px) scale(.96); } }
+
+/* ======================= iPhone: Apple Wallet (simulated) ======================= */
+.aw, .as-layer {
+  /* Apple's system font on Apple devices; elsewhere Inter, the closest bundled match to SF Pro. */
+  --apple-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter Variable", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--apple-font);
+  -webkit-font-smoothing: antialiased;
+}
+.aw {
+  position: absolute; top: var(--sb-h); left: 0; right: 0; bottom: 0; z-index: 5;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: #000; color: #fff;
+  animation: aw-in .46s cubic-bezier(.32, .72, 0, 1) both;
+}
+.aw.is-closing { animation: aw-out .3s cubic-bezier(.4, 0, 1, 1) both; }
+@keyframes aw-in { from { transform: translateY(100%); } }
+@keyframes aw-out { to { transform: translateY(100%); } }
+.aw-home, .aw-cardview { flex: 1; overflow-y: auto; scrollbar-width: none; }
+.aw-home::-webkit-scrollbar, .aw-cardview::-webkit-scrollbar { display: none; }
+.aw-home { padding: 6px 16px 46px; }
+.aw-cardview { padding: 0 0 46px; }
+
+/* Wallet home: large title, round + and ••• buttons, then the card stack. */
+.aw-header { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 4px; }
+.aw-title { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: .005em; }
+.aw-header-actions { display: flex; gap: 10px; }
+.aw-round { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: #1c1c1e; color: #fff; font-size: 17px; font-weight: 500; line-height: 1; }
+.aw-header-actions .aw-round:last-child { font-size: 9px; letter-spacing: .05em; }
+.aw-badge { display: inline-block; margin: 0 0 14px; padding: 3px 8px; border-radius: 999px; border: 1px solid #3a3a3c; color: #98989f; font-size: 11px; }
+.aw-empty { margin: 18px 8px 0; text-align: center; color: #aeaeb2; font-size: 14px; line-height: 1.45; }
+.aw-note { margin: 16px 12px 0; text-align: center; color: #8e8e93; font-size: 11px; line-height: 1.4; }
+
+/* Stack: each card shows its top strip; the next covers the rest; the last is shown whole. */
+.aw-stack { list-style: none; margin: 0; padding: 0; }
+.aw-slot { position: relative; height: 56px; animation: aw-card-in .55s cubic-bezier(.32, .72, 0, 1) both; animation-delay: calc(var(--n, 0) * 45ms + 120ms); }
+.aw-slot.is-first-pass { margin-top: 16px; }
+.aw-slot:last-child { height: auto; }
+@keyframes aw-card-in { from { transform: translateY(90px); opacity: 0; } }
+.aw-card {
+  display: block; width: 100%; padding: 0; border: 0; border-radius: 14px;
+  background: none; color: inherit; font: inherit; text-align: inherit; cursor: pointer;
+  box-shadow: 0 -3px 14px rgba(0, 0, 0, .6);
+  transition: transform .25s cubic-bezier(.32, .72, 0, 1);
+}
+.aw-card:hover { transform: translateY(-6px); }
+
+/* Card view: the open card on top, swipe between cards, details below. */
+.aw-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 10px; }
+.aw-bar-count { color: #8e8e93; font-size: 13px; }
+.aw-link { border: 0; background: none; padding: 6px 4px; color: #0a84ff; font: 400 17px/1.2 var(--apple-font); cursor: pointer; }
+.aw-link:disabled { opacity: .35; cursor: default; }
+.aw-strong { font-weight: 600; }
+.aw-carousel { overflow: hidden; touch-action: pan-y; cursor: grab; padding: 2px 0 4px; outline: none; user-select: none; }
+.aw-carousel:active { cursor: grabbing; }
+.aw-carousel:focus-visible { box-shadow: inset 0 0 0 2px #0a84ff; }
+.aw-track {
+  display: flex; gap: 10px;
+  transform: translateX(calc((100% - 30px) * var(--i) * -1 + var(--drag)));
+  transition: transform .45s cubic-bezier(.32, .72, 0, 1);
+}
+.aw-slide { flex: 0 0 calc(100% - 40px); transition: transform .35s cubic-bezier(.32, .72, 0, 1), opacity .35s; }
+.aw-slide:first-child { margin-left: 20px; }
+.aw-slide:not(.is-active) { opacity: .5; transform: scale(.93); cursor: pointer; }
+.aw-dots { display: flex; justify-content: center; gap: 2px; margin: 10px 0 2px; }
+.aw-dot { width: 19px; height: 19px; padding: 6px; border: 0; border-radius: 50%; background: #48484a; background-clip: content-box; cursor: pointer; }
+.aw-dot.is-active { background-color: #fff; }
+.aw-panel { margin: 10px 16px 0; padding: 14px 16px; border-radius: 14px; background: #1c1c1e; animation: os-fade-in .3s ease-out both; }
+.aw-panel-title { margin: 14px 0 6px; color: #8e8e93; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.aw-panel-title:first-child { margin-top: 0; }
+.aw-list { margin: 0; }
+.aw-list div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid #2c2c2e; }
+.aw-list div:last-child { border-bottom: 0; }
+.aw-list dt { color: #8e8e93; font-size: 14px; }
+.aw-list dd { margin: 0; color: #fff; font-size: 14px; text-align: end; }
+.aw-panel-note { margin: 8px 0 0; color: #8e8e93; font-size: 12px; line-height: 1.4; }
+.aw-reader { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 2px 0 14px; color: #fff; font-size: 15px; font-weight: 600; }
+.aw-reader-icon { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #0a84ff; box-shadow: inset 0 0 0 5px #000, inset 0 0 0 7px #0a84ff; }
+
+/* Payment card faces (fictional demo cards). */
+.cc {
+  position: relative; overflow: hidden; aspect-ratio: 1.586 / 1; border-radius: 14px; padding: 15px 17px;
+  display: flex; flex-direction: column; justify-content: space-between; color: #fff;
+  font-family: var(--apple-font);
+}
+.cc::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(115deg, rgba(255, 255, 255, .22) 0%, rgba(255, 255, 255, 0) 38%); }
+.cc-gold { background: linear-gradient(135deg, #b8893a 0%, #e9cd83 28%, #c99a45 55%, #f1dc9c 78%, #b48434 100%); color: #3a2706; }
+.cc-navy { background: radial-gradient(120% 90% at 85% 10%, #2f6fd0 0%, rgba(47, 111, 208, 0) 55%), linear-gradient(145deg, #0d2552, #173f80 60%, #0b2148); }
+.cc-graphite { background: radial-gradient(90% 80% at 15% 100%, #5b5f66 0%, rgba(91, 95, 102, 0) 60%), linear-gradient(145deg, #232427, #3e4146 55%, #18191b); }
+.cc-top { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: flex-start; }
+.cc-issuer { font-size: 15px; font-weight: 600; letter-spacing: .01em; }
+.cc-demo { padding: 1px 6px; border-radius: 5px; border: 1px solid currentColor; font-size: 9px; font-weight: 700; letter-spacing: .1em; opacity: .75; }
+.cc-chip { position: relative; z-index: 1; width: 38px; height: 28px; border-radius: 6px; background: repeating-linear-gradient(90deg, rgba(0, 0, 0, .14) 0 1px, transparent 1px 9px), linear-gradient(135deg, #f0e2b0, #b99a52); }
+.cc-bottom { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: flex-end; }
+.cc-number { font-size: 14px; letter-spacing: .1em; font-weight: 500; }
+.cc-visa { font: italic 900 24px/1 "Arial Black", "Helvetica Neue", Arial, sans-serif; letter-spacing: -.02em; }
+.cc-charge { font: 700 13px/1 Georgia, "Times New Roman", serif; letter-spacing: .32em; }
+.cc-mc { display: flex; }
+.cc-mc i { width: 26px; height: 26px; border-radius: 50%; background: #eb001b; }
+.cc-mc i + i { margin-left: -10px; background: #f79e1b; opacity: .92; }
+
+/* Gulf Mover boarding pass (ATCO Marine green). */
+.ap {
+  border-radius: 14px; padding: 12px 14px 14px; text-align: start;
+  background: linear-gradient(165deg, #0b7c4d 0%, #03643C 52%, #02482c 100%);
+  color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.ap-head { display: flex; align-items: center; gap: 9px; min-height: 40px; }
+.ap-logo { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: #fff; color: #03643C; font-size: 12px; font-weight: 800; letter-spacing: -.02em; }
+.ap-org { flex: 1; font-size: 13px; font-weight: 700; letter-spacing: .08em; }
+.ap-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ap-end { text-align: end; align-items: flex-end; }
+.ap-label { font-size: 10px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: rgba(255, 255, 255, .72); }
+.ap-value { font-size: 15px; font-weight: 500; line-height: 1.22; overflow-wrap: anywhere; }
+.ap-mono { font-family: ui-monospace, Menlo, monospace; font-size: 13px; }
+.ap-head .ap-field { flex: none; }
+.ap-head .ap-value { font-size: 19px; font-weight: 600; }
+.ap-primary { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 8px; margin-top: 14px; }
+.ap-primary .ap-value { font-size: 17px; font-weight: 600; }
+.ap-ship { opacity: .85; padding-bottom: 2px; }
+.ap-row { display: flex; gap: 10px; margin-top: 14px; }
+.ap-chip { margin-top: 1px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(255, 255, 255, .2); white-space: nowrap; }
+.ap-chip.is-boarded { background: rgba(255, 255, 255, .34); }
+.ap-chip.is-blocked { background: rgba(255, 69, 58, .32); color: #ffe1de; }
+.ap-barcode { width: fit-content; margin: 16px auto 2px; padding: 10px 10px 6px; border-radius: 10px; background: #fff; color: #1c1c1e; text-align: center; }
+.ap-barcode .qr-code, .gp-qr .qr-code { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.ap-barcode .qr-payload { font: 10px ui-monospace, Menlo, monospace; color: #3a3a3c; }
+
+/* iOS "Add pass" sheet, its drop-into-Wallet animation and the green confirmation. */
+.as-layer {
+  position: absolute; top: var(--sb-h); left: 0; right: 0; bottom: 0; z-index: 5;
+  display: flex; align-items: flex-end; background: rgba(0, 0, 0, .42);
+  animation: os-fade-in .3s ease-out both;
+}
+.as-layer.is-closing { animation: os-fade-out .28s ease-in both; }
+.as-sheet {
+  width: 100%; height: calc(100% - 12px); overflow-y: auto; scrollbar-width: none;
+  padding: 0 16px 24px; border-radius: 12px 12px 0 0;
+  background: #f2f2f7; color: #000;
+  animation: os-sheet-up .44s cubic-bezier(.32, .72, 0, 1) both;
+}
+.as-layer.is-closing .as-sheet { animation: os-sheet-down .28s cubic-bezier(.4, 0, 1, 1) both; }
+.as-bar { position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; padding: 10px 0 8px; background: #f2f2f7; }
+.as-sheet .aw-link { color: #007aff; }
+.as-note { margin: 0 0 10px; text-align: center; color: #3c3c43; font-size: 13px; }
+.as-pass { margin-top: 6px; transform-origin: 50% 100%; }
+.as-sheet.is-adding .as-pass, .as-sheet.is-added .as-pass { animation: as-drop .52s cubic-bezier(.55, 0, .45, 1) forwards; }
+@keyframes as-drop { 40% { transform: translateY(-14px) scale(.98); } to { transform: translateY(70%) scale(.55); opacity: 0; } }
+.as-sheet .aw-note { color: #6c6c70; }
+.as-hud {
+  position: absolute; left: 50%; top: 42%; z-index: 2; width: 196px; padding: 22px 16px 18px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+  border-radius: 18px; background: rgba(250, 250, 252, .97); color: #000;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .3); font-size: 16px; font-weight: 600; outline: none;
+  transform: translate(-50%, -50%); animation: as-hud-in .32s cubic-bezier(.2, .9, .3, 1.2) both;
+}
+@keyframes as-hud-in { from { opacity: 0; transform: translate(-50%, -50%) scale(.82); } }
+.as-check, .gs-check { width: 56px; height: 56px; }
+.as-check circle { fill: #34c759; }
+.as-check path, .gs-check path { fill: none; stroke: #fff; stroke-width: 4.5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 40; stroke-dashoffset: 40; animation: os-check-draw .45s .12s ease-out forwards; }
+@keyframes os-check-draw { to { stroke-dashoffset: 0; } }
+
+/* ===================== Android: Google Wallet (simulated) ===================== */
+/* Google Sans where installed, otherwise the bundled Roboto (Android's system font). */
+.gw, .gs-layer, .qs-layer { --google-font: "Google Sans", "Google Sans Text", Roboto, "Segoe UI", Arial, sans-serif; font-family: var(--google-font); }
+.gw {
+  position: absolute; top: var(--sb-h); left: 0; right: 0; bottom: 0; z-index: 5;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: #fff; color: #1f1f1f;
+  animation: gw-in .32s cubic-bezier(.2, 0, 0, 1) both;
+}
+.gw.is-closing { animation: gw-out .22s cubic-bezier(.3, 0, 1, 1) both; }
+@keyframes gw-in { from { opacity: 0; transform: translateY(28px) scale(.98); } }
+@keyframes gw-out { to { opacity: 0; transform: translateY(18px); } }
+.gw-page { flex: 1; overflow-y: auto; padding: 0 0 44px; scrollbar-width: none; animation: gw-page-in .3s cubic-bezier(.2, 0, 0, 1) both; }
+.gw-page::-webkit-scrollbar { display: none; }
+.gw-page > :not(.gw-carousel) { margin-left: 16px; margin-right: 16px; }
+@keyframes gw-page-in { from { opacity: 0; transform: translateY(14px); } }
+.gw-appbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; height: 56px; background: #fff; }
+.gw-appbar-title { margin: 0; font-size: 20px; font-weight: 500; }
+.gw-avatar { margin-inline-start: auto; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: #0b57d0; color: #fff; font-size: 14px; font-weight: 500; }
+.gw-icon-btn { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: #1f1f1f; cursor: pointer; }
+.gw-icon-btn:hover { background: #f1f3f4; }
+[dir="rtl"] .gw-flip, [dir="rtl"] .gp-route-arrow { transform: scaleX(-1); display: inline-block; }
+.gw-badge { display: inline-block; align-self: flex-start; margin-top: 2px; margin-bottom: 12px; padding: 4px 10px; border-radius: 8px; background: #f1f3f4; color: #444746; font-size: 12px; }
+.gw-home > .gw-badge { display: table; }
+.gw-section { margin-top: 18px; margin-bottom: 10px; color: #1f1f1f; font-size: 16px; font-weight: 500; }
+.gw-passes { list-style: none; padding: 0; display: grid; gap: 10px; }
+.gw-tile-btn { width: 100%; padding: 0; border: 0; border-radius: 16px; background: none; color: inherit; font: inherit; text-align: inherit; cursor: pointer; }
+.gw-tile-btn:hover .gp-tile { filter: brightness(1.08); }
+.gw-empty { padding: 12px 8px; text-align: center; color: #444746; }
+.gw-note { margin-top: 16px; text-align: center; color: #5f6368; font-size: 11px; line-height: 1.4; }
+
+/* Card carousel (Material): neighbours peek at both edges, active card full size. */
+.gw-carousel { overflow: hidden; touch-action: pan-y; cursor: grab; padding: 4px 0 6px; outline: none; user-select: none; }
+.gw-carousel:active { cursor: grabbing; }
+.gw-carousel:focus-visible { box-shadow: inset 0 0 0 2px #0b57d0; border-radius: 8px; }
+.gw-track { display: flex; gap: 12px; transform: translateX(calc((100% - 44px) * var(--i) * -1 + var(--drag))); transition: transform .4s cubic-bezier(.2, 0, 0, 1); }
+.gw-slide { flex: 0 0 calc(100% - 56px); transition: transform .3s cubic-bezier(.2, 0, 0, 1), opacity .3s; }
+.gw-slide:first-child { margin-left: 28px; }
+.gw-slide:not(.is-active) { transform: scale(.92); opacity: .7; cursor: pointer; }
+.gw-slide.is-active .gc-pass { cursor: pointer; }
+.gw-dots { display: flex; justify-content: center; align-items: center; gap: 0; margin-top: 8px; margin-bottom: 4px; }
+.gw-dot { width: 18px; height: 18px; padding: 6px; border: 0; border-radius: 6px; background: #c4c7c5; background-clip: content-box; cursor: pointer; transition: width .2s; }
+.gw-dot.is-active { width: 30px; background-color: #0b57d0; }
+.gw-context { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 66px; animation: os-fade-in .25s ease-out both; }
+.gw-chip { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; background: #e8f0fe; color: #0b57d0; font-size: 14px; font-weight: 500; }
+.gw-note-start { margin-top: 6px; }
+
+.gc {
+  position: relative; overflow: hidden; aspect-ratio: 1.586 / 1; border-radius: 16px; padding: 16px;
+  display: flex; flex-direction: column; justify-content: space-between; color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .2), 0 4px 10px rgba(0, 0, 0, .12);
+}
+.gc-gold { background: linear-gradient(120deg, #c8a14f, #e7cc87 55%, #c39543); color: #33240a; }
+.gc-navy { background: linear-gradient(135deg, #17386e, #24539c); }
+.gc-graphite { background: linear-gradient(135deg, #3c4043, #5f6368); }
+.gc-pass { background: #03643C; }
+.gc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; }
+.gc-demo { padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, .22); font-size: 10px; font-weight: 500; letter-spacing: .08em; }
+.gc-gold .gc-demo { background: rgba(0, 0, 0, .12); }
+.gc-bottom { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; font-size: 13px; }
+.gc-last4 { font-size: 15px; letter-spacing: .06em; }
+.gc-pass-issuer { display: inline-flex; align-items: center; gap: 8px; }
+.gc-pass-issuer .gp-logo { width: 30px; height: 30px; font-size: 11px; }
+.gc-pass-route { font-size: 18px; font-weight: 500; line-height: 1.25; }
+
+.gp-tile { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 16px; background: #03643C; color: #fff; }
+.gp-logo { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: #fff; color: #03643C; font-size: 13px; font-weight: 700; }
+.gp-tile-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gp-tile-title { font-size: 15px; font-weight: 500; }
+.gp-tile-sub { font-size: 13px; opacity: .88; overflow-wrap: anywhere; }
+.gp-card { padding: 18px; border-radius: 24px; background: #03643C; color: #fff; }
+.gp-issuer { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; }
+.gp-route { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; font-size: 20px; font-weight: 500; line-height: 1.25; }
+.gp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.gp-row { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gp-label { font-size: 12px; opacity: .82; }
+.gp-value { font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
+.gp-mono { font-family: "Roboto Mono", ui-monospace, monospace; font-size: 13px; }
+.gp-qr { margin-top: 18px; padding: 16px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; background: #fff; color: #1f1f1f; }
+.gp-qr .qr-payload { font: 11px "Roboto Mono", ui-monospace, monospace; color: #444746; }
+.gp-scan { font-size: 12px; color: #444746; }
+.gp-details { margin-top: 14px; padding: 14px; display: grid; gap: 12px; border-radius: 16px; background: #f0f4f9; color: #1f1f1f; }
+.gp-details .gp-label { opacity: 1; color: #444746; }
+
+/* Material bottom sheet: Save → saving → "Added to Google Wallet". */
+.gs-layer { position: absolute; top: var(--sb-h); left: 0; right: 0; bottom: 0; z-index: 5; display: flex; align-items: flex-end; }
+.gs-scrim { position: absolute; inset: 0; border: 0; padding: 0; background: rgba(0, 0, 0, .32); animation: os-fade-in .25s ease-out both; }
+.gs-layer.is-closing .gs-scrim { animation: os-fade-out .22s ease-in both; }
+.gs-sheet {
+  position: relative; width: 100%; padding: 8px 20px 22px; border-radius: 28px 28px 0 0;
+  background: #fff; color: #1f1f1f; text-align: center;
+  animation: os-sheet-up .32s cubic-bezier(.2, 0, 0, 1) both;
+}
+.gs-layer.is-closing .gs-sheet { animation: os-sheet-down .22s cubic-bezier(.3, 0, 1, 1) both; }
+.gs-handle { display: block; width: 32px; height: 4px; margin: 6px auto 14px; border-radius: 2px; background: #c4c7c5; }
+.gs-brand { color: #444746; font-size: 14px; }
+.gs-title { margin: 8px 0 16px; font-size: 22px; font-weight: 400; line-height: 1.3; }
+.gs-done { display: flex; flex-direction: column; align-items: center; margin-top: 10px; animation: os-fade-in .25s ease-out both; }
+.gs-done .gs-title { margin-top: 6px; }
+.gs-check circle { fill: #1e8e3e; }
+.gs-preview { text-align: start; }
+.gs-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.gs-filled-btn, .gs-text-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; border: 0; border-radius: 999px; font: 500 14px var(--google-font); cursor: pointer; }
+.gs-filled-btn { background: #0b57d0; color: #fff; }
+.gs-filled-btn:hover { background: #0842a0; }
+.gs-filled-btn:disabled { background: #6f93d6; cursor: default; }
+.gs-text-btn { background: none; color: #0b57d0; }
+.gs-text-btn:hover { background: #ecf3fe; }
+.gs-text-btn:disabled { color: #9aa0a6; background: none; cursor: default; }
+.gs-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .5); border-top-color: #fff; animation: os-spin .7s linear infinite; }
+@keyframes os-spin { to { transform: rotate(360deg); } }
+
+/* Android Quick Settings shade with the Wallet tile. */
+.qs-layer { position: absolute; top: var(--sb-h); left: 0; right: 0; bottom: 0; z-index: 5; }
+.qs-scrim { position: absolute; inset: 0; border: 0; padding: 0; background: rgba(0, 0, 0, .36); animation: os-fade-in .2s ease-out both; }
+.qs-layer.is-closing .qs-scrim { animation: os-fade-out .2s ease-in both; }
+.qs-shade { position: relative; z-index: 1; padding: 16px 16px 6px; border-radius: 0 0 28px 28px; background: #e9eef6; animation: qs-down .28s cubic-bezier(.2, 0, 0, 1) both; }
+.qs-layer.is-closing .qs-shade { animation: qs-up .2s cubic-bezier(.3, 0, 1, 1) both; }
+@keyframes qs-down { from { transform: translateY(-100%); } }
+@keyframes qs-up { to { transform: translateY(-100%); } }
+.qs-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.qs-tile { display: flex; align-items: center; min-height: 56px; padding: 0 16px; border: 0; border-radius: 20px; background: #dde3ea; color: #1f1f1f; font: 500 14px var(--google-font); text-align: start; }
+.qs-tile.is-on { background: #d3e3fd; color: #041e49; }
+.qs-wallet { background: #0b57d0; color: #fff; cursor: pointer; }
+.qs-wallet:hover { background: #0842a0; }
+.qs-handle { display: block; width: 72px; height: 20px; margin: 10px auto 0; padding: 8px 20px; border: 0; border-radius: 12px; background-color: #747775; background-clip: content-box; cursor: pointer; }
+
+.pres-wallet-help { color: var(--pres-ink, #0b1620); font-weight: 600; }
+
+/* Reduced motion: every simulated screen and hint appears without movement. */
+@media (prefers-reduced-motion: reduce) {
+  .aw, .aw *, .as-layer, .as-layer *, .gw, .gw *, .gs-layer, .gs-layer *,
+  .qs-layer, .qs-layer *, .os-hint, .os-coach, .pres-statusbar, .pres-side-btn::before, .pres-side-btn::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  .as-check path, .gs-check path { stroke-dashoffset: 0; }
+  .as-sheet.is-adding .as-pass, .as-sheet.is-added .as-pass { opacity: 0; }
+}
