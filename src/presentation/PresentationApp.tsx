@@ -45,7 +45,15 @@ export function PresentationApp() {
     let last = -1;
     const update = () => {
       const r = stage.getBoundingClientRect();
-      const s = Math.min(1, (r.width - 32) / device.outer.w, (r.height - 24) / device.outer.h);
+      /* Reserve the fixed hint band (and a small guard) at the bottom so the
+         device frame can never be scaled up into it. Account for the actual
+         rendered height of the hint band the first time we see it. */
+      const hints = document.querySelector<HTMLElement>('.pres-hints');
+      const hintsH = hints ? hints.getBoundingClientRect().height : 0;
+      const guard = 12;
+      const availW = Math.max(0, r.width - 32);
+      const availH = Math.max(0, r.height - 24 - hintsH - guard);
+      const s = Math.min(1, availW / device.outer.w, availH / device.outer.h);
       if (s > 0 && Math.abs(s - last) > 0.001) {
         last = s;
         setScale(s);
@@ -194,15 +202,17 @@ export function PresentationApp() {
             {deviceId === 'android' && <span className="pres-cam" aria-hidden="true" />}
           </div>
         </div>
-        <p className="pres-help">
-          Tip: interact with the app inside the frame · phone previews scroll independently ·
-          sign-in and demo data carry across devices · press Esc to leave full screen.
-        </p>
-        {fsError && !fullscreen && (
-          <p className="pres-fs-note" role="status">
-            Full screen is not available here — the presentation still works in the window.
+        <div className="pres-hints" aria-live="polite">
+          <p className="pres-help">
+            Tip: interact with the app inside the frame · phone previews scroll independently ·
+            sign-in and demo data carry across devices · press Esc to leave full screen.
           </p>
-        )}
+          {fsError && !fullscreen && (
+            <p className="pres-fs-note" role="status">
+              Full screen is not available here — the presentation still works in the window.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

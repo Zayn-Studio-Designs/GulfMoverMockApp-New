@@ -125,7 +125,8 @@ describe('booking flow', () => {
 
     click(/Continue/);
     expect(screen.getByRole('alert')).toHaveTextContent('Please complete the name, email and phone fields.');
-    fireEvent.change(screen.getByLabelText(/Full name/), { target: { value: 'Demo Passenger' } });
+    // pax = 2 also renders a per-ticket “Passenger 2 name” field, so target the textbox role.
+    fireEvent.change(screen.getByRole('textbox', { name: /^Full name/ }), { target: { value: 'Demo Passenger' } });
     fireEvent.change(screen.getByLabelText(/Email address/), { target: { value: 'demo@example.test' } });
     fireEvent.change(screen.getByLabelText(/Phone number/), { target: { value: '+966 500 000 000' } });
     click(/Continue/);
@@ -172,13 +173,17 @@ describe('booking flow', () => {
 });
 
 describe('boarding', () => {
-  test('a repeated scan is rejected and does not board twice', async () => {
+  test('a repeated verification is rejected and does not board twice', async () => {
     await renderApp('/boarding');
-    click('Simulate valid QR scan');
-    click('Scan the same ticket again');
-    expect(screen.getAllByText(/Already scanned — exception required/).length).toBeGreaterThan(0);
-    const boarded = screen.getByText('Boarded (demo)').parentElement!;
-    expect(within(boarded).getByText('1')).toBeInTheDocument();
+    // The real demo ticket list supplies an opaque ticket ID (no passenger data in it).
+    const ticketId = screen.getAllByText(/GMTK-/)[0].textContent as string;
+    const input = screen.getByLabelText('QR payload, ticket ID or booking reference');
+    fireEvent.change(input, { target: { value: ticketId } });
+    click('Verify');
+    expect(screen.getAllByText(/Boarding recorded for this ticket/).length).toBeGreaterThan(0);
+    fireEvent.change(input, { target: { value: ticketId } });
+    click('Verify');
+    expect(screen.getAllByText(/This ticket was already boarded/).length).toBeGreaterThan(0);
   });
 });
 

@@ -2,6 +2,8 @@
 // placeholders pending ATCO confirmation — do not replace them with real names.
 
 import type { BoatSlot } from '../domain/fleet';
+import { createSeededTickets, type Ticket } from '../domain/tickets';
+import { saudiLocalDate, saudiLocalTime, saudiLocalTomorrow } from '../domain/dates';
 
 export const DESTINATIONS = ['Approved Anchorage A (Demo)', 'Offshore Vessel Demo-01'] as const;
 export const ORIGIN = 'Ras Tanura Service Pier';
@@ -55,6 +57,12 @@ export interface ReturnLeg {
   boatId?: string;
 }
 
+/** Policy acceptance recorded on each demo booking (Phase 10). */
+export interface PolicyAcceptance {
+  version: string;
+  acceptedAt: string;
+}
+
 export interface Booking {
   ref: string;
   date: string;
@@ -62,6 +70,10 @@ export interface Booking {
   time: string;
   dest: string;
   passengers: number;
+  /** Demo-collected passenger names (lead first). Never embedded in QR payloads. */
+  passengerNames?: string[];
+  /** One ticket per passenger per one-way leg; outbound and return are separate. */
+  tickets?: Ticket[];
   amount: number;
   payment: string;
   threshold: string;
@@ -70,6 +82,10 @@ export interface Booking {
   service: string;
   boatId?: string;
   return?: ReturnLeg | null;
+  policyAccepted?: PolicyAcceptance | null;
+  /** Optional corporate purchase-order reference (demo only). */
+  po?: string;
+  bookingContact?: string;
 }
 
 export interface MaterialRequest {
@@ -82,6 +98,10 @@ export interface MaterialRequest {
   sender: string;
   receiver: string;
   detail: string;
+  /** Demo booking reference this material travels with, when one exists. */
+  bookingRef?: string;
+  /** Destination vessel, when the request targets one. */
+  vessel?: string;
 }
 
 export interface AuditEvent {
@@ -90,8 +110,9 @@ export interface AuditEvent {
   action: string;
 }
 
-export const today = () => new Date().toISOString().slice(0, 10);
-export const nowTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+/** Saudi-local date the demo operates on (never the computer's UTC date). */
+export const today = () => saudiLocalDate();
+export const nowTime = () => saudiLocalTime();
 
 export function initialSailings(): Sailing[] {
   return [
@@ -102,16 +123,27 @@ export function initialSailings(): Sailing[] {
 }
 
 export function initialBookings(): Booking[] {
+  const outboundLead = 'Demo Passenger';
   return [
-    { ref: 'GM-DEMO-0248', date: today(), leg: 'Outbound', time: '07:00', dest: 'Approved Anchorage A (Demo)', passengers: 1, amount: 500, payment: 'Payment recorded (demo)', threshold: 'Collecting bookings', ops: 'Awaiting ATCO decision', boarding: 'Not started', service: 'Passenger transfer', boatId: 'B-01' },
-    { ref: 'GM-DEMO-0312', date: today(), leg: 'Return', time: '09:30', dest: 'Offshore Vessel Demo-01', passengers: 2, amount: 1000, payment: 'Payment pending (demo)', threshold: 'Minimum met (demo)', ops: 'Awaiting ATCO decision', boarding: 'Not started', service: 'Passenger transfer', boatId: 'B-02' },
+    {
+      ref: 'GM-DEMO-0248', date: today(), leg: 'Outbound', time: '07:00', dest: 'Approved Anchorage A (Demo)',
+      passengers: 1, passengerNames: [outboundLead], tickets: createSeededTickets({ ref: 'GM-DEMO-0248', leg: 'outbound', count: 1, leadName: outboundLead }),
+      amount: 500, payment: 'Payment recorded (demo)', threshold: 'Collecting bookings', ops: 'Awaiting ATCO decision', boarding: 'Not started', service: 'Passenger transfer', boatId: 'B-01',
+      policyAccepted: { version: 'gulf-mover-demo-policy-v1', acceptedAt: `${today()} 09:10` },
+    },
+    {
+      ref: 'GM-DEMO-0312', date: today(), leg: 'Return', time: '09:30', dest: 'Offshore Vessel Demo-01',
+      passengers: 2, passengerNames: ['Return Demo Passenger', 'Passenger 2'], tickets: createSeededTickets({ ref: 'GM-DEMO-0312', leg: 'return', count: 2, leadName: 'Return Demo Passenger' }),
+      amount: 1000, payment: 'Payment pending (demo)', threshold: 'Minimum met (demo)', ops: 'Awaiting ATCO decision', boarding: 'Not started', service: 'Passenger transfer', boatId: 'B-02',
+      policyAccepted: { version: 'gulf-mover-demo-policy-v1', acceptedAt: `${today()} 09:15` },
+    },
   ];
 }
 
 export function initialMaterials(): MaterialRequest[] {
   return [
-    { id: 'MR-DEMO-01', name: 'Packaged supplies (demo)', qty: '2 containers', weight: '12 kg (fictional)', size: '40 × 30 × 25 cm (fictional)', status: 'Pending review', sender: 'Demo Logistics Co.', receiver: 'Offshore Vessel Demo-01', detail: 'Fictional sample request for UI review. Item suitability has not been evaluated.' },
-    { id: 'MR-DEMO-02', name: 'Equipment case (demo)', qty: '1 case', weight: '8 kg (fictional)', size: '50 × 35 × 20 cm (fictional)', status: 'Clarification required', sender: 'Ship Agent Demo', receiver: 'Approved Anchorage A (Demo)', detail: 'Sample request with missing documentation; no transport is accepted.' },
+    { id: 'MR-DEMO-01', name: 'Packaged supplies (demo)', qty: '2 containers', weight: '12 kg (fictional)', size: '40 × 30 × 25 cm (fictional)', status: 'Pending review', sender: 'Demo Logistics Co.', receiver: 'Offshore Vessel Demo-01', detail: 'Fictional sample request for UI review. Item suitability has not been evaluated.', bookingRef: 'GM-DEMO-0312', vessel: 'Offshore Vessel Demo-01' },
+    { id: 'MR-DEMO-02', name: 'Equipment case (demo)', qty: '1 case', weight: '8 kg (fictional)', size: '50 × 35 × 20 cm (fictional)', status: 'Clarification required', sender: 'Ship Agent Demo', receiver: 'Approved Anchorage A (Demo)', detail: 'Sample request with missing documentation; no transport is accepted.', vessel: 'Approved Anchorage A (Demo)' },
   ];
 }
 
@@ -122,7 +154,7 @@ export function initialAudit(): AuditEvent[] {
   ];
 }
 
-const tomorrow = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+const tomorrow = () => saudiLocalTomorrow();
 
 /** Fictional boat bookings: shared scheduled sailings and whole-boat charters. */
 export function initialBoatSlots(): BoatSlot[] {

@@ -17,6 +17,7 @@ import SettingsView from './pages/SettingsView';
 import AuthView from './pages/AuthView';
 import { AuthProvider } from './context/AuthContext';
 import './styles/index.css';
+import './styles/wallet.css';
 
 export function AppRoutes() {
   return (

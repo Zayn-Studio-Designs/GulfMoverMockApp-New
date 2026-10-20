@@ -9,6 +9,11 @@ import { StatusPill } from '../components/StatusPill';
 import { ArrowIcon, Icon } from '../components/Icon';
 import { formatTime } from '../domain/fleet';
 import { BOATS } from '../data/demoData';
+import { QRCodeTicket } from '../components/QRCodeTicket';
+import type { Lang } from '../i18n/translations';
+import { WalletAddSheet, WalletPassSheet } from '../components/wallet/WalletSheets';
+import { useTicketIndex, type TicketEntry } from '../hooks/useTicketIndex';
+import { toCsv, downloadCsv } from '../domain/csv';
 
 export default function MyBookingsView() {
   const { t, tx, lang } = useLanguage();
@@ -19,6 +24,8 @@ export default function MyBookingsView() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [detailRef, setDetailRef] = useState<string | null>(null);
+  const [addPassTicket, setAddPassTicket] = useState<TicketEntry | null>(null);
+  const [openPassTicket, setOpenPassTicket] = useState<TicketEntry | null>(null);
 
   const boatName = (id?: string) => BOATS.find(b => b.id === id)?.name[lang];
 
@@ -26,6 +33,9 @@ export default function MyBookingsView() {
     (!search || b.ref.toLowerCase().includes(search.toLowerCase())) &&
     (statusFilter === 'all' || b.payment.toLowerCase().includes(statusFilter)));
   const detail = bookings.find(b => b.ref === detailRef);
+  const { entries } = useTicketIndex(bookings);
+  const detailEntries = entries.filter(e => detail && e.booking.ref === detail.ref);
+  const savedTicketIds = new Set(useDemo().passes.map(p => p.ticketId));
 
   const requestAction = (type: 'amend' | 'refund') => openModal({
     title: type === 'refund' ? t('requestRefund') : t('requestAmend'), desc: t('requestReceived'), confirmText: t('confirm'),
@@ -76,7 +86,17 @@ export default function MyBookingsView() {
             ))}
           </div>
         ) : (
-        <div className="table-wrap" style={{ marginTop: 17 }}>
+        <>
+        <div className="between" style={{ marginTop: 14, flexWrap: 'wrap' }}>
+          <span className="small muted">{tx('Fictional data only · status dimensions shown separately.')}</span>
+          <button type="button" className="btn btn-outline btn-small"
+            onClick={() => { if (downloadCsv('gulf-mover-demo-bookings.csv', toCsv(
+              ['Booking ref', 'Date', 'Time', 'Leg', 'Boat', 'Passengers', 'Amount', 'Payment', 'Threshold', 'Ops', 'Boarding', 'PO'],
+              filtered.map(b => [b.ref, b.date, b.time, b.leg, b.boatId ?? '', b.passengers, b.amount, b.payment, b.threshold, b.ops, b.boarding, b.po ?? ''])))) toast(tx('Export downloads the current demo data only.')); }}>
+            {t('exportBookings')}
+          </button>
+        </div>
+        <div className="table-wrap" style={{ marginTop: 10 }}>
           <table>
             <thead><tr>
               <th>{t('bookingRef')}</th><th>{t('date')}</th><th>{t('leg')}</th><th>{t('amount')}</th>
@@ -97,6 +117,7 @@ export default function MyBookingsView() {
             </tbody>
           </table>
         </div>
+        </>
         )}
         {filtered.length === 0 && <div className="empty"><div className="icon"><Icon name="search" /></div><strong>{t('noBookings')}</strong></div>}
       </div>
@@ -123,14 +144,56 @@ export default function MyBookingsView() {
               ))}
             </div>
             <div className="divider" />
+            <div className="inset" style={{ marginTop: 14 }}>
+              <strong>{t('corpContact')}</strong>
+              <p className="small muted">{detail.bookingContact || '—'}{detail.po && <> · {t('poLabel')}: <span className="mono">{detail.po}</span></>}</p>
+            </div>
+            {detailEntries.length > 0 && (
+              <div className="inset" style={{ marginTop: 14 }}>
+                <strong>{t('ticketsQrTitle')}</strong>
+                <div className="ticket-qr-grid">
+                  {detailEntries.map(e => <TicketDetailRow key={e.ticket.id} entry={e} saved={savedTicketIds.has(e.ticket.id)}
+                    t={t} lang={lang}
+                    onAdd={() => setAddPassTicket(e)} onOpen={() => setOpenPassTicket(e)} />)}
+                </div>
+                <p className="small muted">{t('ticketsQrNote')}</p>
+              </div>
+            )}
             <div className="row" style={{ flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-outline btn-small" onClick={() => toast('Ticket is a decorative placeholder in this prototype.')}>{t('ticket')}</button>
               <button type="button" className="btn btn-outline btn-small" onClick={() => requestAction('amend')}>{t('requestAmend')}</button>
               <button type="button" className="btn btn-outline btn-small" onClick={() => requestAction('refund')}>{t('requestRefund')}</button>
             </div>
           </div>
         )}
       </div>
+      {addPassTicket && <WalletAddSheet entry={addPassTicket} onClose={() => setAddPassTicket(null)} />}
+      {openPassTicket && <WalletPassSheet entry={openPassTicket} onClose={() => setOpenPassTicket(null)} />}
     </>
+  );
+}
+
+/** One ticket row in the booking detail: real QR, live boarding state, Wallet actions. */
+function TicketDetailRow({ entry, saved, t, lang, onAdd, onOpen }: {
+  entry: TicketEntry; saved: boolean; t: (k: string) => string; lang: Lang; onAdd: () => void; onOpen: () => void;
+}) {
+  const legTicket = entry.booking.tickets?.find(tk => tk.id === entry.ticket.id);
+  return (
+    <div className="ticket-qr-card">
+      <QRCodeTicket ticketId={entry.ticket.id} size={110} />
+      <div className="ticket-qr-body">
+        <strong>{entry.leg === 'return' ? t('returnLeg') : t('outboundLeg')}
+          <span className="tiny muted"> · {entry.legDate} · <span className="mono">{formatTime(entry.legTime, lang)}</span></span>
+        </strong>
+        <div className="tiny muted">{legTicket?.passengerName || entry.ticket.passengerName} · <span className="mono">{entry.ticket.id}</span></div>
+        <span className={`pill tiny ${entry.ticket.status === 'boarded' ? 'pill-green' : 'pill-gold'}`}>
+          {entry.ticket.status === 'boarded' ? t('ticketBoarded') : t('ticketNotBoarded')}
+        </span>
+      </div>
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {saved
+          ? <button type="button" className="btn btn-outline btn-small" onClick={onOpen}>{t('walletOpenSaved')}</button>
+          : <button type="button" className="btn btn-primary btn-small" onClick={onAdd}>{t('walletAdd')}</button>}
+      </div>
+    </div>
   );
 }

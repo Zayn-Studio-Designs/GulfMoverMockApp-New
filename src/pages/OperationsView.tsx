@@ -9,10 +9,12 @@ import { Icon, type IconName } from '../components/Icon';
 import { isMinimumMet, thresholdLabel } from '../domain/rules';
 import { formatTime } from '../domain/fleet';
 import { BOATS } from '../data/demoData';
+import { toCsv, downloadCsv } from '../domain/csv';
+import { useTicketIndex, type TicketEntry } from '../hooks/useTicketIndex';
 
 export default function OperationsView() {
   const { t, tx, lang } = useLanguage();
-  const { sailings, materials, audit, suspendSailing } = useDemo();
+  const { sailings, materials, audit, bookings, suspendSailing, setSailingOps } = useDemo();
   const { toast, openModal } = useUi();
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState('all');
@@ -24,6 +26,13 @@ export default function OperationsView() {
     (directionFilter === 'all' || s.dir.toLowerCase() === directionFilter));
   const selected = sailings.find(s => s.id === selectedId);
   const pendingMaterials = materials.filter(m => /pending/i.test(m.status)).length;
+  const { entries } = useTicketIndex(bookings);
+  const sailingTickets = (id: string): TicketEntry[] => {
+    const s = sailings.find(x => x.id === id);
+    if (!s) return [];
+    return entries.filter(e => e.legTime === s.time && e.booking.boatId === s.boatId
+      && (s.dir === 'Return' ? e.leg === 'return' : true));
+  };
 
   const metrics: ReadonlyArray<{ icon: IconName; label: string; value: number; foot: string }> = [
     { icon: 'ship', label: 'sailingsToday', value: sailings.length, foot: 'Initial times in brief; demo list' },
@@ -36,6 +45,24 @@ export default function OperationsView() {
     title: t('suspend'), desc: t('reasonSuspend'), confirmText: t('confirm'), requireReason: true,
     onConfirm: reason => { suspendSailing(id, reason); toast('Demo state updated. No real sailing changed.'); },
   });
+
+  const download = (filename: string, headers: readonly string[], rows: ReadonlyArray<readonly unknown[]>) => {
+    if (downloadCsv(filename, toCsv(headers, rows))) toast(t('csvNote'));
+  };
+
+  /** Demo reading of the live booking state; no integration with a real manifest system. */
+  const exportSailings = () => {
+    const rows = list.map(s => [s.id, s.time, s.dir, txSafe(s.dest), s.boatId, s.count, s.minimum, txSafe(thresholdLabel(s.count)), txSafe(s.ops), txSafe(s.manifest)]);
+    download('gulf-mover-demo-sailings.csv', ['Sailing', 'Time', 'Direction', 'Route', 'Boat', 'Tickets', 'Minimum', 'Threshold', 'Readiness', 'Manifest'], rows);
+  };
+  const exportManifest = (id: string) => {
+    const s = sailings.find(x => x.id === id);
+    if (!s) return;
+    const rows = sailingTickets(id).map(e => [e.ticket.id, e.booking.ref, e.leg, e.ticket.passengerName || 'Not provided', e.legDate, e.legTime, e.ticket.status]);
+    download(`gulf-mover-demo-manifest-${id}.csv`, ['Ticket ID', 'Booking ref', 'Leg', 'Passenger', 'Date', 'Time', 'Board status'], rows);
+  };
+  /* CSV helper keeps status strings in demo text; Arabic runs alongside. */
+  const txSafe = (s: string) => tx(s);
 
   return (
     <>
@@ -56,6 +83,7 @@ export default function OperationsView() {
           <div className="between" style={{ flexWrap: 'wrap' }}>
             <div><h2 className="card-title">{t('sailingTable')}</h2><p className="card-desc">{tx('All counts/statuses are sample data; capacity not configured.')}</p></div>
             <div className="chip-row">
+              <button type="button" className="btn btn-outline btn-small" onClick={exportSailings}>{t('exportOccupancy')}</button>
               <select className="filter-select" aria-label={tx('Filter by operations status')} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                 <option value="all">{t('filterAll')}</option>
                 <option value="awaiting">{tx('Awaiting approval')}</option>
@@ -103,7 +131,7 @@ export default function OperationsView() {
               <div>
                 <div className="eyebrow">{tx('DEMO SAILING DETAIL')}</div>
                 <h2 className="card-title"><span className="mono">{selected.id}</span> · {formatTime(selected.time, lang)} · {tx(selected.dest)} · {BOATS.find(b => b.id === selected.boatId)?.name[lang]}</h2>
-                <p className="card-desc">{tx('Passenger list is a placeholder; no real manifest is present.')}</p>
+                <p className="card-desc">{tx('Passenger list below mirrors the live demo bookings for this sailing — not an approved operating manifest.')}</p>
               </div>
               <button type="button" className="btn btn-outline btn-small" onClick={() => setSelectedId(null)}>{tx('Close')}</button>
             </div>
@@ -114,9 +142,33 @@ export default function OperationsView() {
               <div className="status-item"><div className="status-label">{t('manifest')}</div><div className="status-text">{tx(selected.manifest)}</div></div>
             </div>
             <div className="divider" />
+            {(() => {
+              const tickets = sailingTickets(selected.id);
+              return (
+                <div className="table-wrap" style={{ marginTop: 13 }}>
+                  <table style={{ minWidth: 0 }}>
+                    <thead><tr><th>{t('ticketIdLabel')}</th><th>{t('bookingRef')}</th><th>{t('ticketPassenger')}</th><th>{t('status')}</th></tr></thead>
+                    <tbody>
+                      {tickets.map(e => (
+                        <tr key={e.ticket.id}>
+                          <td data-label={t('ticketIdLabel')}><span className="mono tiny">{e.ticket.id}</span></td>
+                          <td data-label={t('bookingRef')}><span className="mono tiny">{e.booking.ref}</span></td>
+                          <td data-label={t('ticketPassenger')}>{e.ticket.passengerName || t('notProvided')}</td>
+                          <td data-label={t('status')}><StatusPill text={e.ticket.status === 'boarded' ? t('ticketBoarded') : t('ticketNotBoarded')} /></td>
+                        </tr>
+                      ))}
+                      {tickets.length === 0 && <tr><td colSpan={4} className="tiny muted">{tx('No ticket records exist for this demo sailing yet.')}</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
             <div className="row" style={{ flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-outline btn-small" onClick={() => toast('Review view is simulated only.')}>{t('review')}</button>
-              <button type="button" className="btn btn-outline btn-small" onClick={() => navigate('/boarding')}>{t('openManifest')}</button>
+              <button type="button" className="btn btn-outline btn-small" onClick={() => exportManifest(selected.id)}>{t('exportManifest')}</button>
+              <button type="button" className="btn btn-primary btn-small"
+                onClick={() => { setSailingOps(selected.id, 'Approved — ready for the day (demo)'); toast(t('opsApproved')); }}>{t('opsApprove')}</button>
+              <button type="button" className="btn btn-outline btn-small"
+                onClick={() => { setSailingOps(selected.id, 'Awaiting approval'); toast(t('opsBackAwait')); }}>{t('opsBackAwait')}</button>
               <button type="button" className="btn btn-danger btn-small" onClick={() => askSuspend(selected.id)}>{t('suspend')}</button>
             </div>
           </div>

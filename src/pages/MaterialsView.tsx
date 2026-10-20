@@ -4,6 +4,7 @@ import { useDemo, type MaterialDecision } from '../context/DemoContext';
 import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusPill } from '../components/StatusPill';
+import { toCsv, downloadCsv } from '../domain/csv';
 
 export default function MaterialsView() {
   const { t, tx } = useLanguage();
@@ -34,6 +35,12 @@ export default function MaterialsView() {
             <h2 className="card-title">{t('materialsTitle')}</h2>
             <span className="pill pill-neutral">{materials.length} {tx('demo request(s)')}</span>
           </div>
+          <button type="button" className="btn btn-outline btn-small" style={{ marginBottom: 10 }}
+            onClick={() => { if (downloadCsv('gulf-mover-demo-materials.csv', toCsv(
+              ['ID', 'Name', 'Qty', 'Weight', 'Size', 'Status', 'Sender', 'Receiver'],
+              materials.map(m => [m.id, m.name, m.qty, m.weight, m.size, m.status, m.sender, m.receiver])))) toast(tx('Export downloads the current demo data only.')); }}>
+            {t('exportMaterials')}
+          </button>
           {materials.map(m => (
             <button key={m.id} type="button" className="request-row" aria-pressed={m.id === selected.id}
               style={{ width: '100%', textAlign: 'start', border: 0, background: m.id === selected.id ? '#f1f8f3' : 'transparent', cursor: 'pointer' }}

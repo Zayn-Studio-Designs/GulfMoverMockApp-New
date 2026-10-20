@@ -5,10 +5,12 @@ import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusPill } from '../components/StatusPill';
 import { ArrowIcon, Icon, type IconName } from '../components/Icon';
-import { BOATS, CITIES, DESTINATIONS, ORIGIN, today } from '../data/demoData';
+import { BOATS, CITIES, DESTINATIONS, ORIGIN, today, nowTime } from '../data/demoData';
 import { ContactCard } from '../components/ContactCard';
-import { FARE_PER_PASSENGER_LEG, fareTotal, legCount, thresholdLabel } from '../domain/rules';
+import { FARE_PER_PASSENGER_LEG, fareTotal, legCount } from '../domain/rules';
 import { BRIEF_TIMES, TIME_SLOTS, boatAvailability, canBookPassengers, canCharter, findSlot, formatTime, type Availability } from '../domain/fleet';
+import { DEMO_POLICY_VERSION, type Ticket } from '../domain/tickets';
+import { QRCodeTicket } from '../components/QRCodeTicket';
 
 const SERVICES: ReadonlyArray<{ value: ServiceType; title: string; desc: string; icon: IconName }> = [
   { value: 'passenger', title: 'servicePassenger', desc: 'servicePassengerDesc', icon: 'user' },
@@ -16,10 +18,6 @@ const SERVICES: ReadonlyArray<{ value: ServiceType; title: string; desc: string;
   { value: 'combined', title: 'serviceCombined', desc: 'serviceCombinedDesc', icon: 'list' },
   { value: 'charter', title: 'serviceCharter', desc: 'serviceCharterDesc', icon: 'ship' },
 ];
-
-const SERVICE_LABEL: Record<ServiceType, string> = {
-  passenger: 'Passenger transfer', material: 'Material request', combined: 'Combined request', charter: 'Charter inquiry',
-};
 
 function Stepper({ step }: { step: number }) {
   const { t } = useLanguage();
@@ -238,7 +236,7 @@ function DetailsStep() {
     updateWizard({ formError: '', bookStep: 4 });
   };
 
-  const field = (id: string, labelKey: string, key: 'passengerName' | 'passengerEmail' | 'passengerPhone' | 'passengerCompany' | 'vessel' | 'imo',
+  const field = (id: string, labelKey: string, key: 'passengerName' | 'passengerEmail' | 'passengerPhone' | 'passengerCompany' | 'vessel' | 'imo' | 'po',
     opts: { required?: boolean; type?: string; autoComplete?: string; placeholder: string; hint?: string }) => (
     <div className="field">
       <label htmlFor={id}>{t(labelKey)}{opts.required ? ' *' : ''}</label>
@@ -262,7 +260,24 @@ function DetailsStep() {
         {field('passenger-company', 'company', 'passengerCompany', { placeholder: 'Demo Logistics Co.', hint: t('fieldOptional') })}
         {field('vessel-field', 'vessel', 'vessel', { placeholder: 'Offshore Vessel Demo-01' })}
         {field('imo-field', 'imo', 'imo', { placeholder: 'Demo reference only' })}
+        {field('po-field', 'poLabel', 'po', { placeholder: 'PO-DEMO-0042', hint: t('poHint') })}
       </div>
+      {wizard.paxCount > 1 && (
+        <div className="form-grid" style={{ marginTop: 15 }} aria-label={t('detailsPassengersHint')}>
+          {Array.from({ length: Math.min(7, wizard.paxCount - 1) }, (_, i) => i + 2).map(n => (
+            <div className="field" key={`pex-${n}`}>
+              <label htmlFor={`pax-name-${n}`}>{t('passengerNameN').replace('{n}', String(n))}</label>
+              <input id={`pax-name-${n}`} value={wizard.extraPassengerNames[n - 2] ?? ''}
+                onChange={e => {
+                  const next = [...wizard.extraPassengerNames];
+                  next[n - 2] = e.target.value;
+                  updateWizard({ extraPassengerNames: next });
+                }} />
+            </div>
+          ))}
+          <small>{t('detailsPassengersHint')}</small>
+        </div>
+      )}
       <div className="notice" style={{ marginTop: 17 }}><strong>{t('noSensitive')}</strong>{t('detailsSub')}</div>
       <div className="between" style={{ marginTop: 20 }}>
         <button type="button" className="btn btn-outline" onClick={() => updateWizard({ bookStep: 2 })}>{t('back')}</button>
@@ -274,7 +289,7 @@ function DetailsStep() {
 
 function ReviewStep() {
   const { t, tx, lang } = useLanguage();
-  const { wizard, updateWizard, resetWizard, materials, addMaterial, addAudit, requestCharter, bookings } = useDemo();
+  const { wizard, updateWizard, resetWizard, materials, addMaterial, bookings, requestCharter } = useDemo();
   const { toast } = useUi();
   const navigate = useNavigate();
   const pax = Math.max(1, wizard.paxCount);
@@ -308,15 +323,17 @@ function ReviewStep() {
       return;
     }
     if (materialOnly) {
+      // Material-only requests skip the passenger reservation entirely.
       const id = `MR-DEMO-${String(materials.length + 1).padStart(2, '0')}`;
       addMaterial({ id, name: 'New material request (demo)', qty: 'To be reviewed', weight: 'Not provided', size: 'Not provided', status: 'Pending review',
         sender: wizard.passengerCompany || 'Demo requestor', receiver: wizard.chosenDestination,
-        detail: 'Submitted through the offline UI prototype only. No actual transport acceptance or charge.' });
-      addAudit('Prototype', `${id} submitted for review (demo)`);
+        detail: 'Submitted through the offline UI prototype only. No actual transport acceptance or charge.',
+        vessel: wizard.vessel || wizard.chosenDestination });
       navigate('/materials');
       toast(t('materialPending'));
       return;
     }
+    // Passenger (and combined) requests reach the payment simulation first.
     updateWizard({ bookStep: 5, paymentChoice: '' });
   };
 
@@ -364,7 +381,7 @@ function ReviewStep() {
 
 function PaymentStep() {
   const { t, tx } = useLanguage();
-  const { wizard, updateWizard, bookings, boatSlots, addBooking, addMaterial, materials, addTicketsToSailing, reservePassengers } = useDemo();
+  const { wizard, updateWizard, addMaterial, materials, createBooking } = useDemo();
   const { toast } = useUi();
   const choices: ReadonlyArray<{ value: PaymentChoice; title: string; desc: string; icon: IconName }> = [
     { value: 'recorded', title: 'payRecorded', desc: 'Local demo state only.', icon: 'check' },
@@ -373,34 +390,43 @@ function PaymentStep() {
   ];
   const feedback = wizard.paymentChoice === 'recorded' ? t('recorded') : wizard.paymentChoice === 'pending' ? t('pending') : tx('Payment failed / uncertain (demo)');
 
+  /* Booking creation is atomic: legs reserve together or not at all, tickets
+     and policy acceptance are recorded on the shared demo booking. */
   const finish = () => {
     if (!wizard.paymentChoice) { toast(t('paymentNotice')); return; }
     const pax = Math.max(1, wizard.paxCount);
-    const ref = `GM-DEMO-${String(3200 + bookings.length + 1).padStart(4, '0')}`;
-    // Minimum is aggregated across all bookings on the same boat and sailing, not per booking.
-    const existing = findSlot(boatSlots, wizard.selectedBoat, wizard.journeyDate, wizard.selectedOut)?.passengers ?? 0;
-    // A chartered boat cannot take passengers: re-check at the moment of booking.
-    if (!reservePassengers(wizard.selectedBoat, wizard.journeyDate, wizard.selectedOut, pax, ref)) {
-      toast(t('boatTaken')); updateWizard({ bookStep: 2 }); return;
+    // Per-passenger names (lead uses the main field; extras are optional demo data).
+    const passengerNames = [wizard.passengerName.trim() || 'Demo Passenger'];
+    for (let i = 2; i <= pax; i++) passengerNames.push(wizard.extraPassengerNames[i - 2]?.trim() || `Passenger ${i}`);
+    const legs: Array<{ boatId: string; date: string; time: string }> = [
+      { boatId: wizard.selectedBoat, date: wizard.journeyDate, time: wizard.selectedOut },
+    ];
+    if (wizard.addReturn && wizard.returnDate) legs.push({ boatId: wizard.selectedRetBoat, date: wizard.returnDate, time: wizard.selectedRet });
+    const policyAccepted = wizard.policyAck && wizard.accessAck
+      ? { version: DEMO_POLICY_VERSION, acceptedAt: `${today()} ${nowTime()}` }
+      : null;
+    const result = createBooking({
+      legs,
+      dest: wizard.chosenDestination,
+      passengers: pax,
+      passengerNames,
+      payment: wizard.paymentChoice,
+      addReturn: wizard.addReturn && !!wizard.returnDate,
+      policyAccepted,
+      po: wizard.po || undefined,
+      bookingContact: `${wizard.passengerName.trim()} · ${wizard.passengerEmail.trim()}`.replace(/^ · | · $/, '') || undefined,
+    });
+    if (!result.ok) {
+      toast(result.reason === 'chartered' ? t('boatTaken') : t('noCapacity'));
+      updateWizard({ bookStep: 2 });
+      return;
     }
-    if (wizard.addReturn && !reservePassengers(wizard.selectedRetBoat, wizard.returnDate, wizard.selectedRet, pax, `${ref}-R`)) {
-      toast(t('boatTaken')); updateWizard({ bookStep: 2 }); return;
-    }
-    const booking = {
-      ref,
-      date: wizard.journeyDate, leg: wizard.addReturn ? 'Outbound + return' : 'Outbound', time: wizard.selectedOut,
-      dest: wizard.chosenDestination, passengers: pax, amount: fareTotal(pax, wizard.addReturn),
-      payment: wizard.paymentChoice === 'recorded' ? 'Payment recorded (demo)' : wizard.paymentChoice === 'pending' ? 'Payment pending (demo)' : 'Payment failed / uncertain (demo)',
-      threshold: thresholdLabel(existing + pax), ops: 'Awaiting ATCO decision', boarding: 'Not started',
-      service: SERVICE_LABEL[wizard.service], boatId: wizard.selectedBoat,
-      return: wizard.addReturn ? { date: wizard.returnDate, time: wizard.selectedRet, dest: wizard.chosenDestination, boatId: wizard.selectedRetBoat } : null,
-    };
-    addBooking(booking);
-    if (wizard.journeyDate === today()) addTicketsToSailing(wizard.selectedOut, wizard.selectedBoat, pax);
+    const booking = result.booking;
     if (wizard.service !== 'passenger') {
       addMaterial({ id: `MR-DEMO-${String(materials.length + 1).padStart(2, '0')}`, name: 'New fictional material request', qty: 'To confirm',
         weight: 'Not provided', size: 'Not provided', status: 'Pending review', sender: 'Demo requestor', receiver: wizard.chosenDestination,
-        detail: 'Created locally from the UI prototype; not submitted to an actual operator.' });
+        detail: 'Created locally from the UI prototype; not submitted to an actual operator.',
+        bookingRef: booking.ref, vessel: wizard.vessel || wizard.chosenDestination });
     }
     updateWizard({ bookStep: 6, currentBooking: booking });
   };
@@ -433,6 +459,20 @@ function PaymentStep() {
   );
 }
 
+function TicketQrCard({ ticket, t }: { ticket: Ticket; t: (k: string) => string }) {
+  return (
+    <div className="ticket-qr-card">
+      <QRCodeTicket ticketId={ticket.id} size={120} />
+      <div className="ticket-qr-body">
+        <strong>{ticket.leg === 'return' ? t('returnLeg') : t('outboundLeg')}</strong>
+        <div className="tiny muted">{ticket.passengerName}</div>
+        <span className="pill pill-neutral tiny">{ticket.status === 'boarded' ? t('ticketBoarded') : t('ticketNotBoarded')}</span>
+      </div>
+      <span className="tiny muted" dir="ltr">{t('ticketScanHint')}</span>
+    </div>
+  );
+}
+
 function ResultStep() {
   const { t, tx, lang } = useLanguage();
   const { wizard, bookings, resetWizard } = useDemo();
@@ -461,6 +501,15 @@ function ResultStep() {
           <div key={label} className="status-item"><div className="status-label">{t(label)}</div><div className="status-text">{tx(val)}</div><StatusPill text={val} /></div>
         ))}
       </div>
+      {b.tickets && b.tickets.length > 0 && (
+        <div className="inset" style={{ marginTop: 14 }}>
+          <strong>{t('ticketsQrTitle')}</strong>
+          <div className="ticket-qr-grid">
+            {b.tickets.map(tk => <TicketQrCard key={tk.id} ticket={tk} t={t} />)}
+          </div>
+          <p className="small muted">{t('ticketsQrNote')}</p>
+        </div>
+      )}
       {b.return && (
         <div className="inset" style={{ marginTop: 14 }}>
           <strong>{t('returnLeg')} · {b.return.date} · <span className="mono">{formatTime(b.return.time, lang)}</span>{b.return.boatId && <> · {BOATS.find(x => x.id === b.return?.boatId)?.name[lang]}</>}</strong>
