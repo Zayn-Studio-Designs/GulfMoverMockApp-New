@@ -1,0 +1,77 @@
+/* Apple Wallet presentation simulation (Phase 3) — inside the mock iPhone only.
+   Simulated experience; no real pass is installed and no Apple branding is copied. */
+
+/* ---------- Ticket QR (shared) ---------- */
+.qr-code{display:inline-flex;flex-direction:column;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
+.qr-payload{max-width:210px;overflow-wrap:anywhere;text-align:center}
+.ticket-qr-grid{display:grid;gap:10px;margin-top:12px}
+.ticket-qr-card{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;flex-wrap:wrap}
+.ticket-qr-body{display:grid;gap:4px;min-width:150px}
+
+/* ---------- Pass visual ---------- */
+.pass-card{position:relative;border-radius:20px;overflow:hidden;color:#fff;background:linear-gradient(145deg,var(--navy) 0%,var(--navy2) 62%,#0f2c4c 100%);box-shadow:0 14px 34px rgba(18,52,90,.35);text-align:start}
+.pass-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px 10px}
+.pass-brand{display:flex;align-items:center;gap:8px;min-width:0}
+.pass-brand-dot{width:22px;height:22px;border-radius:6px;background:var(--teal2);color:var(--navy);display:grid;place-items:center;flex:none;font-weight:900;font-size:11px}
+.pass-brand-name{font-size:12px;font-weight:900;letter-spacing:.09em;white-space:nowrap}
+.pass-kind{font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#a9bfd2;white-space:nowrap}
+.pass-strip{height:3px;background:linear-gradient(90deg,var(--sage),rgba(120,169,139,.15));margin:0 16px}
+.pass-body{padding:13px 16px 4px}
+.pass-route{display:flex;align-items:center;gap:8px;font-weight:850}
+.pass-route .pt{font-size:15px;letter-spacing:-.01em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pass-route .pa{color:var(--sage);flex:none;display:grid;place-items:center}
+.pass-when{margin-top:10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.pass-date{font-size:11px;font-weight:800;color:#c6d6e3;letter-spacing:.06em;text-transform:uppercase}
+.pass-time{font-size:26px;font-weight:900;letter-spacing:-.02em}
+.pass-legtag{font-size:9px;font-weight:850;letter-spacing:.12em;text-transform:uppercase;color:var(--teal2);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px 8px}
+.pass-rows{margin-top:9px;display:grid;gap:4px;font-size:11px;color:#d7e2ec}
+.pass-rows b{color:#fff;font-weight:850}
+.pass-qr{margin:12px 16px 14px;background:#fff;border-radius:12px;padding:12px;display:grid;place-items:center}
+.pass-note{padding:0 16px 13px;font-size:9px;color:#93a9bd;letter-spacing:.02em}
+
+/* Status chip shown on the pass (kept in sync with ticket state) */
+.pass-status{display:inline-flex;align-items:center;gap:5px;font-size:9.5px;font-weight:850;letter-spacing:.05em;border-radius:999px;padding:3px 8px}
+.pass-status.boarded{color:#aff0c8;background:rgba(120,169,139,.22);border:1px solid rgba(120,169,139,.4)}
+.pass-status.wait{color:#ffd98a;background:rgba(255,214,138,.13);border:1px solid rgba(255,214,138,.3)}
+.pass-status.blocked{color:#ffb3ab;background:rgba(255,140,125,.13);border:1px solid rgba(255,140,125,.32)}
+
+/* ---------- Wallet sheet overlays (fixed to the app viewport) ---------- */
+.wallet-layer{position:fixed;inset:0;z-index:120;display:flex;align-items:flex-end;justify-content:center;background:rgba(10,20,30,.5);animation:walletFog .22s ease-out}
+@keyframes walletFog{from{opacity:0}to{opacity:1}}
+.wallet-sheet{width:min(430px,100%);max-height:88%;overflow:auto;border-radius:22px 22px 0 0;background:#f2f4f7;padding:16px 16px 22px;animation:sheetUp .26s cubic-bezier(.2,.9,.3,1.1);direction:ltr;text-align:start}
+[dir="rtl"] .wallet-sheet{direction:rtl}
+@keyframes sheetUp{from{transform:translateY(14%);opacity:.4}to{transform:translateY(0);opacity:1}}
+.sheet-grip{width:38px;height:5px;border-radius:99px;background:#c9d1d9;margin:2px auto 12px}
+.sheet-title{font-size:17px;font-weight:900;color:var(--navy);margin:0 0 2px}
+.sheet-sub{font-size:11px;color:var(--muted);margin:0 0 14px}
+.wallet-demo-tag{display:inline-flex;gap:5px;align-items:center;font-size:9px;font-weight:850;letter-spacing:.09em;color:var(--gold);background:var(--goldbg);border:1px solid #f1dfad;border-radius:999px;padding:3px 8px;text-transform:uppercase}
+.wallet-actions{display:flex;gap:9px;margin-top:16px}
+.wallet-actions .btn{flex:1;min-height:46px}
+.wallet-add-btn{background:var(--navy);color:#fff;border-color:var(--navy)}
+.wallet-add-btn:hover{background:var(--navy2)}
+.wallet-add-btn:disabled{opacity:.6}
+.pass-added{display:grid;place-items:center;text-align:center;padding:26px 8px 10px}
+.pass-check{width:64px;height:64px;border-radius:50%;background:var(--teal);color:#fff;display:grid;place-items:center;margin-bottom:14px;animation:checkPop .3s cubic-bezier(.2,.9,.3,1.35)}
+@keyframes checkPop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+.pass-check svg{width:30px;height:30px}
+
+/* ---------- Lock screen (side-button simulation) ---------- */
+.lock-layer{position:fixed;inset:0;z-index:130;background:linear-gradient(165deg,#0b1e33 0%,#12345A 58%,#1c4470 100%);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;animation:walletFog .25s ease-out}
+.lock-time{font-size:44px;font-weight:900;letter-spacing:-.02em}
+.lock-date{font-size:12px;font-weight:800;color:#c6d6e3;letter-spacing:.08em;text-transform:uppercase}
+.lock-hint{margin-top:auto;margin-bottom:34px;font-size:11px;color:#9db4c8;text-align:center;max-width:250px}
+.lock-close{position:absolute;top:12px;inset-inline-end:12px;font-size:11px}
+.lock-actions{position:absolute;bottom:12px;inset-inline:12px;display:grid;gap:8px}
+.side-btn{position:absolute;top:104px;inset-inline-end:3px;width:5px;height:64px;border-radius:3px;background:#e8edf2;opacity:.9}
+.side-btn.pressing{animation:sidePress .95s ease-in-out}
+@keyframes sidePress{0%,100%{background:#e8edf2;box-shadow:none}20%,80%{background:var(--sage);box-shadow:0 0 10px var(--sage)}40%,60%{background:#e8edf2;box-shadow:none}50%{background:var(--sage);box-shadow:0 0 12px var(--sage)}}
+.side-tap{position:absolute;top:80px;inset-inline-end:14px;font-size:10px;font-weight:800;color:var(--sage);letter-spacing:.05em;animation:tapFade .95s ease-in-out}
+@keyframes tapFade{0%,100%{opacity:0}30%,70%{opacity:1}}
+.wallet-open{animation:walletSlide .4s cubic-bezier(.2,.9,.3,1.05)}
+@keyframes walletSlide{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+
+/* Reduced motion: keep the same states, shorten animations */
+@media (prefers-reduced-motion: reduce){
+  .wallet-layer,.wallet-sheet,.lock-layer,.pass-check,.wallet-open{animation:none}
+  .side-btn.pressing,.side-tap{animation:none}
+}

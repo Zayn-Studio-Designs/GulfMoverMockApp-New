@@ -113,3 +113,34 @@ Changes (`src/presentation/PresentationApp.tsx`, `src/presentation/presentation.
 | Console | no errors/warnings in the presentation tab | Pass |
 
 Not verified: pixel screenshots (preview compositor still unavailable — checks are DOM/computed-style based); actual scrollbar pixels (verified via injected rules + `scrollbar-width` computed style rather than a screenshot).
+
+## Verification — 2026-10-20 (branch `customer-first-redesign`, uncommitted working tree) — per-ticket QR tickets, Wallet pass sheet, corporate PO, staff CSV exports, demo admin config
+
+### What changed this session (all uncommitted)
+
+Per-passenger, per-one-way-leg booking tickets with genuine scannable QR codes, plus the thresholds and workflows around them.
+
+| Area | Files |
+|---|---|
+| Opaque ticket identity (no names or personal data in IDs or QR payloads) | `src/domain/tickets.ts` |
+| Scan payload parsing + ticket index for the boarding desk | `src/domain/tickets.ts`, `src/hooks/useTicketIndex.ts` |
+| Real QR rendering (SVG, `qrcode.react`) · Apple Wallet *simulation* sheet/pass visual | `src/components/QRCodeTicket.tsx`, `src/components/wallet/`, `src/styles/wallet.css` |
+| Booking wizard: per-passenger names, PO reference, policy acceptance, atomic multi-leg booking, per-ticket QR result | `src/pages/BookingView.tsx`, `src/context/DemoContext.tsx` |
+| My Bookings: per-leg ticket detail, wallet actions, staff bookings CSV export | `src/pages/MyBookingsView.tsx`, `src/domain/csv.ts` |
+| Boarding desk: QR/manual lookup, per-ticket board/unboard, duplicate-scan prevention | `src/pages/BoardingView.tsx` |
+| Operations: CSV exports (bookings/sailings), demo sailing-approval actions | `src/pages/OperationsView.tsx` |
+| Fleet: demo admin config (fare / departures / capacity inputs, demo-only) | `src/pages/FleetView.tsx`, `src/domain/fleet.ts` |
+| Corporate: PO reference saved onto a real demo booking record | `src/pages/CorporateView.tsx`, `src/context/DemoContext.tsx` |
+| Materials & customer home placeholder polish | `src/pages/MaterialsView.tsx`, `src/pages/CustomerHome.tsx` |
+
+### Commands actually run — 2026-10-20
+
+| Check | Command | Result |
+|---|---|---|
+| Type check | `npx tsc --noEmit` (`npm run typecheck`) | 0 errors |
+| Tests | `npm test` (vitest) | 5 files, **55/55 passed** — includes new `src/tests/features.test.tsx`: payload round-trip, one ticket per passenger per leg with name-free QR payloads, atomic multi-leg reservation (all legs or none), CSV helpers, Wallet add-pass once-flow, corporate PO saved to demo state, result step showing a scannable QR per ticket; plus updated `src/tests/app.test.tsx` boarding tests for per-ticket flows |
+| Production build | `npm run build` | OK — JS 246.06 kB main + 142.55 kB shared, CSS 41.46 kB |
+
+Bugs the new tests caught and fixed: `planReservation` previously dropped newly created boat slots from the returned state (booking success looked reserved but the slot was lost); the scan parser did not accept the QR format (`GM-VERIFY-1|GMTK-…`) the app itself generates. Both covered by `features.test.tsx`.
+
+Not verified this session: real-device rendering; Arabic side-by-side pass of every new screen; Apple Wallet pass on a real device (technically impossible — it is a labelled simulation); server-side QR validation (out of scope for a front-end demo).
