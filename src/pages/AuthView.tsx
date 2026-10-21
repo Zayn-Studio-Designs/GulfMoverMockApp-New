@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useRef, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, type DemoProvider } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
 import { Brand } from '../components/Brand';
 import { ContactAtcoLink } from '../components/ContactCard';
+import { ProviderButton, ProviderSimOverlay } from '../components/ProviderAuth';
 
 type Mode = 'signin' | 'signup' | 'reset';
 
@@ -29,7 +30,7 @@ function PasswordField({ id, label, value, onChange, autoComplete, hint }: {
 
 export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mode }) {
   const { t, lang, setLang } = useLanguage();
-  const { user, signIn, signUp, signInAsGuest, requestResetCode, resetPassword } = useAuth();
+  const { user, signIn, signUp, signInAsGuest, signInWithProvider, requestResetCode, resetPassword } = useAuth();
   const { toast } = useUi();
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,6 +68,19 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
   };
 
   const guest = async () => { await signInAsGuest(); navigate(from, { replace: true }); };
+
+  /* Simulated provider sign-in (frontend-only): a short in-app animation, then the same demo
+     session mechanism the guest flow uses. No provider page, popup or credentials involved. */
+  const [providerFlow, setProviderFlow] = useState<DemoProvider | null>(null);
+  const reducedMotion = useRef(
+    typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ).current;
+  const providerBusy = busy || providerFlow !== null;
+  const completeProvider = async (provider: DemoProvider) => {
+    await signInWithProvider(provider);
+    setProviderFlow(null);
+    navigate(from, { replace: true });
+  };
 
   if (user) return <Navigate to={from} replace />;
 
@@ -153,7 +167,16 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
           {mode !== 'reset' && (
             <>
               <div className="auth-or"><span>{t('orDivider')}</span></div>
-              <button type="button" className="btn btn-outline btn-block" onClick={guest}>{t('guest')}</button>
+              {/* Simulated provider options — frontend demo only, labelled as such on the overlay. */}
+              <div className="provider-row">
+                <ProviderButton provider="google" mode={mode} disabled={providerBusy} onClick={() => setProviderFlow('google')} />
+                <ProviderButton provider="apple" mode={mode} disabled={providerBusy} onClick={() => setProviderFlow('apple')} />
+              </div>
+              <button type="button" className="btn btn-outline btn-block" onClick={guest} disabled={providerBusy}>{t('guest')}</button>
+              {providerFlow && (
+                <ProviderSimOverlay provider={providerFlow} mode={mode} reducedMotion={reducedMotion}
+                  onComplete={completeProvider} onCancel={() => setProviderFlow(null)} />
+              )}
             </>
           )}
         </div>

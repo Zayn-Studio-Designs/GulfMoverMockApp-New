@@ -162,6 +162,56 @@
 .avatar-row{display:flex;gap:16px;align-items:center;margin-top:14px}
 .error-text{color:var(--red);font-size:12px;font-weight:700}
 .toggle-list{display:grid;margin-top:10px}
+
+/* ---------- Simulated provider sign-in (Google / Apple) ----------
+   Frontend-only demo: no real OAuth, no provider pages, nothing collected. Buttons follow
+   each provider's published brand guidance (Google: white/light surface + coloured G mark;
+   Apple: black in light themes, white in dark, never distorted) while staying native to the
+   ATCO card design. */
+.provider-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.provider-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:42px;padding:9px 12px;border-radius:10px;border:1px solid #dadce0;background:#fff;color:#3c4043;font-weight:650;font-size:13px;cursor:pointer;transition:background .12s,border-color .12s,box-shadow .12s}
+.provider-btn svg{flex:none}
+.provider-btn:hover:not(:disabled){box-shadow:0 1px 4px rgba(60,64,67,.24)}
+.provider-btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+.provider-apple{background:#000;border-color:#000;color:#fff}
+.provider-apple:hover:not(:disabled){background:#1a1a1a;border-color:#1a1a1a}
+[data-theme="dark"] .provider-btn{background:#1f2a35;border-color:#3a4a58;color:#e9f1f6}
+[data-theme="dark"] .provider-btn:hover:not(:disabled){background:#26333f}
+/* Apple guidance: choose black OR white consistently; dark themes flip to white-on-dark. */
+[data-theme="dark"] .provider-apple{background:#fff;border-color:#fff;color:#000}
+[data-theme="dark"] .provider-apple:hover:not(:disabled){background:#e8e8e8}
+/* Stacking starts a touch earlier than the grid's 420px so longer Arabic labels keep one line. */
+@media(max-width:540px){.provider-row{grid-template-columns:1fr}}
+
+/* Overlay: a single in-app modal for the simulated handshake — connecting then success. */
+.provider-overlay{position:fixed;inset:0;z-index:110;display:grid;place-items:center;padding:18px;background:rgba(11,20,30,.46);animation:provider-fade .18s ease-out}
+@keyframes provider-fade{from{opacity:0}to{opacity:1}}
+.provider-card{width:min(360px,100%);display:grid;justify-items:center;gap:12px;padding:24px 22px;border-radius:18px;background:var(--surface);border-top:4px solid var(--teal);box-shadow:0 24px 70px rgba(6,18,28,.3);text-align:center;animation:provider-card-in .24s cubic-bezier(.2,.8,.3,1)}
+@keyframes provider-card-in{from{opacity:0;transform:translateY(10px) scale(.97)}to{opacity:1;transform:none}}
+.provider-logo{width:56px;height:56px;display:grid;place-items:center;border-radius:50%;background:var(--surface2);border:1px solid var(--line);color:var(--ink)}
+.provider-progress{width:132px}
+.provider-progress-track{display:block;height:3px;border-radius:99px;background:var(--line);overflow:hidden}
+.provider-progress-fill{display:block;height:100%;border-radius:99px;background:var(--teal);animation:provider-progress-x .85s cubic-bezier(.3,.7,.4,1) both}
+@keyframes provider-progress-x{from{width:0}to{width:100%}}
+.provider-title{margin:2px 0 0;font-size:17px;color:var(--ink)}
+.provider-note{margin:0;font-size:11.5px;color:var(--muted);line-height:1.5}
+.provider-spin{color:var(--muted);font-size:12px;font-weight:650}
+
+/* Success state: crisp checkmark draw + restrained ring glow, then the app takes over. */
+.provider-check{color:var(--teal)}
+.provider-check-ring{stroke:currentColor;opacity:.55;stroke-dasharray:270;stroke-dashoffset:0}
+.provider-check-mark{stroke-dasharray:30;stroke-dashoffset:30;animation:provider-check-draw .34s .06s cubic-bezier(.3,.8,.4,1) forwards}
+@keyframes provider-check-draw{to{stroke-dashoffset:0}}
+.provider-card.is-success .provider-logo{color:var(--teal);border-color:rgba(3,100,60,.35);box-shadow:0 0 0 4px rgba(3,100,60,.08)}
+.provider-card.is-success{animation:provider-card-pop .3s cubic-bezier(.2,.8,.3,1)}
+@keyframes provider-card-pop{0%{transform:scale(.98)}100%{transform:scale(1)}}
+
+/* Reduced motion: instant phases, no decorative drawing or glow. */
+@media (prefers-reduced-motion: reduce){
+  .provider-overlay,.provider-card,.provider-progress-fill,.provider-check-mark,
+  .provider-card.is-success{animation:none !important}
+  .provider-check-mark{stroke-dashoffset:0}
+}
 .toggle-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid #eef2f5;font-size:13px;color:var(--ink2);cursor:pointer}
 .toggle-row:last-child{border-bottom:0}
 .toggle-row input{appearance:none;-webkit-appearance:none;flex:none;width:42px;height:24px;border-radius:999px;background:#cbd8e0;position:relative;cursor:pointer;transition:background .15s}

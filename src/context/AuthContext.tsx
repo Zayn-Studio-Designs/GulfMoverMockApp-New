@@ -46,6 +46,14 @@ const DEFAULT_NOTIFICATIONS: NotificationPrefs = { emailBookings: true, smsSched
 
 export const DEMO_GUEST = { email: 'guest@demo.test', username: 'demo-guest', company: 'Demo Logistics Co.' };
 
+/** Stand-in demo identities for the simulated provider sign-in (no real OAuth, no emails
+    collected — these are fictional internal markers in the existing demo account shape). */
+export type DemoProvider = 'google' | 'apple';
+export const DEMO_PROVIDERS: Record<DemoProvider, { email: string; username: string }> = {
+  google: { email: 'provider-google@demo.test', username: 'demo-google' },
+  apple: { email: 'provider-apple@demo.test', username: 'demo-apple' },
+};
+
 function load<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -111,6 +119,8 @@ interface AuthContextValue {
   signUp: (input: SignUpInput) => Promise<AuthError | null>;
   signIn: (login: string, password: string, remember?: boolean) => Promise<AuthError | null>;
   signInAsGuest: () => Promise<void>;
+  /** Simulated provider sign-in: session only, no real identity provider is contacted. */
+  signInWithProvider: (provider: DemoProvider) => Promise<void>;
   signOut: () => void;
   updateProfile: (patch: ProfilePatch) => AuthError | null;
   changeEmail: (email: string, password: string) => Promise<AuthError | null>;
@@ -178,6 +188,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     setAccounts([...accounts, guest]);
     startSession(guest.id);
+  }, [accounts, setAccounts, startSession]);
+
+  /** Simulated "continue with Google/Apple": creates (or reuses) a clearly-labelled demo
+      account and starts the session — the real product would run OAuth here instead. */
+  const signInWithProvider = useCallback(async (provider: DemoProvider) => {
+    const meta = DEMO_PROVIDERS[provider];
+    const existing = accounts.find(a => a.email === meta.email);
+    if (existing) { startSession(existing.id); return; }
+    const salt = randomId();
+    const providerAccount: Account = {
+      id: `U-provider-${provider}`, ...meta, company: 'Demo Logistics Co.',
+      fullName: '', phone: '', companyLogo: '', companyAddress: '', companyWebsite: '', avatar: '',
+      notifications: { ...DEFAULT_NOTIFICATIONS }, createdAt: new Date().toISOString(),
+      salt, passwordHash: await hashPassword(randomId() + randomId(), salt),
+    };
+    setAccounts([...accounts, providerAccount]);
+    startSession(providerAccount.id);
   }, [accounts, setAccounts, startSession]);
 
   const signOut = useCallback(() => startSession(null), [startSession]);
@@ -253,7 +280,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [accounts, current, setAccounts, startSession]);
 
   const value = useMemo(() => ({
-    user, signedOutByUser, signUp, signIn, signInAsGuest, signOut, updateProfile, changeEmail, changePassword, requestResetCode, resetPassword, deleteAccount,
+    user, signedOutByUser, signUp, signIn, signInAsGuest, signInWithProvider, signOut, updateProfile, changeEmail, changePassword, requestResetCode, resetPassword, deleteAccount,
   }), [user, signedOutByUser, signUp, signIn, signInAsGuest, signOut, updateProfile, changeEmail, changePassword, requestResetCode, resetPassword, deleteAccount]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
