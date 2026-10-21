@@ -335,7 +335,9 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
 }
 
 .pres-help {
-  margin: 0;
+  /* Centered as a block (auto inline margins) and as text: without the auto margins the
+     max-width would park the paragraph at the column's start edge, shifting it left. */
+  margin: 0 auto;
   max-width: 88%;
   font-size: 11.5px;
   color: var(--pres-muted);

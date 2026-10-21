@@ -168,7 +168,9 @@
    each provider's published brand guidance (Google: white/light surface + coloured G mark;
    Apple: black in light themes, white in dark, never distorted) while staying native to the
    ATCO card design. */
-.provider-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.provider-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+/* The guest demo button is a separate option: the margin above keeps it clear of the
+   provider pair instead of touching the row. */
 .provider-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:42px;padding:9px 12px;border-radius:10px;border:1px solid #dadce0;background:#fff;color:#3c4043;font-weight:650;font-size:13px;cursor:pointer;transition:background .12s,border-color .12s,box-shadow .12s}
 .provider-btn svg{flex:none}
 .provider-btn:hover:not(:disabled){box-shadow:0 1px 4px rgba(60,64,67,.24)}
@@ -180,8 +182,9 @@
 /* Apple guidance: choose black OR white consistently; dark themes flip to white-on-dark. */
 [data-theme="dark"] .provider-apple{background:#fff;border-color:#fff;color:#000}
 [data-theme="dark"] .provider-apple:hover:not(:disabled){background:#e8e8e8}
-/* Stacking starts a touch earlier than the grid's 420px so longer Arabic labels keep one line. */
-@media(max-width:540px){.provider-row{grid-template-columns:1fr}}
+/* Stack on narrow screens so longer labels (Arabic/Rtl includes the provider name) keep one
+   per line instead of being squeezed side by side; two columns survive down to ~620px. */
+@media(max-width:620px){.provider-row{grid-template-columns:1fr}}
 
 /* Overlay: a single in-app modal for the simulated handshake — connecting then success. */
 .provider-overlay{position:fixed;inset:0;z-index:110;display:grid;place-items:center;padding:18px;background:rgba(11,20,30,.46);animation:provider-fade .18s ease-out}
