@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useTheme } from '../../context/ThemeContext';
 import { useDemo } from '../../context/DemoContext';
 import { useTicketIndex, type TicketEntry } from '../../hooks/useTicketIndex';
 import { fromOwnOrigin, isProtocolMessage, messageTargetOrigin, type AppToShell, type HostDevice } from '../../presentation/walletProtocol';
@@ -47,6 +48,7 @@ function postToHost(message: AppToShell) {
 /** Keeps the device's Wallet in step with the demo: saved passes, language, and confirmed adds. */
 export function WalletHostBridge() {
   const { t, tx, lang } = useLanguage();
+  const { pref, effective: theme } = useTheme();
   const { bookings, passes, addWalletPass } = useDemo();
   const { entries } = useTicketIndex(bookings);
   const addRef = useRef(addWalletPass);
@@ -77,6 +79,12 @@ export function WalletHostBridge() {
   }, []);
 
   useEffect(() => { if (getHostWindow()) postToHost(stateRef.current); }, [savedViews, lang]);
+
+  /* Tell the shell what theme the screen is showing (System / Auto resolved here in the app),
+     so the device frame's boot surface and chrome agree with the app without a reload. */
+  const themeState = useRef({ type: 'gm-app:theme' as const, theme });
+  themeState.current = { type: 'gm-app:theme', theme };
+  useEffect(() => { if (getHostWindow()) postToHost(themeState.current); }, [theme, pref]);
 
   return null;
 }

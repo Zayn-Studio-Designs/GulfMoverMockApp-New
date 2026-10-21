@@ -4,6 +4,11 @@ import { AppleAddSheet, AppleWallet } from './wallet/AppleWallet';
 import { GoogleSaveSheet, GoogleWallet, QuickSettings } from './wallet/GoogleWallet';
 import { useDoublePress } from './wallet/hooks';
 import { OS_TEXT, type OsLang } from './wallet/osText';
+import { BootOverlay } from './BootOverlay';
+import { BOOT_SOUND_MANIFEST_URL, bootSoundUrl, selectBootSoundFile } from './bootSound';
+import { readThemePref, resolveEffectiveTheme } from '../context/ThemeContext';
+// Reuse the one dev-only guard from the boot module (vite-injected import.meta.env.DEV).
+const BOOT_DEBUG_ENABLED = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
 import '../styles/fonts.css';
 import './wallet/deviceWallet.css';
 
@@ -36,6 +41,20 @@ type Overlay =
   | { kind: 'wallet'; ticketId?: string }
   | { kind: 'add'; pass: PassView; alreadySaved: boolean }
   | { kind: 'qs' };
+
+/* Subtle toolbar glyphs, matching the shell's restrained SVG style. */
+const SOUND_ON_ICON = (
+  <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+    <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
+    <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+  </svg>
+);
+const SOUND_OFF_ICON = (
+  <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false">
+    <path d="M4 9v6h4l5 4V5L8 9H4z" fill="currentColor" />
+    <path d="M16 9l5.5 5.5M21.5 9L16 14.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+  </svg>
+);
 
 const SignalIcons = () => (
   <span className="pres-statusbar-icons" aria-hidden="true">
@@ -108,6 +127,140 @@ export function PresentationApp() {
   };
   const offerCoach = (device: 'iphone' | 'android') => { if (!walletOpened.current[device]) setCoach(device); };
   const [sidePressed, setSidePressed] = useState(false);
+  /* ---------- Boot sequence: replay control, horn audio, effective theme ---------- */
+  // Each boot run mounts a fresh BootOverlay by key, so clicks during an existing animation can
+  // never leave a stale one behind. The overlay sits in the shell — the iframe (app) never
+  // reloads, so session, navigation, language and demo state are untouched.
+  const [bootRun, setBootRun] = useState(0);
+  const [bootVisible, setBootVisible] = useState(false);
+  // Sound preference (persisted). The actual file is chosen by `boot-sound.json` in the audio
+  // folder, so the sound can be replaced without touching application code.
+  const SOUND_KEY = 'gm-pres-boot-sound';
+  const [soundOn, setSoundOn] = useState<boolean>(() => {
+    try { return localStorage.getItem(SOUND_KEY) !== 'no'; } catch { return true; }
+  });
+  // Set briefly when the browser refuses to start playback (autoplay policy); a click on the
+  // sound button (or any toolbar interaction) counts as a user gesture and clears it.
+  const [soundBlockedHint, setSoundBlockedHint] = useState(false);
+  // One Audio instance for the horn: replay stops and rewinds it instead of stacking players.
+  const hornRef = useRef<HTMLAudioElement | null>(null);
+  // Resolved sound file (from boot-sound.json) is cached; a null means "checked, none usable".
+  const soundFileRef = useRef<{ touched: boolean; file: string | null }>({ touched: false, file: null });
+
+  /** Reads the manifest once per session; re-reads if a fetch fails so saving the file helps. */
+  const resolveSoundFile = useCallback(async (): Promise<string | null> => {
+    if (soundFileRef.current.touched) return soundFileRef.current.file;
+    try {
+      const res = await fetch(BOOT_SOUND_MANIFEST_URL, { cache: 'no-store' });
+      if (!res.ok) throw new Error(String(res.status));
+      const file = selectBootSoundFile(await res.json());
+      soundFileRef.current = { touched: true, file };
+      bootDebug('manifest', file || 'no-usable-file');
+    } catch (err) {
+      // Missing/unusable manifest: stay silent this session, but retry on the next boot.
+      bootDebug('manifest-failed', String(err instanceof Error ? err.message : err));
+    }
+    return soundFileRef.current.file;
+  }, []);
+  // Boot follows the app's appearance preference ('gm-theme', shared same-tab localStorage) with
+  // a System default resolved from the OS — and follows live OS changes in System mode.
+  const [bootTheme, setBootTheme] = useState<'light' | 'dark'>(() => resolveEffectiveTheme(readThemePref()));
+  const reducedMotion = useRef(
+    typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  ).current;
+
+  const startBoot = useCallback(() => {
+    // Cancel any in-flight sequence and clear whatever the device shell is showing, then restart.
+    setBootTheme(resolveEffectiveTheme(readThemePref())); // never replay a stale theme
+    const horn = hornRef.current;
+    if (horn) { horn.pause(); try { horn.currentTime = 0; } catch { /* not seekable yet */ } }
+    setOverlay(null);
+    setSideHint(false);
+    setCoach(null);
+    setBootVisible(true);
+    setBootRun(n => n + 1);
+  }, []);
+
+  const finishBoot = useCallback(() => setBootVisible(false), []);
+
+  // Dev/QA telemetry into the same window.__gmBootDebug channel used by BootOverlay:
+  // records the horn resolution chain honestly (called, resolved file, play outcome).
+  // Development builds only: production bundles drop the calls entirely (see BootOverlay).
+  const bootDebug = (ev: string, detail?: string) => {
+    if (!BOOT_DEBUG_ENABLED) return;
+    try {
+      const w = window as unknown as { __gmBootDebug?: Array<{ t: number; ev: string; detail?: string }> };
+      (w.__gmBootDebug = w.__gmBootDebug || []).push({ t: Math.round(performance.now()), ev, detail });
+    } catch { /* telemetry never breaks the boot */ }
+  };
+
+  // Horn: exactly one Audio element, rewound before each play. A replaced file (new name in
+  // boot-sound.json) re-creates the element; autoplay rejection is silent for the boot but
+  // surfaces one gentle hint pointing at the sound button.
+  const onHorn = useCallback(() => {
+    bootDebug('onHorn-called', soundOn ? 'sound-on' : 'sound-off');
+    if (!soundOn) return;
+    void resolveSoundFile().then(file => {
+      if (!file || !soundOn) return;
+      try {
+        const wanted = bootSoundUrl(file);
+        let horn = hornRef.current;
+        if (horn && horn.getAttribute('data-src') !== wanted) { horn.pause(); horn = null; hornRef.current = null; }
+        if (!horn) {
+          horn = new Audio(wanted);
+          horn.setAttribute('data-src', wanted);
+          horn.preload = 'auto';
+          horn.volume = 0.72;
+          // A media decode failure (wrong bytes served, bad file) is not a play() rejection —
+          // surface it through the same gentle hint as an autoplay block.
+          horn.addEventListener('error', () => setSoundBlockedHint(true));
+          hornRef.current = horn;
+        }
+        horn.pause();
+        try { horn.currentTime = 0; } catch { /* not seekable yet */ }
+      const p = horn.play();
+      bootDebug('play-called', wanted);
+      if (p && typeof p.then === 'function') {
+        p.then(
+          () => { bootDebug('play-accepted'); setSoundBlockedHint(false); },
+          (err) => { bootDebug('play-refused', String(err instanceof DOMException ? err.name : err)); setSoundBlockedHint(true); }, // autoplay policy: enable via the sound button
+        );
+      }
+    } catch (err) {
+      bootDebug('horn-exception', String(err instanceof Error ? err.message : err));
+      setSoundBlockedHint(true); // audio unavailable: sequence completes silently
+    }
+    });
+  }, [soundOn, resolveSoundFile]);
+
+  const toggleSound = useCallback(() => {
+    setSoundOn(on => {
+      const next = !on;
+      try { localStorage.setItem(SOUND_KEY, next ? 'yes' : 'no'); } catch { /* session only */ }
+      if (!next && hornRef.current) hornRef.current.pause();
+      return next;
+    });
+    setSoundBlockedHint(false);
+  }, []);
+
+  // Follow the effective theme for the device surface: stored pref + live OS changes.
+  useEffect(() => {
+    const update = () => setBootTheme(resolveEffectiveTheme(readThemePref()));
+    update();
+    window.addEventListener('storage', update);
+    if (typeof window.matchMedia === 'function') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      mq.addEventListener?.('change', update);
+    }
+    return () => {
+      window.removeEventListener('storage', update);
+      if (typeof window.matchMedia === 'function') {
+        const mq = window.matchMedia('(prefers-color-scheme: dark)');
+        mq.removeEventListener?.('change', update);
+      }
+    };
+  }, []);
+
   const deviceRef = useRef(deviceId);
   deviceRef.current = deviceId;
   const savedRef = useRef(savedPasses);
@@ -145,6 +298,12 @@ export function PresentationApp() {
       const onPhone = deviceRef.current !== 'mac';
       if (msg.type === 'gm-app:ready') {
         postToApp({ type: 'gm-host:device', device: deviceRef.current });
+      } else if (msg.type === 'gm-app:theme') {
+        // The app resolved its own preference (System / Auto included): keep the shell chrome and
+        // the next boot surface in step without reloading anything.
+        setBootTheme(msg.theme);
+        document.documentElement.dataset.theme = msg.theme;
+        (document.documentElement.style as CSSStyleDeclaration).colorScheme = msg.theme;
       } else if (msg.type === 'gm-wallet:state') {
         setWalletLang(msg.lang);
         setSavedPasses(msg.passes);
@@ -158,14 +317,17 @@ export function PresentationApp() {
     return () => window.removeEventListener('message', onMessage);
   }, [postToApp, openOverlay]);
 
-  /* The app adapts its Wallet buttons to the device; phone software never carries across devices. */
+  /* The app adapts its Wallet buttons to the device; phone software never carries across devices.
+     Switching devices plays the selected device's boot sequence (the app itself is not reloaded). */
   useEffect(() => {
     postToApp({ type: 'gm-host:device', device: deviceId });
     setOverlay(null);
     setSideHint(false);
     setCoach(null);
     returnFocus.current = null;
-  }, [deviceId, postToApp]);
+    setBootVisible(true);
+    setBootRun(n => n + 1);
+  }, [deviceId, postToApp, startBoot]);
 
   /* While a phone layer is up, the app behind it cannot be reached by keyboard or pointer. */
   useEffect(() => {
@@ -281,14 +443,27 @@ export function PresentationApp() {
     }
   }, []);
 
+  /* Home: send the app back to its home screen WITHOUT reloading the iframe (session, bookings,
+     settings and language all stay), and replay the boot animation from the beginning. The
+     pushState + popstate nudge is the no-reload way to drive React Router; the hardcoded reload
+     paths remain only as a last-resort fallback for unexpected hosts. */
   const backToStart = useCallback(() => {
     const win = iframeRef.current?.contentWindow;
+    let navigated = false;
     if (win) {
-      try { win.location.href = '/'; } catch { /* fall through */ }
+      try {
+        win.history.pushState({}, '', '/');
+        win.dispatchEvent(new PopStateEvent('popstate', { state: null }));
+        navigated = true;
+      } catch { /* fall through to the reload fallback */ }
     }
-    const frame = iframeRef.current;
-    if (frame) frame.src = '/';
-  }, []);
+    if (!navigated) {
+      try { if (win) win.location.href = '/'; } catch { /* ignore */ }
+      const frame = iframeRef.current;
+      if (frame) frame.src = '/';
+    }
+    startBoot();
+  }, [startBoot]);
 
   return (
     <div
@@ -327,7 +502,17 @@ export function PresentationApp() {
         </div>
 
         <div className="pres-actions">
-          <button type="button" className="pres-btn" onClick={backToStart} title="Load the app's home screen">
+          {/* One unobtrusive control for sound; if autoplay was refused it raises a gentle hint. */}
+          <button type="button" className={'pres-btn pres-btn-icon' + (soundBlockedHint ? ' is-attention' : '')}
+            onClick={toggleSound}
+            aria-pressed={!soundOn}
+            aria-label={soundOn ? 'Mute the boot sound' : 'Enable the boot sound'}
+            title={soundOn ? 'Sound on — click to mute' : 'Sound off — click to enable'}>
+            {soundOn ? SOUND_ON_ICON : SOUND_OFF_ICON}
+            <span className="pres-btn-icon-label">{soundOn ? 'Sound on' : 'Sound off'}</span>
+          </button>
+          {/* Home replays the boot sequence of the selected device (no page/iframe reload). */}
+          <button type="button" className="pres-btn" onClick={backToStart} title="Back to the home screen with the boot animation" data-pres-home>
             ↺ Home
           </button>
           <button type="button" className="pres-btn pres-btn-primary" onClick={toggleFullscreen}>
@@ -363,6 +548,10 @@ export function PresentationApp() {
                 title="Gulf Mover application"
                 onLoad={() => { syncFrameStyle(); postToApp({ type: 'gm-host:device', device: deviceRef.current }); }}
               />
+              {bootVisible && (
+                <BootOverlay key={bootRun} run={bootRun} theme={bootTheme} lang={walletLang as 'en' | 'ar'}
+                  reducedMotion={reducedMotion} onHorn={onHorn} onFinished={finishBoot} />
+              )}
               {deviceId === 'iphone' && overlay?.kind === 'wallet' && (
                 <AppleWallet lang={walletLang} passes={savedPasses} focusTicketId={overlay.ticketId}
                   closeSignal={closeSignal} onClosed={overlayClosed} />
@@ -426,6 +615,11 @@ export function PresentationApp() {
             Tip: interact with the app inside the frame · phone previews scroll independently ·
             sign-in and demo data carry across devices · press Esc to leave full screen.
           </p>
+          {soundBlockedHint && (
+            <p className="pres-fs-note" role="status">
+              The boot sound was held back by your browser. Click the sound button once to enable it.
+            </p>
+          )}
           {fsError && !fullscreen && (
             <p className="pres-fs-note" role="status">
               Full screen is not available here — the presentation still works in the window.

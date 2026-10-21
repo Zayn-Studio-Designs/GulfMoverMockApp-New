@@ -1,6 +1,20 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      // Presentation chrome follows the app's appearance preference ('gm-theme'); applied before
+      // first paint so the shell and the hosted device never flash the wrong theme.
+      (function () {
+        try {
+          var p = localStorage.getItem('gm-theme');
+          if (p !== 'light' && p !== 'dark' && p !== 'system') p = 'system';
+          var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var t = p === 'system' ? (m ? 'dark' : 'light') : p;
+          document.documentElement.dataset.theme = t;
+          document.documentElement.style.colorScheme = t;
+        } catch (e) { /* private mode: light default */ }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#12345A" />

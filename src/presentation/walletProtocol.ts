@@ -31,6 +31,7 @@ export type ShellToApp =
 
 export type AppToShell =
   | { type: 'gm-app:ready' }
+  | { type: 'gm-app:theme'; theme: 'light' | 'dark' }
   | { type: 'gm-wallet:state'; lang: 'en' | 'ar'; passes: PassView[] }
   | { type: 'gm-wallet:request-add'; pass: PassView }
   | { type: 'gm-wallet:request-open'; ticketId: string };
@@ -49,7 +50,7 @@ export function fromOwnOrigin(origin: string): boolean {
   return origin === window.location.origin || (isLocalFile() && (origin === 'null' || origin === 'file://'));
 }
 
-const TYPES = new Set(['gm-host:device', 'gm-wallet:confirm-add', 'gm-app:ready', 'gm-wallet:state', 'gm-wallet:request-add', 'gm-wallet:request-open']);
+const TYPES = new Set(['gm-host:device', 'gm-wallet:confirm-add', 'gm-app:ready', 'gm-app:theme', 'gm-wallet:state', 'gm-wallet:request-add', 'gm-wallet:request-open']);
 
 export function isProtocolMessage(data: unknown): data is ShellToApp | AppToShell {
   return typeof data === 'object' && data !== null && TYPES.has((data as { type?: unknown }).type as string);

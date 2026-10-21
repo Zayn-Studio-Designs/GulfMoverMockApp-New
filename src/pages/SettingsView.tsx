@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme, type ThemePref } from '../context/ThemeContext';
 import { useAuth, type NotificationPrefs } from '../context/AuthContext';
 import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
@@ -270,6 +271,7 @@ function NotificationsTab() {
 
 function PreferencesTab() {
   const { t, lang, setLang } = useLanguage();
+  const { pref: theme, setPref: setTheme } = useTheme();
   return (
     <section className="card card-pad" aria-labelledby="set-language">
       <h2 id="set-language" className="card-title">{t('preferencesTitle')}</h2>
@@ -280,6 +282,15 @@ function PreferencesTab() {
           <option value="en">English</option>
           <option value="ar">العربية</option>
         </select>
+      </div>
+      <div className="field" style={{ marginTop: 14, maxWidth: 320 }}>
+        <label htmlFor="set-appearance">{t('appearancePref')}</label>
+        <select id="set-appearance" value={theme} onChange={e => setTheme(e.target.value as ThemePref)}>
+          <option value="light">{t('themeLight')}</option>
+          <option value="dark">{t('themeDark')}</option>
+          <option value="system">{t('themeSystem')}</option>
+        </select>
+        <small>{t('appearanceHint')}</small>
       </div>
       <div className="inset small" style={{ marginTop: 16 }}>
         <div className="between"><span className="muted">{t('timeFormat')}</span><strong>{t('timeFormat12')}</strong></div>

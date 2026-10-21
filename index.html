@@ -1,6 +1,19 @@
 <!DOCTYPE html>
 <html lang="en" dir="ltr">
   <head>
+    <script>
+      // Apply the stored appearance before first paint: no light flash for dark-mode users.
+      (function () {
+        try {
+          var p = localStorage.getItem('gm-theme');
+          if (p !== 'light' && p !== 'dark' && p !== 'system') p = 'system';
+          var m = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var t = p === 'system' ? (m ? 'dark' : 'light') : p;
+          document.documentElement.dataset.theme = t;
+          document.documentElement.style.colorScheme = t;
+        } catch (e) { /* private mode: light default */ }
+      })();
+    </script>
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />

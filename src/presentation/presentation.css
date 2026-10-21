@@ -90,6 +90,7 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   min-width: 0;
 }
 
+/* The device picker must never overlap the action buttons: let it shrink and scroll instead. */
 .pres-seg {
   display: inline-flex;
   gap: 3px;
@@ -97,7 +98,11 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   border-radius: 12px;
   background: #e9edf1;
   border: 1px solid var(--pres-line);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+.pres-seg::-webkit-scrollbar { display: none; }
 
 .pres-seg-btn {
   border: 0;
@@ -168,6 +173,29 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
 }
 
 .pres-btn-primary:hover { background: #02492C; border-color: #02492C; }
+
+/* Icon-style controls (replay, sound): same rhythm as the other toolbar buttons. */
+.pres-btn-icon {
+  color: var(--pres-navy);
+  padding: 8px 12px;
+}
+.pres-btn-icon svg { flex: none; color: var(--pres-green); }
+.pres-btn-icon-label { font-size: 12.5px; }
+@media (max-width: 1120px) { .pres-btn-icon-label { display: none; } .pres-btn-icon { padding: 8px 10px; } }
+/* Gentle attention when the browser held playback back: a quiet accent dot, same restraint. */
+.pres-btn-icon.is-attention { border-color: var(--pres-green); }
+.pres-btn-icon.is-attention svg::after { content: none; }
+.pres-btn-icon.is-attention::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  inset-inline-end: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pres-green);
+}
+.pres-btn-icon.is-attention { position: relative; }
 
 /* ---------- Stage ---------- */
 
@@ -269,7 +297,7 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   height: 27px;
   border-radius: 15px;
   background: #0c0e11;
-  z-index: 2;
+  z-index: 7;
   pointer-events: none;
 }
 
@@ -290,7 +318,7 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   height: 11px;
   border-radius: 50%;
   background: #04060a;
-  z-index: 2;
+  z-index: 7;
   pointer-events: none;
 }
 
@@ -333,5 +361,188 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
 @media (max-width: 900px) {
   .pres-status { display: none; }
   .pres-toolbar { gap: 10px; padding: 8px 12px; }
+  .pres-btn { padding: 8px 10px; }
+  .pres-btn-primary { padding: 8px 12px; }
+  .pres-seg-btn { padding: 7px 12px; }
   .pres-help { max-width: 60%; }
+}
+@media (max-width: 700px) {
+  .pres-brand-name { display: none; }
+  .pres-brand-sub { display: none; }
+  .pres-brand-dot { display: none; }
+  .pres-brand { min-width: auto; }
+  .pres-center { justify-content: flex-start; }
+  .pres-seg-btn { padding: 7px 10px; }
+}
+
+/* ---------- Boot sequence (device start-up, shell layer over the app iframe) ----------
+   A calm, product-grade reveal: deep navy surface, the genuine ATCO Marine logo, a thin arc
+   tracing a 2-2.5px progress ring and a quiet bottom progress bar. No spinners, no glow.
+   The phone status bar, island/camera stay above it, like a real device boot. */
+
+.boot {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  text-align: center;
+  background:
+    radial-gradient(120% 70% at 50% 30%, rgba(28,68,112,.35) 0%, rgba(28,68,112,0) 60%),
+    #0F2740;
+  color: #eaf2f8;
+  animation: boot-fade-in .18s ease-out both;
+}
+.boot.is-light {
+  background:
+    radial-gradient(120% 70% at 50% 30%, rgba(18,52,90,.07) 0%, rgba(18,52,90,0) 60%),
+    #F4F7FA;
+  color: #14293e;
+}
+/* The whole sequence fades out as a unit — no flashing frames, no layout jump, because the
+   underlying app is already mounted (the overlay never affects the iframe). */
+.boot-overlay-leaving { animation: boot-fade-out .46s ease-in both; }
+@keyframes boot-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes boot-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; visibility: hidden; }
+}
+.boot.is-reduced { animation: none; }
+.boot.is-reduced .boot-logo,
+.boot.is-reduced .boot-copy { animation: none; opacity: 1; transform: none; }
+.boot.is-reduced .boot-pct { animation: none; }
+
+.boot-center {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  display: grid;
+  place-items: center;
+}
+.boot-arc,
+.boot-arc svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.boot-arc-track { stroke: rgba(120,169,139,.28); }
+.boot-arc-sweep { stroke: #78A98B; transition: stroke .3s; }
+.boot.is-light .boot-arc-track { stroke: rgba(3,100,60,.18); }
+.boot.is-light .boot-arc-sweep { stroke: #03643C; }
+.boot-logo {
+  width: 124px;
+  height: auto;
+  object-fit: contain;
+  /* The genuine ATCO Marine logo (dark green + navy) needs a subtle light bed on the dark boot
+     surface — a soft rounded plate, not a card. */
+  background: rgba(244, 247, 250, .93);
+  border-radius: 18px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 10px 34px rgba(4,16,28,.35);
+  animation: boot-logo-in .8s cubic-bezier(.22,.8,.26,1) both;
+  animation-delay: .08s;
+}
+.boot.is-light .boot-logo {
+  background: transparent;
+  box-shadow: none;
+}
+@keyframes boot-logo-in {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes boot-copy-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.boot-caption {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .01em;
+}
+.font-fix .boot-caption,[lang="ar"] .boot-caption,
+[dir="rtl"] .boot-caption { font-family: "IBM Plex Sans Arabic", "Inter Variable", system-ui, sans-serif; }
+.boot-sim {
+  font-size: 10.5px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(138,160,180,.75);
+}
+.boot.is-light .boot-sim { color: rgba(59,73,85,.55); }/* Percentage sits directly beneath the ring (its own column row, no overlap), on the same
+   centre line: logo + arc + number read as one unified start-up element at every size. */
+.boot-pct {
+  margin-top: 2px;
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  color: rgba(226,240,248,.88);
+  text-align: center;
+  min-width: 148px;
+  display: block;
+  animation: boot-copy-in .7s .35s ease-out both;
+}
+.boot-pct .boot-pct-sign { font-size: 12px; margin-inline-start: 1px; }
+.boot.is-light .boot-pct { color: rgba(20,41,62,.72); }
+@media (max-width: 420px) {
+  .boot-pct { font-size: 14px; min-width: 128px; }
+}
+.boot-copy {
+  margin-top: 14px;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  animation: boot-copy-in .7s .25s ease-out both;
+}
+
+/* Respect the user's motion preference: static reveal, short hold, then handover. */
+@media (prefers-reduced-motion: reduce) {
+  .boot,
+  .boot.is-reduced { animation: none !important; }
+  .boot-logo, .boot-copy, .boot-pct { animation: none !important; opacity: 1; transform: none; }
+}
+
+/* ---------- Presentation chrome: appearance ----------
+   The shell follows the app appearance preference ('gm-theme') applied by the pre-paint script.
+   Same ATCO identity on a deep-blue base; dark devices keep their own bezel tones. */
+[data-theme="dark"] body {
+  background: radial-gradient(120% 90% at 50% 0%, #16283c 0%, #0e1926 70%, #0b131d 100%);
+  color: #dce7f0;
+  color-scheme: dark;
+}
+[data-theme="dark"] .pres-toolbar {
+  background: #101c29;
+  border-bottom-color: #21303f;
+}
+[data-theme="dark"] .pres-brand-name,
+[data-theme="dark"] .pres-status strong { color: #cfe0ee; }
+[data-theme="dark"] .pres-brand-sub,
+[data-theme="dark"] .pres-status,
+[data-theme="dark"] .pres-help,
+[data-theme="dark"] .pres-fs-note { color: #8fa3b3; }
+[data-theme="dark"] .pres-seg { background: #152434; border-color: #21303f; }
+[data-theme="dark"] .pres-seg-btn { color: #8fa3b3; }
+[data-theme="dark"] .pres-seg-btn:hover,
+[data-theme="dark"] .pres-seg-btn.active { color: #eaf2f8; }
+[data-theme="dark"] .pres-seg-btn.active { background: #12345A; }
+[data-theme="dark"] .pres-btn {
+  background: #152434;
+  border-color: #26394b;
+  color: #cfe0ee;
+}
+[data-theme="dark"] .pres-btn:hover { background: #1a2c3e; border-color: #31485d; }
+[data-theme="dark"] .pres-btn-primary { background: #03643C; border-color: #03643C; }
+[data-theme="dark"] .pres-btn-primary:hover { background: #02492C; border-color: #02492C; }
+[data-theme="dark"] .pres-device-area { background: transparent; }
+[data-theme="dark"] .pres-hints { background: linear-gradient(180deg, transparent 0%, rgba(12,20,30,.55) 100%); }
+[data-theme="dark"] .pres-fs-note { background: #101c29; }
+[data-theme="dark"] .pres-shell:fullscreen,
+[data-theme="dark"] .pres-shell:-webkit-full-screen {
+  background: radial-gradient(120% 90% at 50% 0%, #16283c 0%, #0e1926 70%, #0b131d 100%);
 }

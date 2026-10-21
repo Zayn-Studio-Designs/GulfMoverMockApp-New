@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { LanguageProvider } from './context/LanguageContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { DemoProvider } from './context/DemoContext';
 import { UiProvider } from './context/UiContext';
 import { WorkModeProvider } from './context/WorkModeContext';
@@ -44,7 +45,8 @@ export function AppRoutes() {
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
-    <LanguageProvider>
+    <ThemeProvider>
+      <LanguageProvider>
       <WorkModeProvider>
         <AuthProvider>
           <DemoProvider>
@@ -53,6 +55,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
         </AuthProvider>
       </WorkModeProvider>
     </LanguageProvider>
+    </ThemeProvider>
   );
 }
 
