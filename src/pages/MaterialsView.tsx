@@ -20,6 +20,7 @@ export default function MaterialsView() {
     onConfirm: reason => { decideMaterial(selected.id, decision, reason); toast(t('decisionSaved')); },
   });
 
+  if (!selected) return <><PageHeader titleKey="materialsTitle" subKey="materialsSub" /><div className="card card-pad empty">{t('materialsEmpty')}</div></>;
   const lines: Array<[string, string]> = [
     ['description', selected.detail], ['quantity', selected.qty], ['weight', selected.weight],
     ['dimensions', selected.size], ['sender', selected.sender], ['receiver', selected.receiver],

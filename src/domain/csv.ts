@@ -1,8 +1,11 @@
 // CSV export helpers (Phase 12). Pure and testable; only downloadCsv touches the browser.
 
-/** RFC-4180 style escaping: quotes doubled, field always wrapped — stable formatting. */
+/** RFC-4180 style escaping: quotes doubled, field always wrapped — stable formatting.
+ *  Typed text that starts like a spreadsheet formula (=, +, -, @) gets a leading apostrophe,
+ *  so a value such as "=HYPERLINK(...)" is shown as text in Excel instead of being run. */
 export function csvEscape(value: unknown): string {
-  const text = value === undefined || value === null ? '' : String(value);
+  let text = value === undefined || value === null ? '' : String(value);
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 }
 

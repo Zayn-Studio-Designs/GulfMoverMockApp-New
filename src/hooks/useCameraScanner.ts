@@ -24,15 +24,15 @@ function makeDetector(): BarcodeDetectorLike | null {
 export function useCameraScanner(active: boolean, onDetect: (payload: string) => void) {
   const [state, setState] = useState<ScannerState>('idle');
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const stopped = useRef(false);
 
   useEffect(() => {
     if (!active) { setState('idle'); return; }
-    stopped.current = false;
+    // Per-run flag: a quick off/on toggle must not let an earlier, still-pending run attach its stream.
+    let cancelled = false;
     let stream: MediaStream | null = null;
     let timer: number | undefined;
 
-    const fail = (s: ScannerState) => { if (!stopped.current) setState(s); };
+    const fail = (s: ScannerState) => { if (!cancelled) setState(s); };
 
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia) { fail('unsupported'); return; }
@@ -43,7 +43,7 @@ export function useCameraScanner(active: boolean, onDetect: (payload: string) =>
         fail('denied');
         return;
       }
-      if (stopped.current) { stream.getTracks().forEach(t => t.stop()); return; }
+      if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
       const video = videoRef.current;
       if (!video) { stream.getTracks().forEach(t => t.stop()); fail('error'); return; }
       video.srcObject = stream;
@@ -57,7 +57,7 @@ export function useCameraScanner(active: boolean, onDetect: (payload: string) =>
       }
       setState('active');
       const poll = async () => {
-        if (stopped.current) return;
+        if (cancelled) return;
         try {
           const codes = await detector.detect(video);
           if (codes.length > 0) onDetect(codes[0].rawValue);
@@ -69,7 +69,7 @@ export function useCameraScanner(active: boolean, onDetect: (payload: string) =>
     })();
 
     return () => {
-      stopped.current = true;
+      cancelled = true;
       window.clearTimeout(timer);
       videoRef.current && (videoRef.current.srcObject = null);
       stream?.getTracks().forEach(t => t.stop());

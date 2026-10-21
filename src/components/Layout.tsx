@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { DEMO_GUEST, useAuth } from '../context/AuthContext';
 import { Avatar } from './Avatar';
 import { Brand } from './Brand';
 import { CompanyLogo } from './ImageUpload';
@@ -9,6 +9,7 @@ import { useDemo } from '../context/DemoContext';
 import { useWorkMode } from '../context/WorkModeContext';
 import { useUi } from '../context/UiContext';
 import { Icon, type IconName } from './Icon';
+import { Tour, hasSeenTour, markTourSeen } from './Tour';
 
 /**
  * Navigation shown to each demo view. Navigation filtering is UI-only: every route
@@ -32,8 +33,8 @@ const CUSTOMER_NAV: ReadonlyArray<{ to: string; key: string; icon: IconName }> =
   { to: '/settings', key: 'navAccount', icon: 'user' },
 ];
 
-/** Profile button with a small menu: account details, Settings and Sign out. */
-function AccountMenu() {
+/** Profile button with a small menu: account details, Settings, the guided tour and Sign out. */
+function AccountMenu({ onTour }: { onTour: () => void }) {
   const { t } = useLanguage();
   const { user, signOut } = useAuth();
   const { isCustomer, setMode } = useWorkMode();
@@ -54,7 +55,7 @@ function AccountMenu() {
 
   if (!user) return null;
   return (
-    <div className="account-menu" ref={ref}>
+    <div className="account-menu" ref={ref} data-tour="account">
       <button type="button" className="account-btn" aria-haspopup="menu" aria-expanded={open} aria-label={t('accountMenu')} onClick={() => setOpen(o => !o)}>
         <Avatar user={user} />
       </button>
@@ -76,6 +77,7 @@ function AccountMenu() {
           <button role="menuitem" type="button" className="account-item" onClick={() => { setOpen(false); setMode(isCustomer ? 'staff' : 'customer'); }}>
             {isCustomer ? t('wsSwitchStaff') : t('wsSwitchCustomer')}
           </button>
+          <button role="menuitem" type="button" className="account-item" onClick={() => { setOpen(false); onTour(); }}>{t('tourStart')}</button>
           <div className="account-sep" />
           <button role="menuitem" type="button" className="account-item account-signout" onClick={() => { setOpen(false); signOut(); toast(t('signedOut')); navigate('/signin'); }}>{t('signOut')}</button>
         </div>
@@ -91,8 +93,23 @@ export function Layout() {
   const { resetDemoData } = useDemo();
   const { toast } = useUi();
   const { pathname, search } = useLocation();
+  const [tourOpen, setTourOpen] = useState(false);
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [pathname]);
+
+  // Each step opens its own page, so the tour can start from anywhere.
+  const startTour = useCallback(() => setTourOpen(true), []);
+  const closeTour = useCallback(() => setTourOpen(false), []);
+
+  // New accounts get the tour once, on their first visit; the demo guest can start it from the ? button.
+  // The tour follows the current demo view, and restarts from step 1 if the view is switched.
+  const userId = user?.id;
+  const isGuest = user?.email === DEMO_GUEST.email;
+  useEffect(() => {
+    if (!userId || isGuest || hasSeenTour(userId)) return;
+    markTourSeen(userId);
+    startTour();
+  }, [userId, isGuest, startTour]);
 
   const publicAtcoInfo = pathname === '/settings' && new URLSearchParams(search).get('tab') === 'atco';
   if (!user && !publicAtcoInfo) return <Navigate to="/signin" replace state={signedOutByUser ? undefined : { from: pathname }} />;
@@ -111,27 +128,29 @@ export function Layout() {
           <div className="header-tag">{t('productTag')}</div>
           <div className="header-spacer" />
           <div className="head-actions">
-            <div className="lang-toggle">
+            <div className="lang-toggle" data-tour="language">
               <button type="button" className={lang === 'en' ? 'active' : ''} aria-pressed={lang === 'en'} onClick={() => setLang('en')}>EN</button>
               <button type="button" className={lang === 'ar' ? 'active' : ''} aria-pressed={lang === 'ar'} onClick={() => setLang('ar')} lang="ar">العربية</button>
             </div>
-            <AccountMenu />
+            {user && <button type="button" className="tour-btn" data-tour="account" aria-label={t('tourStart')} title={t('tourStart')} onClick={startTour}>?</button>}
+            <AccountMenu onTour={startTour} />
           </div>
         </div>
       </header>
       <div className="shell">
         <aside className="sidebar" aria-label={t('mainNavigation')}>
           <div className="side-label">{t('workspace')}</div>
-          <div className="ws-switch" role="group" aria-label={t('wsSwitchGroup')}>
+          <div className="ws-switch" role="group" data-tour="ws-switch" aria-label={t('wsSwitchGroup')}>
             <div className="ws-seg">
               <button type="button" className={`ws-btn${isCustomer ? ' active' : ''}`} aria-pressed={isCustomer} onClick={() => setMode('customer')}>{t('wsCustomerLabel')}</button>
               <button type="button" className={`ws-btn${isCustomer ? '' : ' active'}`} aria-pressed={!isCustomer} onClick={() => setMode('staff')}>{t('wsStaffLabel')}</button>
             </div>
             <small>{t('wsDemoHint')}</small>
           </div>
-          <nav className="nav-list" aria-label={t('mainNavigation')}>
+          <nav className="nav-list" aria-label={t('mainNavigation')} data-tour="nav">
             {(isCustomer ? CUSTOMER_NAV : NAV_ITEMS).map(item => (
-              <NavLink key={item.to} to={item.to} end className={({ isActive }) => `nav-btn${isActive ? ' active' : ''}`}>
+              <NavLink key={item.to} to={item.to} end className={({ isActive }) => `nav-btn${isActive ? ' active' : ''}`}
+                data-tour={`nav-${item.key}`}>
                 <Icon name={item.icon} />
                 <span className="nav-full">{t(item.key)}</span>
                 <span className="nav-short">{t(`${item.key}Short`)}</span>
@@ -146,6 +165,7 @@ export function Layout() {
           <button type="button" className="mobile-reset" onClick={onReset}><Icon name="reset" />{t('resetDemo')}</button>
         </main>
       </div>
+      {tourOpen && user && <Tour key={isCustomer ? 'customer' : 'staff'} mode={isCustomer ? 'customer' : 'staff'} onClose={closeTour} />}
     </>
   );
 }

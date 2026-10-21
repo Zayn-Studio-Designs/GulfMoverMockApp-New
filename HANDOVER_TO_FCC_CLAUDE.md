@@ -11,8 +11,8 @@ This guide is for someone who is **not a programmer**. It explains how to get th
 | Item | Value |
 |---|---|
 | Repository | https://github.com/TOPZEDE/GulfMoverMockApp |
-| Branch | `handoff/fcc-claude-final` |
-| Branch on GitHub | https://github.com/TOPZEDE/GulfMoverMockApp/tree/handoff/fcc-claude-final |
+| Branch | `handoff/fcc-claude-polish` (latest: tour, ? button, overflow and bug fixes). Earlier: `handoff/fcc-claude-final` |
+| Branch on GitHub | https://github.com/TOPZEDE/GulfMoverMockApp/tree/handoff/fcc-claude-polish |
 | Based on | `handoff/presentation-wallet` @ `1202e09` |
 | Code commit | `6cd25e2356f300c766afa524c2e13385d1db548a` |
 
@@ -38,7 +38,7 @@ You need **Git** and **Node.js 18 or newer** (version 20 LTS is recommended).
 **Option A: you do not have the project yet.**
 ```bash
 cd ~/Desktop
-git clone --branch handoff/fcc-claude-final https://github.com/TOPZEDE/GulfMoverMockApp.git GulfMover-final
+git clone --branch handoff/fcc-claude-polish https://github.com/TOPZEDE/GulfMoverMockApp.git GulfMover-final
 cd GulfMover-final
 ```
 
@@ -46,8 +46,8 @@ cd GulfMover-final
 ```bash
 git status
 git fetch origin
-git switch handoff/fcc-claude-final
-git pull origin handoff/fcc-claude-final
+git switch handoff/fcc-claude-polish
+git pull origin handoff/fcc-claude-polish
 ```
 If `git status` lists changed files, stop at that point. Ask fcc-claude to save or commit them first, so nothing is lost.
 
@@ -67,6 +67,33 @@ npm run presentation
 - **Plain website (no device frames):** http://localhost:3000/
 - If port 3000 is busy, Vite prints a different `Local:` address in the terminal. Use that address and add `/presentation.html` to the end.
 - To stop the server, press **Control + C** in the terminal.
+
+---
+
+## 4b. Windows PC: run on localhost
+
+1. Install **Node.js LTS** from https://nodejs.org (accept the defaults) and **Git for Windows** from https://git-scm.com/download/win (accept the defaults).
+2. Open **Command Prompt**: press the Windows key, type `cmd`, press Enter. (Use Command Prompt rather than PowerShell; PowerShell can block `npm` with a "running scripts is disabled" message.)
+3. Paste these lines one at a time and press Enter after each:
+   ```bat
+   cd %USERPROFILE%\Desktop
+   git clone --branch handoff/fcc-claude-polish https://github.com/TOPZEDE/GulfMoverMockApp.git GulfMover
+   cd GulfMover
+   npm ci
+   npm run presentation
+   ```
+   The repository is private: the first `git clone` opens a GitHub sign-in window. Sign in with the account that has access.
+4. The browser opens by itself. If not, go to **http://localhost:3000/presentation.html** (plain app: http://localhost:3000/).
+5. Keep the Command Prompt window open while presenting. Close it, or press **Ctrl + C**, to stop.
+
+**Next time** you only need:
+```bat
+cd %USERPROFILE%\Desktop\GulfMover
+git pull
+npm ci
+npm run presentation
+```
+If Windows Firewall asks about Node.js, **Cancel** is fine. The app only needs this PC.
 
 ---
 
@@ -104,6 +131,9 @@ Choose **Mac** to show the desktop website inside a laptop frame, or open http:/
 ---
 
 ## 6. What was built (main files)
+
+Latest round (`handoff/fcc-claude-polish`) added: guided tour and **?** button (`src/components/Tour.tsx`, `src/components/Layout.tsx`), crash-recovery screen (`src/components/ErrorBoundary.tsx`), and the fixes listed in `docs/test-results.md` (21 October 2026).
+
 
 | Area | Files |
 |---|---|

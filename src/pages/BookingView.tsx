@@ -27,7 +27,7 @@ function Stepper({ step: wizardStep }: { step: number }) {
   // Six wizard screens, five labels: the payment simulation (5) belongs to "Review & pay" (4).
   const step = wizardStep >= 5 ? wizardStep - 1 : wizardStep;
   return (
-    <ol className="stepper">
+    <ol className="stepper" data-tour="booking-steps">
       {names.map((n, i) => (
         <li key={n} className={`step${step === i + 1 ? ' active' : ''}${step > i + 1 ? ' done' : ''}`}>
           <span className="step-num">{step > i + 1 ? '✓' : i + 1}</span><span>{n}</span>
@@ -47,7 +47,7 @@ function ServiceStep() {
         <div><h2 className="card-title">{t('serviceTitle')}</h2><p className="card-desc">{t('homeCopy')}</p></div>
         <span className="pill pill-blue">{t('stepService')} 1/5</span>
       </div>
-      <div className="grid grid-2" style={{ marginTop: 18 }}>
+      <div className="grid grid-2" style={{ marginTop: 18 }} data-tour="booking-services">
         {SERVICES.map(s => (
           <button key={s.value} type="button" aria-pressed={wizard.service === s.value}
             className={`service-card${wizard.service === s.value ? ' selected' : ''}`}
@@ -508,6 +508,7 @@ function ResultStep() {
   const b = wizard.currentBooking ?? bookings[0];
   const { entries } = useTicketIndex(bookings);
   const savedTicketIds = new Set(passes.map(p => p.ticketId));
+  if (!b) return <div className="card card-pad"><p className="muted">{t('noBookings')}</p></div>;
   const rows: Array<[string, string]> = [['paymentStatus', b.payment], ['thresholdStatus', b.threshold], ['opsStatus', b.ops], ['boardingStatus', b.boarding]];
   return (
     <div className="card card-pad">

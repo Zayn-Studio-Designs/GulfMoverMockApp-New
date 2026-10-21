@@ -103,6 +103,11 @@ describe('CSV export helpers', () => {
     expect(csvEscape('he said "hi"')).toBe('"he said ""hi"""');
     expect(toCsv(['a', 'b'], [[1, 'x,y']])).toBe('"a","b"\r\n"1","x,y"');
   });
+  test('typed text that looks like a spreadsheet formula is exported as plain text', () => {
+    expect(csvEscape('=HYPERLINK("http://x")')).toBe('"\'=HYPERLINK(""http://x"")"');
+    expect(csvEscape('+966 500')).toBe('"\'+966 500"');
+    expect(csvEscape(-5)).toBe('"-5"');
+  });
 });
 
 describe('wallet pass simulation', () => {

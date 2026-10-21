@@ -19,6 +19,7 @@ import { AuthProvider } from './context/AuthContext';
 import './styles/fonts.css';
 import './styles/index.css';
 import { WalletHostBridge } from './components/wallet/WalletHostBridge';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './styles/wallet.css';
 
 export function AppRoutes() {
@@ -58,11 +59,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
 function App() {
   return (
-    <AppProviders>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AppProviders>
+    <ErrorBoundary>
+      <AppProviders>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AppProviders>
+    </ErrorBoundary>
   );
 }
 

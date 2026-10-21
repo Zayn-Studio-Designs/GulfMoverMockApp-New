@@ -171,3 +171,18 @@ Browser walkthrough (Chromium/Playwright, `npm run presentation` and the single-
 
 Not verified: Safari/Firefox and real phones (Chromium only); real touch hardware (pointer events tested with mouse drags and synthetic pointer events in jsdom).
 
+
+## Polish and QA round — 21 October 2026 (local branch `polish/tour-and-qa`, not yet committed)
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | Pass (exit 0) |
+| `npm test` | Pass — 6 files, **79 tests** (adds guided tour ×4, robustness ×4, CSV formula escaping) |
+| `npm run build` | Pass |
+| `npm audit --omit=dev` | 0 vulnerabilities in shipped dependencies (dev-tool warnings remain, see limitations) |
+
+**Browser sweep** (headless Chromium, `npm run dev`): every screen at 360, 393, 768, 1024 and 1440 px wide, in English and Arabic — sign-in, sign-up, forgot password, public ATCO page, home, all six booking steps including payment and result, My Bookings and booking details, all seven Settings tabs, every customer tour step, Operations, Boarding (with a lookup), Materials, Fleet, Corporate and every staff tour step. 440 checks: no text outside its box, no clipped text, no sideways page scroll, no JavaScript errors.
+
+**Presentation shell:** Apple Wallet and Google Wallet flows re-run end to end with no errors; guided tour checked inside the iPhone and Android frames.
+
+Fixed in this round: guided tour and **?** button restored; tour no longer sends you back when you tap the highlighted button; tour no longer measures every frame while open; header subtitle no longer cut off on phones; sidebar links no longer underlined; account menu and dialogs appear above the tour; crash-recovery screen instead of a blank page; damaged saved data can no longer stop the app starting; camera scanner can no longer stay on after a quick off/on; spreadsheet exports neutralise formula-like text.

@@ -124,7 +124,14 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [accounts, setAccountsState] = useState<Account[]>(() => load<Account[]>(ACCOUNTS_KEY, []).map(withDefaults));
+  const [accounts, setAccountsState] = useState<Account[]>(() => {
+    // Damaged or hand-edited storage must never stop the app from starting: keep only well-formed accounts.
+    const raw = load<unknown>(ACCOUNTS_KEY, []);
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .filter((a): a is Account => !!a && typeof a === 'object' && typeof (a as Account).id === 'string' && typeof (a as Account).email === 'string' && typeof (a as Account).username === 'string')
+      .map(withDefaults);
+  });
   const [sessionId, setSessionId] = useState<string | null>(loadSession);
   const [signedOutByUser, setSignedOutByUser] = useState(false);
   // Reset codes live only in memory, like a short-lived emailed code.

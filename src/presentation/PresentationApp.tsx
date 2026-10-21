@@ -274,7 +274,9 @@ export function PresentationApp() {
       style.id = ID;
       style.textContent =
         'html{scrollbar-width:none;-ms-overflow-style:none}' +
-        'html::-webkit-scrollbar,body::-webkit-scrollbar{width:0;height:0;display:none}';
+        'html::-webkit-scrollbar,body::-webkit-scrollbar{width:0;height:0;display:none}' +
+        // No rubber-band bounce at the top/bottom edge inside the device frame.
+        'html,body{overscroll-behavior:none}';
       (doc.head || doc.documentElement).appendChild(style);
     } catch {
       /* Cross-origin or still loading: next load event will retry. */

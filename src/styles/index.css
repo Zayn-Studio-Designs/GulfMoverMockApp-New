@@ -129,7 +129,7 @@
   .brand-mark{flex:none}
   .brand > div:last-child{min-width:0}
   .brand-name{white-space:nowrap;letter-spacing:.03em}
-  .brand-sub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand-sub{white-space:nowrap}
   .lang-toggle button{padding:8px 11px;font-size:12px;min-height:36px}
 
   /* Page content: 16px gutters and room above the bottom bar */
@@ -382,3 +382,46 @@ input,select,textarea{color:var(--ink)}
   .pay-actions .btn-primary{flex:1}
 }
 
+/* Guided tour: starts once for new accounts; replay with the ? button or the account menu.
+   Customer and staff views have their own steps; the highlighted control stays clickable. */
+.tour{position:fixed;inset:0;z-index:100;pointer-events:none}
+.tour-blocker{position:fixed;pointer-events:auto}
+.tour-card{pointer-events:auto}
+/* No transitions on the spotlight or card: animating a full-screen shadow repaints the whole page every frame. */
+.tour-spot{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(12,32,48,.6);outline:3px solid var(--teal);pointer-events:none}
+.tour-spot-none{inset:0;border-radius:0;outline:0;box-shadow:none;background:rgba(12,32,48,.6)}
+.tour-card{position:fixed;width:min(360px,calc(100vw - 32px));background:#fff;border-radius:var(--radius);border-top:4px solid var(--teal);box-shadow:0 20px 50px rgba(0,0,0,.28);padding:20px}
+.tour-progress{font-size:11px;font-weight:850;letter-spacing:.06em;text-transform:uppercase;color:var(--teal)}
+.tour-title{margin:6px 0 8px;font-size:19px;color:var(--navy)}
+.tour-body{margin:0;font-size:14px;line-height:1.55;color:var(--ink)}
+.tour-dots{display:flex;gap:5px;margin-top:16px}
+.tour-dots span{width:7px;height:7px;border-radius:4px;background:var(--line)}
+.tour-dots span.active{width:18px;background:var(--teal)}
+.tour-actions{display:flex;align-items:center;gap:8px;margin-top:16px}
+.tour-spacer{flex:1}
+.tour-skip{font-size:13px;color:var(--muted)}
+.tour-btn{width:36px;height:36px;flex:none;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--teal);font-size:17px;font-weight:850;cursor:pointer;display:grid;place-items:center}
+.tour-btn:hover{background:var(--teal2)}
+@media(max-width:420px){.tour-card{padding:16px}.tour-btn{width:32px;height:32px;font-size:15px}}
+
+/* Customer home on phones: next trip first. */
+@media(max-width:780px){
+  .home-next{order:-1}
+}
+
+/* Recovery screen shown by the error boundary instead of a blank page. */
+.crash-screen{min-height:100vh;display:grid;place-items:center;padding:24px 16px;background:var(--ice)}
+.crash-card{width:min(520px,100%);background:#fff;border:1px solid var(--line);border-radius:18px;padding:24px;box-shadow:var(--shadow)}
+.crash-card h1{margin:0 0 10px;font-size:22px;color:var(--ink)}
+.crash-card p{margin:0 0 10px;color:var(--ink2);font-size:14px;line-height:1.55}
+.crash-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+
+/* While the tour is open, a menu or dialog the user opens from the highlighted control sits above the dimmed layer. */
+.app-header:has(.account-pop){z-index:110}
+body:has(.tour) .modal-backdrop.open{z-index:120}
+
+/* Sidebar links are navigation buttons, not inline text links. */
+.nav-btn{text-decoration:none}
+/* Small phones: the logo and name identify the app; the subtitle is dropped rather than cut off
+   or squeezed into a narrow column next to the language, ? and profile buttons. */
+@media(max-width:480px){.brand-sub{display:none}}
