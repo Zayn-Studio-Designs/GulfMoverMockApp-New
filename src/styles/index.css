@@ -347,6 +347,28 @@ input,select,textarea{color:var(--ink)}
 .home-bookings p{margin:4px 0 0}
 [dir="rtl"] .dir-flip{display:inline-block;transform:scaleX(-1)}
 
+/* Guided tour: starts once for new accounts; replay with the ? button or the account menu.
+   Customer and staff views have their own steps; the highlighted control stays clickable. */
+.tour{position:fixed;inset:0;z-index:100;pointer-events:none}
+.tour-blocker{position:fixed;pointer-events:auto}
+.tour-card{pointer-events:auto}
+/* No transitions on the spotlight or card: animating a full-screen shadow repaints the whole page every frame. */
+.tour-spot{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(12,32,48,.6);outline:3px solid var(--teal);pointer-events:none}
+.tour-spot-none{inset:0;border-radius:0;outline:0;box-shadow:none;background:rgba(12,32,48,.6)}
+.tour-card{position:fixed;width:min(360px,calc(100vw - 32px));background:#fff;border-radius:var(--radius);border-top:4px solid var(--teal);box-shadow:0 20px 50px rgba(0,0,0,.28);padding:20px}
+.tour-progress{font-size:11px;font-weight:850;letter-spacing:.06em;text-transform:uppercase;color:var(--teal)}
+.tour-title{margin:6px 0 8px;font-size:19px;color:var(--navy)}
+.tour-body{margin:0;font-size:14px;line-height:1.55;color:var(--ink)}
+.tour-dots{display:flex;gap:5px;margin-top:16px}
+.tour-dots span{width:7px;height:7px;border-radius:4px;background:var(--line)}
+.tour-dots span.active{width:18px;background:var(--teal)}
+.tour-actions{display:flex;align-items:center;gap:8px;margin-top:16px}
+.tour-spacer{flex:1}
+.tour-skip{font-size:13px;color:var(--muted)}
+.tour-btn{width:36px;height:36px;flex:none;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--teal);font-size:17px;font-weight:850;cursor:pointer;display:grid;place-items:center}
+.tour-btn:hover{background:var(--teal2)}
+@media(max-width:420px){.tour-card{padding:16px}.tour-btn{width:32px;height:32px;font-size:15px}}
+
 /* Payment step: trip summary → simulated outcome → one disclaimer → actions. */
 .pay-card{max-width:880px;margin:0 auto}
 .pay-title{font-size:24px;margin-top:2px}

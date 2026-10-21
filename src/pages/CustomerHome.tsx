@@ -46,7 +46,7 @@ export default function CustomerHome() {
           <div className="eyebrow">{t('stepService')}</div>
           <h2 className="home-big">{t('quick')}</h2>
           <p className="muted">{t('homeHow')}</p>
-          <button type="button" className="btn btn-primary home-cta" onClick={goBook}>
+          <button type="button" className="btn btn-primary home-cta" data-tour="home-book" onClick={goBook}>
             {t('homeBookCta')} <ArrowIcon />
           </button>
           <p className="footer-note">{t('briefFare')}: <b>SAR 500</b> {t('perTrip')}. {t('vatPending')}.</p>
