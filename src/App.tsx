@@ -19,12 +19,14 @@ import AuthView from './pages/AuthView';
 import { AuthProvider } from './context/AuthContext';
 import './styles/fonts.css';
 import './styles/index.css';
-import { WalletHostBridge } from './components/wallet/WalletHostBridge';
+import { HostHomeBridge, WalletHostBridge } from './components/wallet/WalletHostBridge';
 import { AppCrashScreen, ErrorBoundary } from './components/ErrorBoundary';
 import './styles/wallet.css';
 
 export function AppRoutes() {
   return (
+    <>
+    <HostHomeBridge />
     <Routes>
       <Route path="/signin" element={<AuthView />} />
       <Route path="/signup" element={<AuthView initialMode="signup" />} />
@@ -41,6 +43,7 @@ export function AppRoutes() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    </>
   );
 }
 

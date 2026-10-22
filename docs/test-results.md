@@ -203,3 +203,31 @@ Baseline before changes: typecheck pass, 89/89 tests, build pass.
 **Not verified:**
 - The whole-app crash screen could not be triggered in a real browser without adding test-only code. It is covered by the unit test.
 - Safari, Firefox and real phones were not tested.
+
+## Branch 0-2: presentation and dark-mode fixes (22 October 2026)
+
+**Downloaded presentation showed the computer's folders.**
+- *Cause:* **Home** (which replays the boot) tried to move the app frame to `/`. In a presentation opened from a file, `/` is the root of the disk, so after the boot screen the device showed local folders. The download wrapper's own Home interception relied on an older button label, so it no longer applied.
+- *Fix:* Home now sends a `gm-host:home` message, and the app returns to its start screen through its own router. The frame is never pointed at `/` when running from a file. The download wrapper also puts the app back if the frame ever leaves it.
+- *Boot sound:* now embedded in the downloaded presentation; previously it was silent.
+
+**Dark-mode issues.**
+- *Boot logo:* the light plate behind it was wider than the progress ring and stuck out. It is now a disc inside the ring. The header logo gets a small light plate so it can be read on the dark header.
+- *Backgrounds:* hard-coded white and pale-green backgrounds now use theme tokens. Their light-mode values are identical.
+- *Overrides added:* tour title, active navigation and settings tab, the Customer/staff switch, links, step ticks, the selected materials row (previously an inline style), the booking-reference label, notification toggles and the toolbar size badge.
+
+**Light-mode boot:** measured at about 5.2 s from start to hand-over in every combination of OS light/dark and app Light/Dark/System preference. No light-only failure was reproduced. The confirmed failure was the Home path above, which happened in both themes.
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | Pass |
+| `npm test` | Pass: 10 files, **103 tests** (adds Home → `gm-host:home` and the app-side router check) |
+| `npm run build` | Pass |
+| Dark contrast scan: every page, booking step, settings tab and tour step; 1280 px and 393 px; English and Arabic (176 screens) | **0 low-contrast text items**, 0 JavaScript errors. Remaining light surfaces are intentional: the logo plate and Apple's white sign-in button. Before the fix, about 400 items were flagged. |
+| Light-mode regression: computed colours of every element, previous commit compared with this one, 40 screens and states | Identical. The single difference is a hover shadow caused by the mouse position. |
+| Downloaded presentation opened from disk, light and dark | 20/20 checks pass. First boot and every device boot land in the app. Home pressed 3 times returns to the app's Home screen. A frame forced to `/` is put back on the app. The embedded boot sound plays. No errors. |
+| Presentation on localhost | Home returns the app to its Home screen. Apple and Google Wallet flows were re-run earlier on this branch. |
+
+**Not verified:**
+- Windows Chrome and Edge, Safari and Firefox. Tests ran in Chromium on Linux.
+- Whether your machine shows a separate light-mode boot problem. If it does, a screenshot would let us pin it down.

@@ -30,3 +30,13 @@ export function selectBootSoundFile(manifest: unknown): string | null {
 export function bootSoundUrl(file: string): string {
   return '/assets/audio/' + encodeURIComponent(file);
 }
+
+/**
+ * The single-file download has no server to fetch the manifest or the audio from, so its build
+ * embeds the sound as a data URL on window.__gmBootSoundUrl. Only audio data URLs are accepted;
+ * the normal app never sets it and keeps using boot-sound.json.
+ */
+export function embeddedBootSoundUrl(): string | null {
+  const v = (window as unknown as { __gmBootSoundUrl?: unknown }).__gmBootSoundUrl;
+  return typeof v === 'string' && v.startsWith('data:audio/') ? v : null;
+}

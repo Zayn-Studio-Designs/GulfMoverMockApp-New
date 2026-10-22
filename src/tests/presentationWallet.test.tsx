@@ -393,3 +393,45 @@ describe('app inside the device (bridge)', () => {
     expect(posted('gm-wallet:request-add')).toHaveLength(0);
   });
 });
+
+describe('presentation Home button', () => {
+  test('Home asks the app to return to its start screen and never points the device frame at "/"', () => {
+    const view = render(<PresentationApp />);
+    const iframe = view.container.querySelector('iframe') as HTMLIFrameElement;
+    const appWindow = iframe.contentWindow as Window;
+    const postSpy = vi.fn();
+    appWindow.postMessage = postSpy as unknown as Window['postMessage'];
+    const srcBefore = iframe.getAttribute('src');
+    const hrefBefore = appWindow.location.href;
+    fireEvent.click(screen.getByRole('button', { name: /Home/ }));
+    expect(postSpy.mock.calls.map(c => c[0]).filter(m => m.type === 'gm-host:home')).toHaveLength(1);
+    // Opened from a file, "/" is the root of the computer's disk: the frame must not be sent there.
+    expect(iframe.getAttribute('src')).toBe(srcBefore);
+    expect(appWindow.location.href).toBe(hrefBefore);
+  });
+
+  describe('app side', () => {
+    let host: Window;
+    beforeEach(() => {
+      localStorage.clear();
+      const frame = document.createElement('iframe');
+      document.body.appendChild(frame);
+      host = frame.contentWindow as Window;
+      host.postMessage = vi.fn() as unknown as Window['postMessage'];
+      connectHostForTests(host);
+    });
+    afterEach(() => { connectHostForTests(null); });
+    const send = (data: unknown, source: Window) =>
+      act(() => { window.dispatchEvent(new MessageEvent('message', { data, origin: ORIGIN, source })); });
+
+    test('"home" from the presentation returns the app to Home through its own router', async () => {
+      render(<AppProviders><MemoryRouter initialEntries={['/bookings']}><AppRoutes /></MemoryRouter></AppProviders>);
+      fireEvent.click(screen.getByRole('button', { name: 'Explore as demo guest' }));
+      expect(await screen.findByRole('heading', { level: 1, name: 'My bookings' })).toBeInTheDocument();
+      send({ type: 'gm-host:home' }, window); // not the presentation window: ignored
+      expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('My bookings');
+      send({ type: 'gm-host:home' }, host);
+      expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    });
+  });
+});

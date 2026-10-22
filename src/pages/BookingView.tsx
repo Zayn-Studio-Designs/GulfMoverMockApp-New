@@ -516,7 +516,7 @@ function ResultStep() {
         <StatusPill text={tx('DEMO')} />
       </div>
       <div className="hero-panel" style={{ marginTop: 18, minHeight: 0 }}>
-        <div className="eyebrow" style={{ color: '#78A98B' }}>{tx('BOOKING REFERENCE · FICTIONAL')}</div>
+        <div className="eyebrow hero-eyebrow">{tx('BOOKING REFERENCE · FICTIONAL')}</div>
         <h2 style={{ fontSize: 27 }} className="mono">{b.ref}</h2>
         <p>{tx(b.service)} · {b.date} · {formatTime(b.time, lang)}</p>
         <div className="hero-meta">

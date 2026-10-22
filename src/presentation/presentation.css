@@ -442,11 +442,6 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   width: 124px;
   height: auto;
   object-fit: contain;
-  /* The genuine ATCO Marine logo (dark green + navy) needs a subtle light bed on the dark boot
-     surface — a soft rounded plate, not a card. */
-  background: rgba(244, 247, 250, .93);
-  border-radius: 18px;
-  padding: 14px 16px;
   box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 10px 34px rgba(4,16,28,.35);
   animation: boot-logo-in .8s cubic-bezier(.22,.8,.26,1) both;
   animation-delay: .08s;
@@ -454,6 +449,17 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
 .boot.is-light .boot-logo {
   background: transparent;
   box-shadow: none;
+}
+/* Dark boot: the genuine logo (dark green + navy) needs a light bed. It is a disc that sits inside
+   the progress ring (ring ~128px across in the 148px frame); the earlier rounded plate was wider
+   than the ring and its corners stuck out over it. */
+.boot.is-dark .boot-logo {
+  box-sizing: border-box;
+  width: 112px;
+  height: 112px;
+  padding: 26px 10px;
+  border-radius: 50%;
+  background: rgba(244, 247, 250, .96);
 }
 @keyframes boot-logo-in {
   from { opacity: 0; transform: translateY(10px) scale(.97); }
@@ -548,3 +554,6 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
 [data-theme="dark"] .pres-shell:-webkit-full-screen {
   background: radial-gradient(120% 90% at 50% 0%, #16283c 0%, #0e1926 70%, #0b131d 100%);
 }
+
+/* Device size badge in the dark toolbar (it kept its light pill, with low-contrast grey text). */
+[data-theme="dark"] .pres-dims { background: #152434; border-color: #21303f; color: #cfe0ee; }

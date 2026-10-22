@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useDemo } from '../../context/DemoContext';
@@ -94,6 +95,29 @@ export function WalletHostBridge() {
  * hands the pass to the device's own (simulated) Wallet sheet. Renders nothing on
  * the Mac preview and the normal website.
  */
+/**
+ * Lets the presentation's Home button return the app to its start screen through the app's own
+ * router. The shell used to push "/" into the frame's history and, failing that, load "/" in the
+ * frame — which in a presentation opened from a file is the root of the computer's disk.
+ * Rendered inside the router (see AppRoutes).
+ */
+export function HostHomeBridge() {
+  const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  useEffect(() => {
+    const host = getHostWindow();
+    if (!host) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.source !== host || !fromOwnOrigin(e.origin) || !isProtocolMessage(e.data)) return;
+      if (e.data.type === 'gm-host:home') navigateRef.current('/');
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+  return null;
+}
+
 export function DeviceWalletButton({ entry, saved }: { entry: TicketEntry; saved: boolean }) {
   const device = useHostDevice();
   const { t, tx, lang } = useLanguage();

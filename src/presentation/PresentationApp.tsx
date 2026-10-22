@@ -5,7 +5,7 @@ import { GoogleSaveSheet, GoogleWallet, QuickSettings } from './wallet/GoogleWal
 import { useDoublePress } from './wallet/hooks';
 import { OS_TEXT, type OsLang } from './wallet/osText';
 import { BootOverlay } from './BootOverlay';
-import { BOOT_SOUND_MANIFEST_URL, bootSoundUrl, selectBootSoundFile } from './bootSound';
+import { BOOT_SOUND_MANIFEST_URL, bootSoundUrl, selectBootSoundFile, embeddedBootSoundUrl } from './bootSound';
 import { readThemePref, resolveEffectiveTheme } from '../context/ThemeContext';
 // Reuse the one dev-only guard from the boot module (vite-injected import.meta.env.DEV).
 const BOOT_DEBUG_ENABLED = (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
@@ -200,10 +200,10 @@ export function PresentationApp() {
   const onHorn = useCallback(() => {
     bootDebug('onHorn-called', soundOn ? 'sound-on' : 'sound-off');
     if (!soundOn) return;
-    void resolveSoundFile().then(file => {
-      if (!file || !soundOn) return;
+    const embedded = embeddedBootSoundUrl();
+    void (embedded ? Promise.resolve(embedded) : resolveSoundFile().then(file => (file ? bootSoundUrl(file) : null))).then(wanted => {
+      if (!wanted || !soundOn) return;
       try {
-        const wanted = bootSoundUrl(file);
         let horn = hornRef.current;
         if (horn && horn.getAttribute('data-src') !== wanted) { horn.pause(); horn = null; hornRef.current = null; }
         if (!horn) {
@@ -444,26 +444,18 @@ export function PresentationApp() {
   }, []);
 
   /* Home: send the app back to its home screen WITHOUT reloading the iframe (session, bookings,
-     settings and language all stay), and replay the boot animation from the beginning. The
-     pushState + popstate nudge is the no-reload way to drive React Router; the hardcoded reload
-     paths remain only as a last-resort fallback for unexpected hosts. */
+     settings and language all stay), and replay the boot animation from the beginning. The app
+     navigates itself on 'gm-host:home' through its own router (BrowserRouter or, in the single-file
+     download, MemoryRouter). The frame is never pointed at "/" when the presentation runs from a
+     file: there "/" is the root of the computer's disk, and the device would show local folders. */
   const backToStart = useCallback(() => {
-    const win = iframeRef.current?.contentWindow;
-    let navigated = false;
-    if (win) {
-      try {
-        win.history.pushState({}, '', '/');
-        win.dispatchEvent(new PopStateEvent('popstate', { state: null }));
-        navigated = true;
-      } catch { /* fall through to the reload fallback */ }
-    }
-    if (!navigated) {
-      try { if (win) win.location.href = '/'; } catch { /* ignore */ }
-      const frame = iframeRef.current;
-      if (frame) frame.src = '/';
-    }
+    const frame = iframeRef.current;
+    let showingApp = true;
+    try { void frame?.contentWindow?.location.href; } catch { showingApp = false; } // frame left the app (other origin)
+    if (showingApp) postToApp({ type: 'gm-host:home' });
+    else if (frame && /^https?:$/.test(window.location.protocol)) frame.src = '/'; // web host only: reload the app
     startBoot();
-  }, [startBoot]);
+  }, [postToApp, startBoot]);
 
   return (
     <div
