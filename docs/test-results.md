@@ -171,3 +171,35 @@ Browser walkthrough (Chromium/Playwright, `npm run presentation` and the single-
 
 Not verified: Safari/Firefox and real phones (Chromium only); real touch hardware (pointer events tested with mouse drags and synthetic pointer events in jsdom).
 
+
+## Branch 0-2: stability batch 1 (22 October 2026, based on 0-1 @ cffb33b)
+
+Baseline before changes: typecheck pass, 89/89 tests, build pass.
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | Pass (exit 0) |
+| `npm test` | Pass: 10 files, **101 tests**, of which 12 are new in `src/tests/stability.test.tsx` |
+| `npm run build` | Pass |
+| `npm audit --omit=dev` | 0 vulnerabilities |
+
+**Regression tests reproduced each bug first.** Run against the unchanged 0-1 code, 8 of the new tests failed. The two crash-recovery tests need the new component, so they could not run against the old code. After the fixes all 12 pass.
+
+**Browser checks** (Chromium/Playwright against `npm run dev`, all passed):
+- Help/tour button: hidden on the signed-out ATCO page, shown after sign-in.
+- Tour, at 1280 px and 393 px: tapping the highlighted "Book a marine transfer" button stays on the Book page, and the tour can still be finished.
+- CSV export: a PO typed as `=HYPERLINK(...)` is exported as `'=HYPERLINK(...)`, and normal rows are unchanged.
+- Damaged browser data (accounts `{}`, tour list `"oops"`, bookings `[null]`): the app starts, the guest can sign in, My Bookings shows the sample data, and copies of the damaged originals are kept.
+- Boarding Desk camera, using Chromium's fake camera with a deliberately slow permission prompt: after Start → Stop → Start only one stream is live, and after Stop none are.
+- No uncaught page errors.
+- Simulated Google and Apple sign-in still reach Home.
+- Apple and Google Wallet flows end to end in the presentation, waiting for the boot animation: passed.
+- Tour inside the iPhone frame: passed.
+
+**Page sweep:** 440 checks covering every page, booking step, settings tab and tour step, at 5 widths, in English and Arabic.
+- No JavaScript errors and no sideways page scroll.
+- One existing 0-1 issue was flagged, unrelated to this batch: on phones up to 393 px wide the header subtitle "Marine transfers · Ras Tanura" is cut off with "…". This is left for batch 2.
+
+**Not verified:**
+- The whole-app crash screen could not be triggered in a real browser without adding test-only code. It is covered by the unit test.
+- Safari, Firefox and real phones were not tested.
