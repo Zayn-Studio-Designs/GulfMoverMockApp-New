@@ -102,15 +102,42 @@ const isArray = (v: unknown): v is unknown[] => Array.isArray(v);
 const isConfig = (v: unknown): v is DemoConfig =>
   typeof v === 'object' && v !== null && typeof (v as DemoConfig).farePerPassenger === 'number' && isArray((v as DemoConfig).schedule);
 
-/** Defensive parsing: malformed or partially missing localStorage never crashes the demo. */
-function loadPersisted(): PersistedState | null {
+const PERSIST_DAMAGED_KEY = 'gm-demo-state-v1-damaged';
+
+/** Every item is an object carrying its identifying text field (e.g. a booking's `ref`). */
+const allHave = (v: unknown, field: string) =>
+  isArray(v) && v.every(x => typeof x === 'object' && x !== null && typeof (x as Record<string, unknown>)[field] === 'string');
+const optionalAllHave = (v: unknown, field: string) => v === undefined || allHave(v, field);
+
+/**
+ * Keeps the first damaged original (never overwrites an earlier copy) before the demo falls back to
+ * its sample data, so the next automatic save does not silently erase it.
+ */
+function keepDamagedCopy(raw: string) {
   try {
-    const raw = localStorage.getItem(PERSIST_KEY);
+    if (localStorage.getItem(PERSIST_DAMAGED_KEY) === null) localStorage.setItem(PERSIST_DAMAGED_KEY, raw);
+    console.warn(`Gulf Mover demo: saved demo data was damaged and the sample data was loaded; a copy is kept under "${PERSIST_DAMAGED_KEY}".`);
+  } catch {
+    // Storage unavailable: nothing to keep.
+  }
+}
+
+/** Defensive parsing: malformed or partially missing localStorage never crashes the demo. Data from an
+ *  earlier day is replaced by design; same-day data that is unreadable is kept aside as a copy. */
+function loadPersisted(): PersistedState | null {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(PERSIST_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return null;
+    if (typeof parsed !== 'object' || parsed === null) { keepDamagedCopy(raw); return null; }
     const p = parsed as PersistedState;
-    if (p.savedAt !== today() || !isArray(p.bookings) || !isArray(p.boatSlots) || !isArray(p.sailings)) return null;
+    if (p.savedAt !== today()) return null;
+    if (!allHave(p.bookings, 'ref') || !allHave(p.boatSlots, 'id') || !allHave(p.sailings, 'id')
+      || !optionalAllHave(p.materials, 'id') || !optionalAllHave(p.audit, 'action') || !optionalAllHave(p.passes, 'ticketId')) {
+      keepDamagedCopy(raw);
+      return null;
+    }
     return {
       savedAt: p.savedAt,
       sailings: p.sailings as Sailing[],
@@ -122,6 +149,7 @@ function loadPersisted(): PersistedState | null {
       passes: isArray(p.passes) ? (p.passes as WalletPass[]) : [],
     };
   } catch {
+    if (raw) keepDamagedCopy(raw);
     return null;
   }
 }

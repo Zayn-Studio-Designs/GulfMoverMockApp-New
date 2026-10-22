@@ -10,6 +10,7 @@ import { useWorkMode } from '../context/WorkModeContext';
 import { useUi } from '../context/UiContext';
 import { Icon, type IconName } from './Icon';
 import { Tour, hasSeenTour, markTourSeen } from './Tour';
+import { ErrorBoundary } from './ErrorBoundary';
 
 /**
  * Navigation shown to each demo view. Navigation filtering is UI-only: every route
@@ -86,6 +87,22 @@ function AccountMenu({ onTour }: { onTour: () => void }) {
   );
 }
 
+/** Shown in place of a page that failed to render; the header and menu stay usable. */
+function ScreenError({ retry }: { retry: () => void }) {
+  const { t } = useLanguage();
+  const { resetDemoData } = useDemo();
+  return (
+    <div className="card card-pad screen-error" role="alert">
+      <h1 className="page-title">{t('screenErrorTitle')}</h1>
+      <p className="muted">{t('screenErrorBody')}</p>
+      <div className="crash-actions">
+        <button type="button" className="btn btn-primary" onClick={retry}>{t('screenErrorRetry')}</button>
+        <button type="button" className="btn btn-outline" onClick={() => { resetDemoData(); retry(); }}>{t('resetDemo')}</button>
+      </div>
+    </div>
+  );
+}
+
 export function Layout() {
   const { lang, setLang, t } = useLanguage();
   const { user, signedOutByUser } = useAuth();
@@ -132,7 +149,8 @@ export function Layout() {
               <button type="button" className={lang === 'en' ? 'active' : ''} aria-pressed={lang === 'en'} onClick={() => setLang('en')}>EN</button>
               <button type="button" className={lang === 'ar' ? 'active' : ''} aria-pressed={lang === 'ar'} onClick={() => setLang('ar')} lang="ar">العربية</button>
             </div>
-            <button type="button" className="tour-btn" data-tour="account" aria-label={t('tourStart')} title={t('tourStart')} onClick={startTour}>?</button>
+            {/* Signed-out visitors can open only the public ATCO page; the tour needs an account. */}
+            {user && <button type="button" className="tour-btn" data-tour="account" aria-label={t('tourStart')} title={t('tourStart')} onClick={startTour}>?</button>}
             <AccountMenu onTour={startTour} />
           </div>
         </div>
@@ -161,11 +179,13 @@ export function Layout() {
           <button type="button" className="side-reset" onClick={onReset}><Icon name="reset" />{t('resetDemo')}</button>
         </aside>
         <main className="main" id="app-main" tabIndex={-1}>
-          <Outlet />
+          <ErrorBoundary resetKey={pathname} fallback={retry => <ScreenError retry={retry} />}>
+            <Outlet />
+          </ErrorBoundary>
           <button type="button" className="mobile-reset" onClick={onReset}><Icon name="reset" />{t('resetDemo')}</button>
         </main>
       </div>
-      {tourOpen && <Tour key={isCustomer ? 'customer' : 'staff'} mode={isCustomer ? 'customer' : 'staff'} onClose={closeTour} />}
+      {tourOpen && user && <Tour key={isCustomer ? 'customer' : 'staff'} mode={isCustomer ? 'customer' : 'staff'} onClose={closeTour} />}
     </>
   );
 }

@@ -1,8 +1,15 @@
 // CSV export helpers (Phase 12). Pure and testable; only downloadCsv touches the browser.
 
-/** RFC-4180 style escaping: quotes doubled, field always wrapped — stable formatting. */
+// Spreadsheet apps run a cell as a formula when it starts with one of these characters.
+const FORMULA_START = /^[=+\-@\t\r]/;
+const PLAIN_NUMBER = /^[+-]?\d+(\.\d+)?$/;
+
+/** RFC-4180 style escaping: quotes doubled, field always wrapped — stable formatting.
+ *  Typed text that would start a formula (e.g. "=HYPERLINK(...)") gets a leading apostrophe so
+ *  Excel / Sheets show it as text instead of running it; plain numbers such as "-12.5" stay as they are. */
 export function csvEscape(value: unknown): string {
-  const text = value === undefined || value === null ? '' : String(value);
+  let text = value === undefined || value === null ? '' : String(value);
+  if (typeof value === 'string' && FORMULA_START.test(text) && !PLAIN_NUMBER.test(text)) text = `'${text}`;
   return `"${text.replace(/"/g, '""')}"`;
 }
 

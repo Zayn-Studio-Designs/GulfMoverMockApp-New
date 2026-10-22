@@ -39,6 +39,7 @@ export type ProfilePatch = Partial<Pick<Account,
   'username' | 'fullName' | 'phone' | 'company' | 'companyLogo' | 'companyAddress' | 'companyWebsite' | 'avatar' | 'notifications'>>;
 
 const ACCOUNTS_KEY = 'gm-demo-accounts';
+const ACCOUNTS_DAMAGED_KEY = 'gm-demo-accounts-damaged';
 const SESSION_KEY = 'gm-demo-session';
 const RESET_CODE_MINUTES = 15;
 
@@ -78,6 +79,41 @@ function loadSession(): string | null {
     return load<string | null>(SESSION_KEY, null) ?? (JSON.parse(sessionStorage.getItem(SESSION_KEY) ?? 'null') as string | null);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Reads the saved demo accounts without trusting their shape. Well-formed accounts are kept;
+ * anything unreadable (not a list, or entries without id / email / username / password data) is
+ * skipped so it cannot break sign-in. Nothing is rewritten here: the saved list only changes on the
+ * next account action, and a copy of a damaged original is first kept under ACCOUNTS_DAMAGED_KEY.
+ */
+function loadAccounts(): Account[] {
+  let raw: string | null = null;
+  try { raw = localStorage.getItem(ACCOUNTS_KEY); } catch { return []; }
+  if (!raw) return [];
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { parsed = undefined; }
+  const list = Array.isArray(parsed) ? parsed : [];
+  const valid = list.filter(isStoredAccount);
+  if (!Array.isArray(parsed) || valid.length !== list.length) keepDamagedCopy(ACCOUNTS_DAMAGED_KEY, raw);
+  return valid.map(withDefaults);
+}
+
+const isStoredAccount = (a: unknown): a is Account => {
+  if (typeof a !== 'object' || a === null) return false;
+  const x = a as Record<string, unknown>;
+  return typeof x.id === 'string' && typeof x.email === 'string' && typeof x.username === 'string'
+    && typeof x.salt === 'string' && typeof x.passwordHash === 'string';
+};
+
+/** Keeps the first damaged original so it can be inspected or restored; never overwrites an earlier copy. */
+function keepDamagedCopy(key: string, raw: string) {
+  try {
+    if (localStorage.getItem(key) === null) localStorage.setItem(key, raw);
+    console.warn(`Gulf Mover demo: saved data under "${key.replace(/-damaged$/, '')}" was damaged; a copy is kept under "${key}".`);
+  } catch {
+    // Storage unavailable: nothing to keep.
   }
 }
 
@@ -134,7 +170,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [accounts, setAccountsState] = useState<Account[]>(() => load<Account[]>(ACCOUNTS_KEY, []).map(withDefaults));
+  const [accounts, setAccountsState] = useState<Account[]>(loadAccounts);
   const [sessionId, setSessionId] = useState<string | null>(loadSession);
   const [signedOutByUser, setSignedOutByUser] = useState(false);
   // Reset codes live only in memory, like a short-lived emailed code.

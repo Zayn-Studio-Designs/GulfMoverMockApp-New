@@ -24,15 +24,16 @@ function makeDetector(): BarcodeDetectorLike | null {
 export function useCameraScanner(active: boolean, onDetect: (payload: string) => void) {
   const [state, setState] = useState<ScannerState>('idle');
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const stopped = useRef(false);
 
   useEffect(() => {
     if (!active) { setState('idle'); return; }
-    stopped.current = false;
+    // Per-run flag: after a quick off/on, a still-pending earlier run must see that it was stopped,
+    // otherwise it attaches (and never releases) its camera stream. A shared ref was reset by the new run.
+    let stopped = false;
     let stream: MediaStream | null = null;
     let timer: number | undefined;
 
-    const fail = (s: ScannerState) => { if (!stopped.current) setState(s); };
+    const fail = (s: ScannerState) => { if (!stopped) setState(s); };
 
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia) { fail('unsupported'); return; }
@@ -43,12 +44,13 @@ export function useCameraScanner(active: boolean, onDetect: (payload: string) =>
         fail('denied');
         return;
       }
-      if (stopped.current) { stream.getTracks().forEach(t => t.stop()); return; }
+      if (stopped) { stream.getTracks().forEach(t => t.stop()); return; }
       const video = videoRef.current;
       if (!video) { stream.getTracks().forEach(t => t.stop()); fail('error'); return; }
       video.srcObject = stream;
       video.setAttribute('playsinline', 'true');
       try { await video.play(); } catch { /* autoplay guards: ignore */ }
+      if (stopped) return; // turned off while the preview was starting; cleanup already released the stream
       const detector = makeDetector();
       if (!detector) {
         // Frames still preview, but decoding is unavailable: tell the operator.
@@ -57,7 +59,7 @@ export function useCameraScanner(active: boolean, onDetect: (payload: string) =>
       }
       setState('active');
       const poll = async () => {
-        if (stopped.current) return;
+        if (stopped) return;
         try {
           const codes = await detector.detect(video);
           if (codes.length > 0) onDetect(codes[0].rawValue);
@@ -69,7 +71,7 @@ export function useCameraScanner(active: boolean, onDetect: (payload: string) =>
     })();
 
     return () => {
-      stopped.current = true;
+      stopped = true;
       window.clearTimeout(timer);
       videoRef.current && (videoRef.current.srcObject = null);
       stream?.getTracks().forEach(t => t.stop());

@@ -45,7 +45,9 @@ const SEEN_KEY = 'gm-demo-tour-seen';
 
 function seenIds(): string[] {
   try {
-    return JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]') as string[];
+    // Damaged or hand-edited storage (e.g. "{}") must not break sign-in: read only the string ids.
+    const ids: unknown = JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]');
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : [];
   } catch {
     return [];
   }
@@ -139,11 +141,15 @@ export function Tour({ mode, onClose }: { mode: WorkMode; onClose: () => void })
 
   // Open the page this step talks about when the step starts. Afterwards the user may follow the
   // highlighted control (e.g. tap "Book a marine transfer") without being sent back.
+  // navigate() gets a new identity on every route change, so it is read through a ref: with it in
+  // the dependency list, following the highlighted control re-ran this effect and sent the user back.
   const pathRef = useRef(pathname);
   pathRef.current = pathname;
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   useEffect(() => {
-    if (step.route && pathRef.current !== step.route) navigate(step.route);
-  }, [index, step.route, navigate]);
+    if (step.route && pathRef.current !== step.route) navigateRef.current(step.route);
+  }, [index, step.route]);
 
   // Keep the spotlight on the target while the page loads, scrolls, resizes or changes language
   // (one measurement per frame; re-renders only when something moved). When the target appears it
