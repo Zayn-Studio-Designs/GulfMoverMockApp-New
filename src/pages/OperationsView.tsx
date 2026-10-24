@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useDemo } from '../context/DemoContext';
@@ -25,6 +26,7 @@ export default function OperationsView() {
     (statusFilter === 'all' || s.ops.toLowerCase().includes(statusFilter)) &&
     (directionFilter === 'all' || s.dir.toLowerCase() === directionFilter));
   const selected = sailings.find(s => s.id === selectedId);
+  const detailPanel = useRevealOnOpen<HTMLDivElement>(selectedId);
   const pendingMaterials = materials.filter(m => /pending/i.test(m.status)).length;
   const { entries } = useTicketIndex(bookings);
   const sailingTickets = (id: string): TicketEntry[] => {
@@ -126,7 +128,7 @@ export default function OperationsView() {
       </div>
       <div style={{ marginTop: 16 }}>
         {selected && (
-          <div className="card card-pad">
+          <div className="card card-pad reveal-target" ref={detailPanel}>
             <div className="between">
               <div>
                 <div className="eyebrow">{tx('DEMO SAILING DETAIL')}</div>

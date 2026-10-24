@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useDemo, type ServiceType, type PaymentChoice } from '../context/DemoContext';
@@ -233,10 +234,19 @@ function DetailsStep() {
   const { t } = useLanguage();
   const { wizard, updateWizard } = useDemo();
 
+  // The message sits at the top of the form, so a Continue pressed at the bottom of a long form
+  // (phones) used to look like nothing happened: show the message and put the cursor in the field.
+  const showError = (formError: string, fieldId: string) => {
+    updateWizard({ formError });
+    requestAnimationFrame(() => {
+      document.getElementById('booking-form-error')?.scrollIntoView?.({ block: 'center' });
+      document.getElementById(fieldId)?.focus({ preventScroll: true });
+    });
+  };
   const next = () => {
     const name = wizard.passengerName.trim(), email = wizard.passengerEmail.trim(), phone = wizard.passengerPhone.trim();
-    if (!name || !email || !phone) { updateWizard({ formError: 'completeFields' }); return; }
-    if (!email.includes('@')) { updateWizard({ formError: 'validEmail' }); return; }
+    if (!name || !email || !phone) { showError('completeFields', !name ? 'passenger-name' : !email ? 'passenger-email' : 'passenger-phone'); return; }
+    if (!email.includes('@')) { showError('validEmail', 'passenger-email'); return; }
     updateWizard({ formError: '', bookStep: 4 });
   };
 
@@ -256,7 +266,7 @@ function DetailsStep() {
         <div><h2 className="card-title">{t('detailsTitle')}</h2><p className="card-desc">{t('detailsSub')}</p></div>
         <span className="pill pill-neutral">{t('stepDetails')} 3/5</span>
       </div>
-      {wizard.formError && <div className="notice danger" role="alert" style={{ marginTop: 15 }}>{t(wizard.formError)}</div>}
+      {wizard.formError && <div id="booking-form-error" className="notice danger" role="alert" style={{ marginTop: 15 }}>{t(wizard.formError)}</div>}
       <div className="form-grid" style={{ marginTop: 17 }}>
         {field('passenger-name', 'fullName', 'passengerName', { required: true, autoComplete: 'name', placeholder: 'Demo Passenger' })}
         {field('passenger-email', 'email', 'passengerEmail', { required: true, type: 'email', autoComplete: 'email', placeholder: 'passenger@example.test' })}
@@ -563,6 +573,14 @@ export default function BookingView() {
   const { t, tx, lang } = useLanguage();
   const { wizard } = useDemo();
   const step = wizard.bookStep;
+  // Every step change (Continue, Back, payment → result, "create another booking") starts at the
+  // top of the page instead of where the previous step's button was. The first render is left to
+  // the layout, which already scrolls to the top on every page change.
+  const firstStep = useRef(true);
+  useEffect(() => {
+    if (firstStep.current) { firstStep.current = false; return; }
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [step]);
   return (
     <div className="booking-flow" data-step={step}>
       <PageHeader titleKey="bookTitle" subKey="bookSub" eyebrow="ATCO MARINE / CUSTOMER" />

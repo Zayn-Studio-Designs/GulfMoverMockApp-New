@@ -112,7 +112,8 @@ export function Layout() {
   const { pathname, search } = useLocation();
   const [tourOpen, setTourOpen] = useState(false);
 
-  useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [pathname]);
+  // New page: start at the top straight away (a smooth glide from the bottom of a long page looked like lag).
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'instant' }); }, [pathname]);
 
   // Each step opens its own page, so the tour can start from anywhere.
   const startTour = useCallback(() => setTourOpen(true), []);

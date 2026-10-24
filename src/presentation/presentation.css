@@ -257,7 +257,10 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  background: #fff;
+  /* Bezel colour, not white: the device is scaled to fit the window, so the app frame can end a
+     sub-pixel short of the rounded screen edge. Any such seam now blends into the bezel instead of
+     showing as a thin white line around the screen. */
+  background: var(--pres-bezel);
   contain: paint;
   isolation: isolate;
 }
@@ -269,7 +272,9 @@ button:focus-visible { outline: 3px solid var(--pres-green); outline-offset: 2px
   width: 100%;
   height: 100%;
   border: 0;
-  background: #fff;
+  /* Also bezel-coloured: scaled down, the app's page can stop a sub-pixel short of the frame's
+     edge, and the frame's own background then shows as a thin line beside the app. */
+  background: var(--pres-bezel);
 }
 
 /* Mac window: thin chassis, small radius. */

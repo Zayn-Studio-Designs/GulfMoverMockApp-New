@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { QRCodeTicket } from '../../components/QRCodeTicket';
 import type { PassView } from '../walletProtocol';
 import { DEMO_CARDS, type DemoCard } from './demoCards';
@@ -153,10 +153,26 @@ export function AppleWallet({ lang, passes, focusTicketId, closeSignal, onClosed
   useEscape(() => (open ? setOpen(false) : close()));
 
   const openItem = (i: number) => { carousel.go(i); setOpen(true); };
+
+  // The swipe row takes the height of the card being shown, not of the tallest item: a short
+  // payment card no longer leaves a gap that pushed its details box off the bottom of the screen.
+  const slideRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const [rowHeight, setRowHeight] = useState<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const el = slideRefs.current[carousel.index];
+    if (!el) return;
+    const measure = () => setRowHeight(el.offsetHeight);
+    measure();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    observer?.observe(el);
+    return () => observer?.disconnect();
+  }, [open, carousel.index, lang]);
   const trackStyle = {
     '--i': carousel.index,
     '--drag': `${carousel.drag}px`,
     transition: carousel.dragging || prefersReducedMotion() ? 'none' : undefined,
+    height: rowHeight,
   } as CSSProperties;
 
   return (
@@ -175,7 +191,7 @@ export function AppleWallet({ lang, passes, focusTicketId, closeSignal, onClosed
                 <div key={item.id} className={`aw-slide${i === carousel.index ? ' is-active' : ''}`}
                   aria-hidden={i !== carousel.index} aria-label={itemLabel(item)} role="group" aria-roledescription="slide"
                   onClick={() => carousel.go(i)}>
-                  <div dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+                  <div dir={lang === 'ar' ? 'rtl' : 'ltr'} ref={el => { slideRefs.current[i] = el; }}>
                     {item.kind === 'card' ? <AppleCardFace card={item.card} /> : <ApplePass pass={item.pass} text={text} full />}
                   </div>
                 </div>

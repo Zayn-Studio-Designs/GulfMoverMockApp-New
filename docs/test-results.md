@@ -231,3 +231,33 @@ Baseline before changes: typecheck pass, 89/89 tests, build pass.
 **Not verified:**
 - Windows Chrome and Edge, Safari and Firefox. Tests ran in Chromium on Linux.
 - Whether your machine shows a separate light-mode boot problem. If it does, a screenshot would let us pin it down.
+
+## Branch 0-3: demo polish (24 October 2026, based on 0-2 @ 6839fa1)
+
+**Why 0-3 starts from 0-2, not 0-1:** the demo needs the 0-2 fixes (the downloaded presentation no longer shows local folders; dark mode). 0-2 has not been approved yet, so approving 0-3 also brings in 0-2.
+
+**Changes.**
+- **Continue goes to the top.** Every booking step change jumps to the top of the page: Continue, Back, payment → result, and "Create another booking". The steps share one page, so before this the scroll position stayed where the button was. Changing page from the menu also jumps to the top straight away instead of gliding slowly from the bottom. A blocked Continue on the details step now shows its message on screen and puts the cursor in the first missing field. "View details" in My Bookings and Operations, and picking a materials request on a phone, bring the details panel into view.
+- **No white edges on the phones.** The device screen and the app frame used white backgrounds. Scaled to fit the window, the app can end a sub-pixel short of the screen edge, so thin white lines showed around the screen and its rounded corners. Both are now the bezel colour. The app and the Wallet and sheet layers also start 1px under the status bar, which closes a hairline seam that showed the app beneath the Wallet screens.
+- **Apple Wallet boxes fully inside the screen.** The swipe row was always as tall as the tallest item (a boarding pass). A payment card therefore left a gap that pushed its details box off the bottom of the iPhone screen. The row now takes the height of the card being shown.
+- **Polish.**
+  - The sidebar menu links are no longer underlined.
+  - On narrow phones the header subtitle is hidden instead of being cut to "M…".
+  - On phones, content no longer shows in the strip under the floating bottom menu; a fade in the page colour sits beneath it.
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | Pass |
+| `npm test` | Pass: 11 files, **107 tests**; new: `navigationScroll.test.tsx` (4) |
+| `npm run build` | Pass |
+| Booking steps in the browser, from the bottom of each step, at 1280 px and 390 px | Every Continue, Back, "Show booking result" and "Create another booking" ends at scrollY 0. A menu page change ends at 0. View details shows the panel under the header. |
+| Same in the downloaded presentation (iPhone, Android, Mac frames) | Step changes end at scrollY 0 on all three. |
+| Phone edges, light and dark, at 2× zoom | No white lines at the sides, rounded corners or status bar. |
+| Apple and Google Wallet walkthrough with fit checks | No box or text outside the screen or poking out of its container. The only flag is the intended slide-up animation of Wallet opening. Add, HUD, coach, swipe, pass QR, close and reopen all pass. No errors. |
+| Tour cards and highlights, every step, Mac / iPhone / Android, English and Arabic, customer and staff | All inside the screen. |
+| Text and box sweep: 440 checks, 5 widths, English and Arabic | 0 problems (previously 168 flags for the phone subtitle), 0 JavaScript errors. |
+| Dark contrast scan, 176 screens | 0 low-contrast items, 0 JavaScript errors. |
+| Batch-1 browser checks (tour, "?" button, CSV, damaged data, camera) | 13/13 pass. |
+| Downloaded presentation from disk, light and dark | 20/20 pass (boot, Home × 3, safety net, embedded sound, no errors). |
+
+**Not verified:** Safari, Firefox, Windows Edge and real phones. Testing was in Chromium on Linux.

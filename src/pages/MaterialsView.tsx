@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
 import { useLanguage } from '../context/LanguageContext';
 import { useDemo, type MaterialDecision } from '../context/DemoContext';
 import { useUi } from '../context/UiContext';
@@ -12,6 +13,8 @@ export default function MaterialsView() {
   const { toast, openModal } = useUi();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = materials.find(m => m.id === selectedId) ?? materials[0];
+  // On phones the details card sits below the list: bring it into view when a request is picked.
+  const detailPanel = useRevealOnOpen<HTMLDivElement>(selectedId);
 
   // Submission is never acceptance: every decision is an explicit reviewer action with a reason.
   const decide = (decision: MaterialDecision) => openModal({
@@ -53,7 +56,7 @@ export default function MaterialsView() {
             </button>
           ))}
         </div>
-        <div className="card card-pad">
+        <div className="card card-pad reveal-target" ref={detailPanel}>
           <div className="eyebrow">{t('request')} · {tx('DEMO')}</div>
           <h2 className="card-title">{tx(selected.name)}</h2>
           <p className="card-desc mono">{selected.id}</p>

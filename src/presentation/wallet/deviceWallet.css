@@ -26,8 +26,11 @@
 .pres-statusbar.is-dark { background: #000; color: #fff; }
 .pres-statusbar.is-light { background: #fff; color: #1f1f1f; }
 .pres-statusbar-icons { display: flex; align-items: center; gap: 5px; }
+/* The app and the Wallet / sheet layers start 1px under the status bar (which is drawn above them):
+   with the device scaled to fit the window, an exact edge could leave a hairline seam showing the
+   layer beneath. */
 .pres-device-iphone .pres-screen,
-.pres-device-android .pres-screen { top: var(--sb-h); height: calc(100% - var(--sb-h)); }
+.pres-device-android .pres-screen { top: calc(var(--sb-h) - 1px); height: calc(100% - var(--sb-h) + 1px); }
 
 /* ---------- Hardware buttons on the chassis edge ---------- */
 .pres-hw {
@@ -134,7 +137,7 @@
   -webkit-font-smoothing: antialiased;
 }
 .aw {
-  position: absolute; top: var(--sb-h); left: 0; right: 0; bottom: 0; z-index: 5;
+  position: absolute; top: calc(var(--sb-h) - 1px); left: 0; right: 0; bottom: 0; z-index: 5;
   display: flex; flex-direction: column; overflow: hidden;
   background: #000; color: #fff;
   animation: aw-in .46s cubic-bezier(.32, .72, 0, 1) both;
@@ -181,9 +184,9 @@
 .aw-carousel:active { cursor: grabbing; }
 .aw-carousel:focus-visible { box-shadow: inset 0 0 0 2px #0a84ff; }
 .aw-track {
-  display: flex; gap: 10px;
+  display: flex; gap: 10px; align-items: flex-start;
   transform: translateX(calc((100% - 30px) * var(--i) * -1 + var(--drag)));
-  transition: transform .45s cubic-bezier(.32, .72, 0, 1);
+  transition: transform .45s cubic-bezier(.32, .72, 0, 1), height .35s cubic-bezier(.32, .72, 0, 1);
 }
 .aw-slide { flex: 0 0 calc(100% - 40px); transition: transform .35s cubic-bezier(.32, .72, 0, 1), opacity .35s; }
 .aw-slide:first-child { margin-left: 20px; }
@@ -254,7 +257,7 @@
 
 /* iOS "Add pass" sheet, its drop-into-Wallet animation and the green confirmation. */
 .as-layer {
-  position: absolute; top: var(--sb-h); left: 0; right: 0; bottom: 0; z-index: 5;
+  position: absolute; top: calc(var(--sb-h) - 1px); left: 0; right: 0; bottom: 0; z-index: 5;
   display: flex; align-items: flex-end; background: rgba(0, 0, 0, .42);
   animation: os-fade-in .3s ease-out both;
 }
@@ -290,7 +293,7 @@
 /* Google Sans where installed, otherwise the bundled Roboto (Android's system font). */
 .gw, .gs-layer, .qs-layer { --google-font: "Google Sans", "Google Sans Text", Roboto, "Segoe UI", Arial, sans-serif; font-family: var(--google-font); }
 .gw {
-  position: absolute; top: var(--sb-h); left: 0; right: 0; bottom: 0; z-index: 5;
+  position: absolute; top: calc(var(--sb-h) - 1px); left: 0; right: 0; bottom: 0; z-index: 5;
   display: flex; flex-direction: column; overflow: hidden;
   background: #fff; color: #1f1f1f;
   animation: gw-in .32s cubic-bezier(.2, 0, 0, 1) both;
@@ -371,7 +374,7 @@
 .gp-details .gp-label { opacity: 1; color: #444746; }
 
 /* Material bottom sheet: Save → saving → "Added to Google Wallet". */
-.gs-layer { position: absolute; top: var(--sb-h); left: 0; right: 0; bottom: 0; z-index: 5; display: flex; align-items: flex-end; }
+.gs-layer { position: absolute; top: calc(var(--sb-h) - 1px); left: 0; right: 0; bottom: 0; z-index: 5; display: flex; align-items: flex-end; }
 .gs-scrim { position: absolute; inset: 0; border: 0; padding: 0; background: rgba(0, 0, 0, .32); animation: os-fade-in .25s ease-out both; }
 .gs-layer.is-closing .gs-scrim { animation: os-fade-out .22s ease-in both; }
 .gs-sheet {
@@ -399,7 +402,7 @@
 @keyframes os-spin { to { transform: rotate(360deg); } }
 
 /* Android Quick Settings shade with the Wallet tile. */
-.qs-layer { position: absolute; top: var(--sb-h); left: 0; right: 0; bottom: 0; z-index: 5; }
+.qs-layer { position: absolute; top: calc(var(--sb-h) - 1px); left: 0; right: 0; bottom: 0; z-index: 5; }
 .qs-scrim { position: absolute; inset: 0; border: 0; padding: 0; background: rgba(0, 0, 0, .36); animation: os-fade-in .2s ease-out both; }
 .qs-layer.is-closing .qs-scrim { animation: os-fade-out .2s ease-in both; }
 .qs-shade { position: relative; z-index: 1; padding: 16px 16px 6px; border-radius: 0 0 28px 28px; background: #e9eef6; animation: qs-down .28s cubic-bezier(.2, 0, 0, 1) both; }

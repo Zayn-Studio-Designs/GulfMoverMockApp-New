@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useDemo } from '../context/DemoContext';
@@ -34,6 +35,7 @@ export default function MyBookingsView() {
     (!search || b.ref.toLowerCase().includes(search.toLowerCase())) &&
     (statusFilter === 'all' || b.payment.toLowerCase().includes(statusFilter)));
   const detail = bookings.find(b => b.ref === detailRef);
+  const detailPanel = useRevealOnOpen<HTMLDivElement>(detail ? detail.ref : null);
   const { entries } = useTicketIndex(bookings);
   const detailEntries = entries.filter(e => detail && e.booking.ref === detail.ref);
   const savedTicketIds = new Set(useDemo().passes.map(p => p.ticketId));
@@ -124,7 +126,7 @@ export default function MyBookingsView() {
       </div>
       <div style={{ marginTop: 16 }}>
         {detail && (
-          <div className="card card-pad">
+          <div className="card card-pad reveal-target" ref={detailPanel}>
             <div className="between">
               <div><div className="eyebrow">{tx('BOOKING DETAIL / DEMO')}</div><h2 className="card-title mono">{detail.ref}</h2></div>
               <button type="button" className="btn btn-outline btn-small" onClick={() => setDetailRef(null)}>{tx('Close')}</button>

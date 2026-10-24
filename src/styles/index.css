@@ -574,3 +574,19 @@ button.request-row[aria-pressed="true"]{background:#f1f8f3}
 /* Header logo: the genuine ATCO Marine mark (dark green + navy) is unreadable on the dark header,
    so it sits on a small light plate, as on the dark boot screen. */
 [data-theme="dark"] .brand-logo{background:rgba(244,247,250,.95);border-radius:9px;padding:4px 7px;box-sizing:content-box}
+
+/* Details panels brought into view on open (useRevealOnOpen) stop below the sticky header. */
+.reveal-target{scroll-margin-top:124px}
+@media(max-width:780px){.reveal-target{scroll-margin-top:84px}}
+
+/* Polish (0-3). Sidebar / bottom-bar links are navigation buttons, not underlined text links. */
+.nav-btn{text-decoration:none}
+/* Narrow phones: the subtitle was cut to "M…" beside the brand name; the logo and name identify the
+   app, so the subtitle is left out rather than shown as a fragment. */
+@media(max-width:480px){.brand-sub{display:none}}
+/* Phones: the bottom navigation floats 10px above the screen edge, so page content showed in the
+   strip below and around it, as if boxes were poking out under the menu. A soft fade in the page
+   colour now sits beneath the menu (z-index just under it; it never takes clicks). */
+@media(max-width:780px){
+  .shell::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(98px + env(safe-area-inset-bottom));background:linear-gradient(to bottom,transparent,var(--ice) 22px);z-index:39;pointer-events:none}
+}
