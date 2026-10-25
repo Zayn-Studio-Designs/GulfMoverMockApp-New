@@ -16,6 +16,7 @@ const PATHS = {
   wallet: <><rect x="3" y="5" width="18" height="15" rx="2" /><path d="M3 8h18M15 14h3" /></>,
   list: <path d="M9 5h11M9 12h11M9 19h11M4 5h.01M4 12h.01M4 19h.01" />,
   reset: <><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /></>,
+  bell: <><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8" /><path d="M13.7 20a2 2 0 0 1-3.4 0" /></>,
   // Sidebar navigation icons
   home: <><path d="M4 11.5 12 4.5l8 7" /><path d="M6.5 10V20h11v-10" /><path d="M10 20v-5h4v5" /></>,
   navBook: <><path d="M3 7.5 12 3l9 4.5-9 4.5-9-4.5Z" /><path d="M3 12l9 4.5 9-4.5M3 16.5 12 21l9-4.5" /></>,

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { beforeEach, describe, expect, test } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -352,9 +354,8 @@ describe('accounts', () => {
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: password } });
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     await screen.findByRole('heading', { level: 1, name: 'Home' });
-    // From the customer home, go through the account menu like a real user.
-    click('Account menu');
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Switch to ATCO staff view' }));
+    // The demo view switch lives in the side panel, not in the account menu.
+    click('ATCO staff (demo)');
     expect(await screen.findByRole('link', { name: 'Operations' })).toBeInTheDocument();
   }
 
@@ -394,6 +395,113 @@ describe('accounts', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'newpass2027' } });
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+  });
+});
+
+describe('header: profile menu and notifications bell', () => {
+  const order = (a: Element, b: Element) =>
+    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  test('the profile menu no longer repeats Company, Notifications, the view switch or the tour', async () => {
+    await renderApp('/');
+    click('Account menu');
+    const menu = screen.getByRole('menu');
+    for (const name of ['Profile', 'Security & password', 'All settings', 'Sign out']) {
+      expect(within(menu).getByRole('menuitem', { name })).toBeInTheDocument();
+    }
+    for (const name of ['Company', 'Notifications', 'Switch to ATCO staff view', 'Take the tour']) {
+      expect(within(menu).queryByRole('menuitem', { name })).toBeNull();
+    }
+    // The who block (name, company, email) stays at the top of the menu.
+    expect(menu).toHaveTextContent('Demo Logistics Co.');
+  });
+
+  test('sign out is still in the profile menu and closes it', async () => {
+    await renderApp('/');
+    click('Account menu');
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  test('the bell sits between the ? button and the profile picture and opens Notifications', async () => {
+    await renderApp('/');
+    const help = screen.getByRole('button', { name: 'Take the tour' });
+    const bell = screen.getByRole('link', { name: 'Notifications' });
+    const profile = screen.getByRole('button', { name: 'Account menu' });
+    expect(bell.parentElement).toBe(help.parentElement);
+    expect(order(help, bell)).toBe(true);
+    expect(order(bell, profile)).toBe(true);
+    // No unread model exists in the demo, so the bell must not show a made-up count.
+    expect(bell.textContent).toBe('');
+    expect(bell).toHaveAttribute('href', '/settings?tab=notifications');
+
+    fireEvent.click(bell);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Notifications' })).toHaveAttribute('aria-current', 'page');
+    // The existing notification preferences (and their saved state) are untouched.
+    const emailToggle = screen.getByRole('switch', { name: /Email — booking confirmations/ }) as HTMLInputElement;
+    const before = emailToggle.checked;
+    fireEvent.click(emailToggle);
+    expect(emailToggle.checked).toBe(!before);
+  });
+
+  test('the ? button still opens the guided tour', async () => {
+    await renderApp('/');
+    click('Take the tour');
+    expect(await screen.findByRole('dialog', { name: 'Welcome to ATCO Marine' })).toBeInTheDocument();
+  });
+
+  test('company details remain reachable from Settings', async () => {
+    await renderApp('/settings');
+    fireEvent.click(screen.getByRole('button', { name: 'Company' }));
+    expect(await screen.findByRole('heading', { name: 'Company' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Company name')).toBeInTheDocument();
+  });
+
+  test('in Arabic the header order and the bell label are translated', async () => {
+    await renderApp('/');
+    click('العربية');
+    expect(await screen.findByRole('link', { name: 'الإشعارات' })).toHaveAttribute('href', '/settings?tab=notifications');
+    const help = screen.getByRole('button', { name: 'جولة تعريفية' });
+    const bell = screen.getByRole('link', { name: 'الإشعارات' });
+    const profile = screen.getByRole('button', { name: 'قائمة الحساب' });
+    expect(order(help, bell)).toBe(true);
+    expect(order(bell, profile)).toBe(true);
+    expect(document.documentElement.dir).toBe('rtl');
+    click('قائمة الحساب');
+    const menu = screen.getByRole('menu');
+    expect(within(menu).queryByRole('menuitem', { name: 'الإشعارات' })).toBeNull();
+    expect(within(menu).queryByRole('menuitem', { name: 'الشركة' })).toBeNull();
+    expect(within(menu).getByRole('menuitem', { name: 'تسجيل الخروج' })).toBeInTheDocument();
+  });
+});
+
+describe('demo view switch', () => {
+  test('switches both ways from the side panel and remembers the choice', async () => {
+    await renderApp('/');
+    const sidebar = screen.getAllByRole('navigation', { name: 'Main navigation' })[0].closest('.sidebar') as HTMLElement;
+    const customerBtn = within(sidebar).getByRole('button', { name: 'Customer' });
+    const staffBtn = within(sidebar).getByRole('button', { name: 'ATCO staff (demo)' });
+    expect(customerBtn).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(staffBtn);
+    expect(await screen.findByRole('link', { name: 'Operations' })).toBeInTheDocument();
+    expect(staffBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(localStorage.getItem('gm-demo-workspace')).toBe('staff');
+
+    fireEvent.click(customerBtn);
+    expect(await screen.findByRole('link', { name: 'Book Transfer' })).toBeInTheDocument();
+    expect(customerBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('link', { name: 'Operations' })).toBeNull();
+    expect(localStorage.getItem('gm-demo-workspace')).toBeNull();
+  });
+
+  // Phones use the same sidebar as a bottom navigation bar. Regression guard: hiding the switch
+  // there left phone users with no way to change demo view once the profile-menu entry was removed.
+  test('the phone layout does not hide the view switch', () => {
+    const css = readFileSync(path.join(process.cwd(), 'src/styles/index.css'), 'utf8');
+    expect(css).not.toMatch(/\.ws-switch\s*\{[^}]*display\s*:\s*none/);
   });
 });
 

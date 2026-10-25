@@ -1,6 +1,8 @@
-# Proposal (not applied): rename the boot sound file
+# Proposal: rename the boot sound file
 
-Status: **awaiting approval**. Nothing has been renamed and `vite.config.ts` is unchanged on branch 0-2.
+Status: **applied on branch 0-3**. The replacement recording is now `atco-boot-sound.mp3` (bytes
+unchanged, manifest updated, tests and README updated) and the `audioRescue` middleware has been
+removed from `vite.config.ts`. The notes below are kept as the original reasoning.
 
 ## Current situation
 - The ATCO sonic logo is stored as `public/assets/audio/ATCO_Marine_sonic_lo_#2-1792505560465.mp3`.

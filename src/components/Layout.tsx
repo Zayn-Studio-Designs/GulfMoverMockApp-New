@@ -34,11 +34,14 @@ const CUSTOMER_NAV: ReadonlyArray<{ to: string; key: string; icon: IconName }> =
   { to: '/settings', key: 'navAccount', icon: 'user' },
 ];
 
-/** Profile button with a small menu: account details, Settings, the guided tour and Sign out. */
-function AccountMenu({ onTour }: { onTour: () => void }) {
+/**
+ * Profile button with a small menu: account details, Settings and Sign out. Company details live in
+ * Settings, notifications in the header bell, the demo view switch in the side panel and the tour
+ * behind the ? button, so none of them is repeated here.
+ */
+function AccountMenu() {
   const { t } = useLanguage();
   const { user, signOut } = useAuth();
-  const { isCustomer, setMode } = useWorkMode();
   const { toast } = useUi();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -71,14 +74,8 @@ function AccountMenu({ onTour }: { onTour: () => void }) {
             </div>
           </div>
           <Link role="menuitem" className="account-item" to="/settings" onClick={() => setOpen(false)}>{t('profile')}</Link>
-          <Link role="menuitem" className="account-item" to="/settings?tab=company" onClick={() => setOpen(false)}>{t('companyTitle')}</Link>
           <Link role="menuitem" className="account-item" to="/settings?tab=security" onClick={() => setOpen(false)}>{t('securityTab')}</Link>
-          <Link role="menuitem" className="account-item" to="/settings?tab=notifications" onClick={() => setOpen(false)}>{t('notificationsTitle')}</Link>
           <Link role="menuitem" className="account-item" to="/settings?tab=preferences" onClick={() => setOpen(false)}>{t('settingsLink')}</Link>
-          <button role="menuitem" type="button" className="account-item" onClick={() => { setOpen(false); setMode(isCustomer ? 'staff' : 'customer'); }}>
-            {isCustomer ? t('wsSwitchStaff') : t('wsSwitchCustomer')}
-          </button>
-          <button role="menuitem" type="button" className="account-item" onClick={() => { setOpen(false); onTour(); }}>{t('tourStart')}</button>
           <div className="account-sep" />
           <button role="menuitem" type="button" className="account-item account-signout" onClick={() => { setOpen(false); signOut(); toast(t('signedOut')); navigate('/signin'); }}>{t('signOut')}</button>
         </div>
@@ -151,7 +148,9 @@ export function Layout() {
             </div>
             {/* Signed-out visitors can open only the public ATCO page; the tour needs an account. */}
             {user && <button type="button" className="tour-btn" data-tour="account" aria-label={t('tourStart')} title={t('tourStart')} onClick={startTour}>?</button>}
-            <AccountMenu onTour={startTour} />
+            {/* Opens the same Notifications settings page the profile menu used to link to. */}
+            {user && <Link className="bell-btn" to="/settings?tab=notifications" aria-label={t('notificationsTitle')} title={t('notificationsTitle')}><Icon name="bell" /></Link>}
+            <AccountMenu />
           </div>
         </div>
       </header>

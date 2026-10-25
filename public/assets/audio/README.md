@@ -9,8 +9,15 @@ public/assets/audio/boot-sound.json
 The manifest's current file name points at the sonic logo:
 
 ```json
-{ "file": "ATCO_Marine_sonic_lo_#2-1792505560465.mp3" }
+{ "file": "atco-boot-sound.mp3" }
 ```
+
+The file was delivered as `Generate_a_premium_3_#1-1792930200117.mp3` and renamed to
+`atco-boot-sound.mp3` with its audio bytes unchanged, so it has a URL-safe name. Keep names free of
+`#`, `?` and `%`: static servers (including `vite preview`) split on `#`, which used to need a
+special development-server workaround. The earlier ATCO sonic logo
+(`ATCO_Marine_sonic_lo_#2-1792505560465.mp3`) is still in this folder but is no longer referenced;
+only the file named in the manifest is played.
 
 **To replace the sound** (no application code changes needed):
 

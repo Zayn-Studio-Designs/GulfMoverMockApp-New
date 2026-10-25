@@ -3,10 +3,12 @@
 // The horn file lives in `public/assets/audio/`. To replace the sound, drop a new file there
 // and point `boot-sound.json` at it — no application code changes needed:
 //
-//   { "file": "ATCO_Marine_sonic_lo_#2-1792505560465.mp3" }
+//   { "file": "atco-boot-sound.mp3" }
 //
-// Everything else (README.md, .DS_Store, backups) is ignored automatically. If the manifest
-// is missing or unusable the boot simply plays silently; nothing ever breaks.
+// Use a URL-safe name (letters, digits, dots, dashes): characters such as '#' make static servers
+// split the path, so the audio is fetched as HTML and the boot falls silent. Everything else
+// (README.md, .DS_Store, backups) is ignored automatically. If the manifest is missing or
+// unusable the boot simply plays silently; nothing ever breaks.
 
 export const BOOT_SOUND_MANIFEST_URL = '/assets/audio/boot-sound.json';
 
