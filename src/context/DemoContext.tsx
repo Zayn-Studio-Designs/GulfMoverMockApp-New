@@ -273,9 +273,15 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       return { ok: false, failedLeg: reserve ? reserve.failedLeg : null, reason: reserve?.reason ?? 'capacity' };
     }
     const tickets: Ticket[] = [];
+    const issuedIds = new Set<string>();
+    // No ticket identity may repeat, either inside this booking or against an already issued ticket.
+    const idTaken = (id: string) => issuedIds.has(id)
+      || bookingsRef.current.some(b => b.tickets?.some(t => t.id === id));
     const legTags: TicketLeg[] = draft.addReturn ? ['outbound', 'return'] : ['outbound'];
     legTags.forEach(tag => {
-      tickets.push(...createTickets(tag, draft.passengerNames.slice(0, pax)));
+      const legTickets = createTickets(tag, draft.passengerNames.slice(0, pax), idTaken);
+      legTickets.forEach(t => issuedIds.add(t.id));
+      tickets.push(...legTickets);
     });
     const payment = draft.payment === 'recorded' ? 'Payment recorded (demo)'
       : draft.payment === 'pending' ? 'Payment pending (demo)' : 'Payment failed / uncertain (demo)';

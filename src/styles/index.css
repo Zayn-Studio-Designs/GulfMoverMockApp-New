@@ -81,7 +81,7 @@
 [data-theme="dark"] .tour-btn:hover{background:var(--surface)}
 [data-theme="dark"] .bell-btn{background:var(--surface2);border-color:var(--line)}
 [data-theme="dark"] .bell-btn:hover{background:var(--surface)}
-[data-theme="dark"] .wallet-sheet,[data-theme="dark"] .qr-code{background:var(--surface)}
+[data-theme="dark"] .wallet-sheet{background:var(--surface)}
 [data-theme="dark"] table{color:var(--ink2)}
 [data-theme="dark"] .pw-wrap .pw-toggle,
 [data-theme="dark"] .link-btn,[data-theme="dark"] .tour-skip{color:var(--teal)}
@@ -652,3 +652,75 @@ button.request-row[aria-pressed="true"]{background:#f1f8f3}
 [data-theme="dark"] .nav-hub[aria-expanded="true"]{background:var(--teal2);color:var(--teal)}
 /* No room for the subtitle at 320–360 px: show the logo and name only rather than a cut-off line. */
 @media(max-width:360px){.brand-sub{display:none}}
+
+/* ---------- Booking result: confirmation, tickets, then supporting status ---------- */
+.result-flow{display:grid;gap:14px}
+.result-confirm{display:grid;gap:16px}
+.result-confirm-head{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.result-check{width:44px;height:44px;flex:none;border-radius:50%;background:var(--greenbg);color:var(--green);border:1px solid #c8e8d2;display:grid;place-items:center}
+.result-check svg{width:22px;height:22px}
+.result-confirm-text{flex:1;min-width:0}
+.result-title{margin:2px 0 4px;font-size:clamp(21px,2.6vw,26px);line-height:1.15;letter-spacing:-.02em;font-weight:750;color:var(--ink)}
+.result-sub{margin:0;font-size:13px;line-height:1.5;color:var(--muted);max-width:62ch}
+.result-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 20px;margin:0;padding-top:14px;border-top:1px solid var(--line)}
+.result-fact{min-width:0}
+.result-fact dt{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.result-fact dd{margin:4px 0 0;font-size:13px;font-weight:650;color:var(--ink);overflow-wrap:anywhere}
+.result-note{margin:12px 0 0;font-size:11px;line-height:1.5;color:var(--muted)}
+.result-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.result-section-title{margin:0;font-size:14px;font-weight:700;color:var(--ink)}
+.result-count{font-size:11px;font-weight:700;color:var(--teal);background:var(--teal2);border-radius:999px;padding:2px 9px}
+.result-status-list{list-style:none;margin:0;padding:0;display:grid;gap:9px}
+.result-status-list li{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.result-status-list li:last-child{border-bottom:0;padding-bottom:0}
+.result-status-label{font-size:12px;font-weight:600;color:var(--ink2);min-width:0}
+.result-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:space-between}
+.result-notice{margin:0}
+[data-theme="dark"] .result-check{background:var(--teal2);border-color:rgba(45,170,110,.35);color:var(--teal)}
+
+/* ---------- Boarding desk: scan-first ---------- */
+.board-scan{display:grid;gap:12px;padding:18px}
+.board-scan-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.board-scan-copy{min-width:0}
+.board-scan-title{margin:0;font-size:clamp(18px,2.2vw,22px);font-weight:750;letter-spacing:-.02em;color:var(--ink)}
+.board-scan-lead{margin:4px 0 0;font-size:12px;line-height:1.5;color:var(--muted);max-width:54ch}
+/* The preview owns the page: a full-width portrait-ish frame with the video filling it. */
+.scan-preview{position:relative;display:grid;place-items:center;width:100%;height:clamp(240px,38vh,340px);overflow:hidden;border:1.5px dashed #9eb7c3;border-radius:16px;background:linear-gradient(160deg,#eef4f2,#e2ece7)}
+.scan-preview.live{border-style:solid;border-color:#0c1a24;background:#0c1a24}
+.scan-video{width:100%;height:100%;object-fit:cover;display:block}
+.scan-idle{display:grid;place-content:center;justify-items:center;gap:10px;width:100%;height:100%;border:0;border-radius:12px;background:transparent;cursor:pointer;color:var(--teal);font-size:12px;font-weight:650;padding:12px}.scan-idle:hover{background:rgba(3,100,60,.07)}
+.scan-idle svg{width:34px;height:34px}
+.scan-guide{position:absolute;inset:14%;border:2px solid rgba(255,255,255,.85);border-radius:14px;box-shadow:0 0 0 2000px rgba(8,22,32,.16);pointer-events:none}
+.scan-preview:not(.live) .scan-guide{border-color:rgba(3,100,60,.35);box-shadow:none}
+.board-scan-actions{display:flex;gap:9px;flex-wrap:wrap}
+.board-scan-actions .btn-primary{flex:1;min-width:180px}
+.board-scan-notice{margin:0}
+.scan-state{display:grid;gap:10px;padding:14px;border:1px solid var(--line);border-radius:12px;background:var(--surface2)}
+.scan-state.duplicate{background:var(--redbg);border-color:#efc5c0}
+.scan-state-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.scan-state-text{margin:0;font-size:12px;line-height:1.5;color:var(--ink2)}
+.scan-facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 16px;margin:0}
+.scan-facts dt{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.scan-facts dd{margin:3px 0 0;font-size:12px;font-weight:650;color:var(--ink);overflow-wrap:anywhere}
+.scan-state.duplicate .scan-state-text,.scan-state.duplicate .scan-facts dd,.scan-state.duplicate .scan-facts dt{color:var(--red)}
+.board-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,.9fr);gap:16px;margin-top:16px;align-items:start}
+[data-theme="dark"] .scan-preview{background:linear-gradient(160deg,#13232f,#0d1a24);border-color:#3a5568}
+[data-theme="dark"] .scan-preview.live{background:#0c1a24;border-color:#24384a}
+@media(max-width:1100px){.board-layout{grid-template-columns:1fr}}
+@media(max-width:780px){
+  .board-scan{padding:12px;gap:10px}
+  /* The boarding page repeats its purpose in the scan card, so the page header is tightened
+     (not removed) to keep the camera preview and its action in the first phone viewport. */
+  .board-screen .page-header{margin:0 0 12px}
+  .board-screen .page-title{font-size:23px;line-height:1.15}
+  .board-screen .eyebrow{font-size:10px;margin-bottom:4px}
+  .board-layout{gap:14px;margin-top:14px}
+  .result-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .result-actions .btn{flex:1}
+  .scan-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:360px){
+  .result-facts{grid-template-columns:1fr}
+  /* 320px phones: keep the whole camera preview above the fixed bar at 740px height. */
+  .scan-preview{height:clamp(220px,34vh,280px)}
+}

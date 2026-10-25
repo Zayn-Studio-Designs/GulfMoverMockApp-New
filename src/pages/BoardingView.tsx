@@ -13,13 +13,15 @@ import { useCameraScanner } from '../hooks/useCameraScanner';
  * Boarding desk demo. Ticket lookups resolve against the same shared demo
  * bookings the customer app displays; boarding decisions only change local demo
  * state and would require authoritative server validation in production.
+ *
+ * The camera/scanner is the primary action: it comes first and owns the widest
+ * area, while the sailing list, manual lookup and history sit below it.
  */
 export default function BoardingView() {
   const { t, tx, lang } = useLanguage();
   const { sailings, bookings, audit, boarding, updateBoarding, boardTicket, overrideBoarding } = useDemo();
   const { toast, openModal } = useUi();
   const [cameraOn, setCameraOn] = useState(false);
-  const [cameraMessage, setCameraMessage] = useState('');
   const { entries, resolve } = useTicketIndex(bookings);
 
   const sailing = sailings.find(s => s.id === boarding.selectedSailingId) ?? sailings[0];
@@ -35,10 +37,15 @@ export default function BoardingView() {
   const boardedCount = sailingEntries.filter(e => e.ticket.status === 'boarded').length;
   const expected = sailing?.count ?? 0;
 
+  /** The ticket the last verification resolved, looked up in the live demo state. */
+  const scanned = boarding.lastResult?.ticketId
+    ? entries.find(e => e.ticket.id === boarding.lastResult!.ticketId) ?? null
+    : null;
+
   const verify = (payload: string) => {
     const query = payload.trim();
     if (!query) { toast(t('boardUnknownTicket')); return; }
-    const { entry, bookingOnly } = resolve(query);
+    const { entry, bookingOnly, payloadId } = resolve(query);
     if (entry) {
       const res = boardTicket(entry.ticket.id, 'scan verification');
       if (res.result === 'ok') {
@@ -56,7 +63,8 @@ export default function BoardingView() {
       toast(t('detailNextBoarding'));
       return;
     }
-    updateBoarding({ lastResult: null, query });
+    // Keeps the failure visible on the desk instead of only as a transient toast.
+    updateBoarding({ lastResult: { kind: 'unknown', ref: '', ticketId: payloadId ?? '' }, query });
     toast(t('boardUnknownTicket'));
   };
 
@@ -66,6 +74,12 @@ export default function BoardingView() {
   });
 
   const lookup = () => verify(boarding.query);
+  const cameraLive = cameraState === 'active' || cameraState === 'starting';
+  const cameraPill = cameraState === 'active' ? t('boardCameraActive')
+    : cameraState === 'starting' ? t('boardCameraStarting')
+      : t('boardCameraOff');
+  const cameraPillTone = cameraState === 'active' ? 'pill-green' : cameraState === 'starting' ? 'pill-gold'
+    : cameraState === 'denied' || cameraState === 'error' || cameraState === 'unsupported' ? 'pill-red' : 'pill-neutral';
 
   const manualOverride = (ref: string) => openModal({
     title: t('override'), desc: t('overrideReason'), confirmText: t('confirm'), requireReason: true,
@@ -83,10 +97,64 @@ export default function BoardingView() {
   const result = resultFor();
 
   return (
-    <>
-      <PageHeader titleKey="boardingTitle" subKey="boardingSub" />
-      <div className="notice warn" style={{ marginBottom: 15 }}><strong>{t('safeTitle')}</strong>{t('boardScanGate')}</div>
-      <div className="split">
+    <div className="board-screen">
+      <PageHeader titleKey="boardingTitle" eyebrow="ATCO MARINE / BOARDING DESK" />
+
+      {/* Primary action: the scanner, with nothing competing above it. */}
+      <section className="card board-scan" aria-labelledby="board-scan-title">
+        <div className="board-scan-head">
+          <div className="board-scan-copy">
+            <h2 className="board-scan-title" id="board-scan-title">{t('boardScanLead')}</h2>
+            <p className="board-scan-lead">{t('boardScanQuick')}</p>
+          </div>
+          <span className={`pill ${cameraPillTone}`}>{cameraPill}</span>
+        </div>
+
+        <div className={`scan-preview${cameraLive ? ' live' : ''}`}>
+          {cameraLive
+            ? <video ref={videoRef} className="scan-video" playsInline aria-label={t('boardStartCamera')} />
+            : (
+              // The idle frame is itself the scan affordance, so the primary action stays in the
+              // first viewport even on short phones where the button row sits just below the fold.
+              <button type="button" className="scan-idle" onClick={() => setCameraOn(true)} aria-label={t('boardStartCamera')}>
+                <Icon name="board" /><span>{t('boardStartCamera')}</span>
+              </button>
+            )}
+          <span className="scan-guide" aria-hidden="true" />
+        </div>
+
+        <div className="board-scan-actions">
+          <button type="button" className="btn btn-primary" onClick={() => setCameraOn(true)}>{t('boardStartCamera')}</button>
+          {cameraOn && <button type="button" className="btn btn-outline" onClick={() => setCameraOn(false)}>{t('boardStopCamera')}</button>}
+        </div>
+        {(cameraState === 'denied' || cameraState === 'unsupported') && (
+          <div className="notice warn board-scan-notice" role="status">
+            {cameraState === 'denied' ? t('boardCameraDenied') : t('boardCameraUnsupported')}
+          </div>
+        )}
+
+        {result && (
+          <div className={`scan-state${result.cls}`} role="status" aria-live="polite">
+            <div className="scan-state-head">
+              <strong>{t('boardResultTitle')}</strong>
+              {scanned && <StatusPill text={scanned.ticket.status === 'boarded' ? 'Boarded (demo)' : 'Not boarded'} />}
+            </div>
+            <p className="scan-state-text">{result.text}</p>
+            {scanned && (
+              <dl className="scan-facts">
+                <div><dt>{t('ticketPassenger')}</dt><dd>{tx(scanned.ticket.passengerName) || t('notProvided')}</dd></div>
+                <div><dt>{t('ticketIdLabel')}</dt><dd className="mono">{scanned.ticket.id}</dd></div>
+                <div><dt>{t('leg')}</dt><dd>{scanned.leg === 'return' ? t('returnLeg') : t('outboundLeg')}</dd></div>
+                <div><dt>{t('destination')}</dt><dd>{tx(scanned.booking.dest)}</dd></div>
+                <div><dt>{t('departureTime')}</dt><dd>{scanned.legDate} · <span className="mono">{formatTime(scanned.legTime, lang)}</span></dd></div>
+                <div><dt>{t('bookingRef')}</dt><dd className="mono">{scanned.booking.ref}</dd></div>
+              </dl>
+            )}
+          </div>
+        )}
+      </section>
+
+      <div className="board-layout">
         <div className="card card-pad">
           <div className="between">
             <div><h2 className="card-title">{t('selectSailing')}</h2><p className="card-desc">{sailing ? `${sailing.id} · ${tx(sailing.dest)}` : ''}</p></div>
@@ -125,36 +193,11 @@ export default function BoardingView() {
               </table>
             </div>
           )}
-
-          <div className="scan-box" style={{ marginTop: 15 }}>
-            <div className="scan-icon" style={cameraState === 'active' || cameraState === 'starting' ? { padding: 0, overflow: 'hidden' } : undefined}>
-              {cameraState === 'active' || cameraState === 'starting'
-                ? <video ref={videoRef} style={{ width: '100%', height: '100%', objectFit: 'cover' }} aria-label={t('boardStartCamera')} />
-                : <Icon name="board" />}
-            </div>
-            <h2 className="card-title">{t('boardScanTitle')}</h2>
-            <p className="card-desc">{t('boardScanSub')}</p>
-            <div className="row" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-primary" onClick={() => { setCameraMessage(''); setCameraOn(true); }}>{t('boardStartCamera')}</button>
-              {cameraOn && <button type="button" className="btn btn-outline" onClick={() => setCameraOn(false)}>{t('boardStopCamera')}</button>}
-            </div>
-            {(cameraMessage || cameraState === 'denied' || cameraState === 'unsupported') && (
-              <div className="notice warn" role="status" style={{ marginTop: 12 }}>
-                {cameraMessage || (cameraState === 'denied' ? t('boardCameraDenied') : t('boardCameraUnsupported'))}
-              </div>
-            )}
-          </div>
-          {result && (
-            <div className={`scan-state${result.cls}`} role="status" style={{ marginTop: 13 }}>
-              <strong>{t('boardResultTitle')}</strong>
-              <p className="small">{result.text}</p>
-            </div>
-          )}
         </div>
 
         <div className="card card-pad">
           <h2 className="card-title">{t('manualLookup')}</h2>
-          <p className="card-desc">{tx("Manual verification accepts the QR payload, the opaque ticket ID or a booking reference. This mock doesn't connect to a ticketing system.")}</p>
+          <p className="card-desc">{t('boardScanSub')}</p>
           <div className="field" style={{ marginTop: 15 }}>
             <label htmlFor="manual-ref">{t('boardQuery')}</label>
             <input id="manual-ref" placeholder="GM-VERIFY-1|GMTK…" value={boarding.query}
@@ -162,12 +205,6 @@ export default function BoardingView() {
               onKeyDown={e => { if (e.key === 'Enter') lookup(); }} />
           </div>
           <button type="button" className="btn btn-outline btn-block" style={{ marginTop: 10 }} onClick={lookup}>{t('boardVerify')}</button>
-          {boarding.lastResult && (
-            <div className="inset" style={{ marginTop: 14 }}>
-              <strong className="mono">{boarding.lastResult.ref || t('boardUnknownTicket')}</strong>
-              <p className="small mono">{boarding.lastResult.ticketId}</p>
-            </div>
-          )}
           <button type="button" className="btn btn-outline btn-small" style={{ marginTop: 12 }}
             onClick={() => manualOverride(boarding.query.trim().toUpperCase())}>{t('override')}</button>
           <div className="divider" />
@@ -179,8 +216,10 @@ export default function BoardingView() {
               </div>
             ))}
           </div>
+          <div className="divider" />
+          <div className="notice warn"><strong>{t('safeTitle')}</strong>{t('boardScanGate')}</div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

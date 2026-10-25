@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useDemo, type ServiceType, type PaymentChoice } from '../context/DemoContext';
@@ -485,22 +486,32 @@ function PaymentStep() {
   );
 }
 
-/** `entry` adds the device Wallet button when the app is shown in the mock iPhone / Android. */
+/**
+ * One issued ticket: a centred vertical composition (QR, leg, passenger, opaque reference, state).
+ * `entry` adds the device Wallet button when the app is shown in the mock iPhone / Android.
+ */
 function TicketQrCard({ ticket, t, entry, saved = false }: { ticket: Ticket; t: (k: string) => string; entry?: TicketEntry; saved?: boolean }) {
   return (
-    <div className="ticket-qr-card">
-      <QRCodeTicket ticketId={ticket.id} size={120} />
+    <article className="ticket-qr-card">
+      <QRCodeTicket ticketId={ticket.id} />
       <div className="ticket-qr-body">
-        <strong>{ticket.leg === 'return' ? t('returnLeg') : t('outboundLeg')}</strong>
-        <div className="tiny muted">{ticket.passengerName}</div>
-        <span className="pill pill-neutral tiny">{ticket.status === 'boarded' ? t('ticketBoarded') : t('ticketNotBoarded')}</span>
+        <span className="ticket-leg">{ticket.leg === 'return' ? t('returnLeg') : t('outboundLeg')}</span>
+        <strong className="ticket-passenger">{ticket.passengerName}</strong>
+        <span className="ticket-id mono" dir="ltr">{ticket.id}</span>
+        <span className={`pill tiny ${ticket.status === 'boarded' ? 'pill-green' : 'pill-gold'}`}>
+          {ticket.status === 'boarded' ? t('ticketBoarded') : t('ticketNotBoarded')}
+        </span>
       </div>
-      <span className="tiny muted" dir="ltr">{t('ticketScanHint')}</span>
+      <p className="ticket-hint">{t('ticketScanHint')}</p>
       {entry && <DeviceWalletButton entry={entry} saved={saved} />}
-    </div>
+    </article>
   );
 }
 
+/**
+ * Booking result: one confirmation block, then the issued tickets, then the supporting statuses.
+ * Replaces the previous stack of nested cards and duplicated status text.
+ */
 function ResultStep() {
   const { t, tx, lang } = useLanguage();
   const { wizard, bookings, passes, resetWizard } = useDemo();
@@ -509,49 +520,64 @@ function ResultStep() {
   const { entries } = useTicketIndex(bookings);
   const savedTicketIds = new Set(passes.map(p => p.ticketId));
   const rows: Array<[string, string]> = [['paymentStatus', b.payment], ['thresholdStatus', b.threshold], ['opsStatus', b.ops], ['boardingStatus', b.boarding]];
+  const boat = BOATS.find(x => x.id === b.boatId);
+  const returnBoat = BOATS.find(x => x.id === b.return?.boatId);
   return (
-    <div className="card card-pad">
-      <div className="between">
-        <div><div className="eyebrow">{t('stepResult')} 5/5</div><h2 className="card-title" style={{ fontSize: 25 }}>{t('resultTitle')}</h2><p className="card-desc">{t('resultSub')}</p></div>
-        <StatusPill text={tx('DEMO')} />
-      </div>
-      <div className="hero-panel" style={{ marginTop: 18, minHeight: 0 }}>
-        <div className="eyebrow hero-eyebrow">{tx('BOOKING REFERENCE · FICTIONAL')}</div>
-        <h2 style={{ fontSize: 27 }} className="mono">{b.ref}</h2>
-        <p>{tx(b.service)} · {b.date} · {formatTime(b.time, lang)}</p>
-        <div className="hero-meta">
-          <span>{b.passengers} {tx('passenger(s) demo')}</span>
-          <span>SAR {Number(b.amount).toLocaleString('en-US')} {tx('before unconfirmed taxes')}</span>
-          <span>{tx('Destination')}: {tx(b.dest)}</span>
-          {b.boatId && <span>{t('boat')}: {BOATS.find(x => x.id === b.boatId)?.name[lang]}</span>}
+    <div className="result-flow">
+      <section className="card card-pad result-confirm" aria-labelledby="result-confirm-title">
+        <div className="result-confirm-head">
+          <span className="result-check" aria-hidden="true"><Icon name="check" /></span>
+          <div className="result-confirm-text">
+            <div className="eyebrow">{t('stepResult')} 5/5</div>
+            <h2 className="result-title" id="result-confirm-title">{t('resultConfirmed')}</h2>
+            <p className="result-sub">{t('resultSub')}</p>
+          </div>
+          <span className="pill pill-neutral">{tx('DEMO')}</span>
         </div>
-      </div>
-      <div className="status-grid" style={{ marginTop: 17 }}>
-        {rows.map(([label, val]) => (
-          <div key={label} className="status-item"><div className="status-label">{t(label)}</div><div className="status-text">{tx(val)}</div><StatusPill text={val} /></div>
-        ))}
-      </div>
+        <dl className="result-facts">
+          <div className="result-fact"><dt>{t('bookingRef')}</dt><dd className="mono">{b.ref}</dd></div>
+          <div className="result-fact"><dt>{t('routeLabel')}</dt><dd>{tx(ORIGIN)} → {tx(b.dest)}</dd></div>
+          <div className="result-fact"><dt>{t('departureTime')}</dt><dd>{b.date} · <span className="mono">{formatTime(b.time, lang)}</span></dd></div>
+          <div className="result-fact"><dt>{t('passengers')}</dt><dd>{b.passengers}</dd></div>
+          <div className="result-fact"><dt>{t('boat')}</dt><dd>{boat ? boat.name[lang] : tx(b.service)}</dd></div>
+          <div className="result-fact"><dt>{t('total')}</dt><dd>SAR {Number(b.amount).toLocaleString('en-US')}</dd></div>
+        </dl>
+        {b.return && (
+          <p className="result-note">
+            {t('returnLeg')} · {b.return.date} · <b className="mono">{formatTime(b.return.time, lang)}</b>
+            {returnBoat && <> · {returnBoat.name[lang]}</>} — {tx('separate sailing and ticket.')}
+          </p>
+        )}
+      </section>
+
       {b.tickets && b.tickets.length > 0 && (
-        <div className="inset" style={{ marginTop: 14 }}>
-          <strong>{t('ticketsQrTitle')}</strong>
+        <section className="card card-pad result-tickets" aria-labelledby="result-tickets-title">
+          <div className="result-section-head">
+            <h3 className="result-section-title" id="result-tickets-title">{t('ticketsQrTitle')}</h3>
+            <span className="result-count">{b.tickets.length}</span>
+          </div>
           <div className="ticket-qr-grid">
             {b.tickets.map(tk => <TicketQrCard key={tk.id} ticket={tk} t={t}
               entry={entries.find(e => e.ticket.id === tk.id)} saved={savedTicketIds.has(tk.id)} />)}
           </div>
-          <p className="small muted">{t('ticketsQrNote')}</p>
-        </div>
+          <p className="result-note">{t('ticketsQrNote')}</p>
+        </section>
       )}
-      {b.return && (
-        <div className="inset" style={{ marginTop: 14 }}>
-          <strong>{t('returnLeg')} · {b.return.date} · <span className="mono">{formatTime(b.return.time, lang)}</span>{b.return.boatId && <> · {BOATS.find(x => x.id === b.return?.boatId)?.name[lang]}</>}</strong>
-          <div className="small muted">{tx(b.return.dest)} — {tx('separate sailing and ticket.')}</div>
-        </div>
-      )}
+
+      <section className="card card-pad result-status" aria-labelledby="result-status-title">
+        <h3 className="result-section-title" id="result-status-title">{t('resultStatusesTitle')}</h3>
+        <ul className="result-status-list">
+          {rows.map(([label, val]) => (
+            <li key={label}><span className="result-status-label">{t(label)}</span><StatusPill text={val} /></li>
+          ))}
+        </ul>
+        <p className="result-note">{t('thresholdExplainer')}</p>
+      </section>
+
       {wizard.service === 'combined' && (
-        <div className="notice warn" style={{ marginTop: 14 }}><strong>{t('materialPending')}</strong>{tx('Passenger fare only is shown. Materials still require review/quote and are not included in the total.')}</div>
+        <div className="notice warn result-notice"><strong>{t('materialPending')}</strong>{tx('Passenger fare only is shown. Materials still require review/quote and are not included in the total.')}</div>
       )}
-      <div className="notice warn" style={{ marginTop: 17 }}><strong>{t('thresholdStatus')}</strong>{t('thresholdExplainer')}</div>
-      <div className="between" style={{ marginTop: 19 }}>
+      <div className="result-actions">
         <button type="button" className="btn btn-outline" onClick={() => navigate('/bookings')}>{t('viewBookings')}</button>
         <button type="button" className="btn btn-primary" onClick={resetWizard}>{t('newBooking')}</button>
       </div>
@@ -563,8 +589,26 @@ export default function BookingView() {
   const { t, tx, lang } = useLanguage();
   const { wizard } = useDemo();
   const step = wizard.bookStep;
+  const flowRef = useRef<HTMLDivElement>(null);
+  const shownStep = useRef(step);
+
+  // A successful step change starts at the top of the new step: the previous scroll position can sit
+  // near the bottom of a long step (phones especially), leaving the next step's heading off-screen.
+  // Only a real bookStep change triggers this — validation failures never advance the step.
+  //
+  // 'instant' rather than 'auto': the document sets `scroll-behavior:smooth`, and a smooth jump both
+  // delays the new step and makes the final position depend on how far the user had scrolled.
+  useEffect(() => {
+    if (shownStep.current === step) return;
+    shownStep.current = step;
+    const headerBottom = document.querySelector('.app-header')?.getBoundingClientRect().bottom ?? 0;
+    const stepper = flowRef.current?.querySelector<HTMLElement>('.stepper') ?? flowRef.current;
+    const start = stepper?.getBoundingClientRect().top ?? 0;
+    window.scrollTo({ top: Math.max(0, start + window.scrollY - headerBottom - 10), behavior: 'instant' as ScrollBehavior });
+  }, [step]);
+
   return (
-    <div className="booking-flow" data-step={step}>
+    <div className="booking-flow" data-step={step} ref={flowRef}>
       <PageHeader titleKey="bookTitle" subKey="bookSub" eyebrow="ATCO MARINE / CUSTOMER" />
       <div className="hero-panel" style={{ marginBottom: 18 }}>
         <div className="eyebrow hero-eyebrow">{t('heroEyebrow')}</div>

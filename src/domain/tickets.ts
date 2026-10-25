@@ -41,15 +41,23 @@ function randomSuffix(): string {
   }
 }
 
-/** Creates a per-passenger, per-leg ticket list. IDs are persisted with the
- *  booking, so they survive reloads and rerenders unchanged. */
-export function createTickets(leg: TicketLeg, passengerNames: string[]): Ticket[] {
-  return passengerNames.map(passengerName => ({
-    id: `GMTK-${randomSuffix()}`,
-    leg,
-    passengerName,
-    status: 'notBoarded' as TicketStatus,
-  }));
+/**
+ * Creates a per-passenger, per-leg ticket list. IDs are generated once here and stored on the
+ * booking, so they survive reloads and rerenders unchanged. `isTaken` lets the caller reject an ID
+ * already used by another ticket, so two tickets can never share an identity.
+ */
+export function createTickets(
+  leg: TicketLeg,
+  passengerNames: string[],
+  isTaken: (id: string) => boolean = () => false,
+): Ticket[] {
+  const issued = new Set<string>();
+  return passengerNames.map(passengerName => {
+    let id = `GMTK-${randomSuffix()}`;
+    for (let attempt = 0; (issued.has(id) || isTaken(id)) && attempt < 20; attempt++) id = `GMTK-${randomSuffix()}`;
+    issued.add(id);
+    return { id, leg, passengerName, status: 'notBoarded' as TicketStatus };
+  });
 }
 
 /** Deterministic ticket list for the seeded sample bookings (stable across reloads). */

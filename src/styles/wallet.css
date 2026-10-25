@@ -2,11 +2,21 @@
    Simulated experience; no real pass is installed and no Apple branding is copied. */
 
 /* ---------- Ticket QR (shared) ---------- */
-.qr-code{display:inline-flex;flex-direction:column;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px}
-.qr-payload{max-width:210px;overflow-wrap:anywhere;text-align:center}
-.ticket-qr-grid{display:grid;gap:10px;margin-top:12px}
-.ticket-qr-card{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;flex-wrap:wrap}
-.ticket-qr-body{display:grid;gap:4px;min-width:150px}
+.qr-code{display:inline-flex;flex-direction:column;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px;max-width:100%}
+.qr-code svg{display:block;max-width:100%;height:auto}
+.qr-payload{max-width:210px;overflow-wrap:anywhere;text-align:center;color:#5a6b78}
+/* One ticket = one card: QR, leg, passenger, opaque reference and state, all centred. */
+.ticket-qr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-top:12px}
+.ticket-qr-card{display:grid;justify-items:center;gap:11px;text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px 14px;min-width:0}
+.ticket-qr-card .row{justify-content:center}
+.ticket-qr-body{display:grid;gap:4px;justify-items:center;min-width:0;max-width:100%}
+.ticket-leg{font-size:10px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;color:var(--teal)}
+[dir="rtl"] .ticket-leg{letter-spacing:normal}
+.ticket-passenger{font-size:14px;color:var(--ink);overflow-wrap:anywhere;max-width:100%}
+.ticket-id{font-size:11.5px;font-weight:650;letter-spacing:.01em;color:var(--ink2);overflow-wrap:anywhere;max-width:100%}
+.ticket-hint{margin:0;font-size:10px;line-height:1.45;color:var(--muted);max-width:34ch}
+/* The QR stays on white in both themes so the quiet zone and contrast never change. */
+[data-theme="dark"] .qr-code{background:#fff;border-color:rgba(255,255,255,.5)}
 
 /* ---------- Pass visual ---------- */
 .pass-card{position:relative;border-radius:20px;overflow:hidden;color:#fff;background:linear-gradient(145deg,var(--navy) 0%,var(--navy2) 62%,#0f2c4c 100%);box-shadow:0 14px 34px rgba(18,52,90,.35);text-align:start}

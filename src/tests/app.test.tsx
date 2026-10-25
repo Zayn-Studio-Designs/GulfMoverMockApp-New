@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { beforeEach, describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppProviders, AppRoutes } from '../App';
@@ -122,6 +122,35 @@ describe('language toggle', () => {
   });
 });
 
+describe('booking step transitions', () => {
+  // Phones left the user scrolled near the bottom of a long step: every successful Next must
+  // return to the top of the new step, and a blocked Next must not move the page at all.
+  test('a successful step change scrolls back to the top of the new step', async () => {
+    await renderApp('/book');
+    const scroll = vi.spyOn(window, 'scrollTo');
+    scroll.mockClear();
+    click(/Continue/);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    // 'instant' overrides the document's smooth scrolling, so the next step is in place at once.
+    expect(scroll.mock.calls[0][0]).toMatchObject({ behavior: 'instant' });
+    click(/Continue/);
+    expect(scroll).toHaveBeenCalledTimes(2);
+    scroll.mockRestore();
+  });
+
+  test('a step that cannot advance does not move the page', async () => {
+    await renderApp('/book');
+    click(/Continue/); // → journey
+    click(/Continue/); // → details
+    const scroll = vi.spyOn(window, 'scrollTo');
+    scroll.mockClear();
+    click(/Continue/); // required fields empty → validation message, same step
+    expect(screen.getByRole('alert')).toHaveTextContent('Please complete the name, email and phone fields.');
+    expect(scroll).not.toHaveBeenCalled();
+    scroll.mockRestore();
+  });
+});
+
 describe('booking flow', () => {
   test('return leg doubles the fare and statuses stay separate', async () => {
     await renderApp('/');
@@ -151,7 +180,7 @@ describe('booking flow', () => {
     click(/Simulate payment recorded/);
     click('Show booking result');
 
-    expect(screen.getByText('Booking result')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Booking confirmed (demo)' })).toBeInTheDocument();
     // 07:00 already holds 2 tickets; this booking adds 2 more → minimum met across bookings.
     expect(screen.getAllByText('Minimum met (demo)').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Awaiting ATCO decision').length).toBeGreaterThan(0);

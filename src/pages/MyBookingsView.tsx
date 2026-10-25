@@ -182,13 +182,13 @@ function TicketDetailRow({ entry, saved, t, lang, onAdd, onOpen }: {
   const device = useHostDevice();
   const onPhone = device === 'iphone' || device === 'android';
   return (
-    <div className="ticket-qr-card">
-      <QRCodeTicket ticketId={entry.ticket.id} size={110} />
+    <article className="ticket-qr-card">
+      <QRCodeTicket ticketId={entry.ticket.id} />
       <div className="ticket-qr-body">
-        <strong>{entry.leg === 'return' ? t('returnLeg') : t('outboundLeg')}
-          <span className="tiny muted"> · {entry.legDate} · <span className="mono">{formatTime(entry.legTime, lang)}</span></span>
-        </strong>
-        <div className="tiny muted">{legTicket?.passengerName || entry.ticket.passengerName} · <span className="mono">{entry.ticket.id}</span></div>
+        <span className="ticket-leg">{entry.leg === 'return' ? t('returnLeg') : t('outboundLeg')}</span>
+        <strong className="ticket-passenger">{legTicket?.passengerName || entry.ticket.passengerName}</strong>
+        <span className="ticket-id mono" dir="ltr">{entry.ticket.id}</span>
+        <span className="tiny muted">{entry.legDate} · <span className="mono">{formatTime(entry.legTime, lang)}</span></span>
         <span className={`pill tiny ${entry.ticket.status === 'boarded' ? 'pill-green' : 'pill-gold'}`}>
           {entry.ticket.status === 'boarded' ? t('ticketBoarded') : t('ticketNotBoarded')}
         </span>
@@ -200,6 +200,6 @@ function TicketDetailRow({ entry, saved, t, lang, onAdd, onOpen }: {
             ? <button type="button" className="btn btn-outline btn-small" onClick={onOpen}>{t('walletOpenSaved')}</button>
             : <button type="button" className="btn btn-primary btn-small" onClick={onAdd}>{t('walletAdd')}</button>}
       </div>
-    </div>
+    </article>
   );
 }
