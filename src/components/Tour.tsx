@@ -21,7 +21,9 @@ const CUSTOMER_STEPS: ReadonlyArray<TourStep> = [
   { target: 'nav-navBookings', route: '/bookings', title: 'tourBookingsTitle', body: 'tourBookingsBody' },
   { target: 'booking-card', route: '/bookings', title: 'tourCardTitle', body: 'tourCardBody' },
   { target: 'account', route: '/settings', title: 'tourAccountTitle', body: 'tourAccountBody' },
-  { target: 'language', title: 'tourLangTitle', body: 'tourLangBody' },
+  // The language switch lives inside the profile menu, which is closed during the tour, so the step
+  // points at the profile button and explains the action instead of spotlighting a hidden control.
+  { target: 'account', title: 'tourLangTitle', body: 'tourLangBody' },
   { target: 'home-book', route: '/', title: 'tourDoneTitle', body: 'tourDoneBody' },
 ];
 

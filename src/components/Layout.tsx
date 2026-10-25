@@ -12,22 +12,43 @@ import { Icon, type IconName } from './Icon';
 import { Tour, hasSeenTour, markTourSeen } from './Tour';
 import { ErrorBoundary } from './ErrorBoundary';
 
+interface NavItem {
+  to: string;
+  key: string;
+  icon: IconName;
+  /** Phone-only entry: the desktop staff sidebar keeps its existing destinations. */
+  mobileOnly?: boolean;
+  /** Desktop-only entry: the phone staff bar shows the six destinations a crew needs on site. */
+  desktopOnly?: boolean;
+  /** The phone staff entry that opens the Agent Ops chooser instead of a single page. */
+  hub?: boolean;
+}
+
+/** Destinations grouped behind the phone staff “Agent Ops” entry; both pages keep their own routes. */
+const AGENT_OPS_LINKS: ReadonlyArray<NavItem> = [
+  { to: '/corporate', key: 'navCorporate', icon: 'navCorporate' },
+  { to: '/operations', key: 'navOps', icon: 'navOps' },
+];
+
 /**
  * Navigation shown to each demo view. Navigation filtering is UI-only: every route
  * stays reachable by URL and the demo banner carries the no-real-permissions notice.
  */
-export const NAV_ITEMS: ReadonlyArray<{ to: string; key: string; icon: IconName }> = [
-  { to: '/book', key: 'navBook', icon: 'navBook' },
+export const NAV_ITEMS: ReadonlyArray<NavItem> = [
+  { to: '/', key: 'navHome', icon: 'home', mobileOnly: true },
+  { to: '/book', key: 'navBook', icon: 'navBook', desktopOnly: true },
   { to: '/bookings', key: 'navBookings', icon: 'navBookings' },
-  { to: '/corporate', key: 'navCorporate', icon: 'navCorporate' },
-  { to: '/operations', key: 'navOps', icon: 'navOps' },
+  { to: '/corporate', key: 'navCorporate', icon: 'navCorporate', desktopOnly: true },
+  { to: '/operations', key: 'navOps', icon: 'navOps', desktopOnly: true },
+  // Phone-only stand-in for those two pages, in the position the six-entry bar expects.
+  { to: '#agent-ops', key: 'navAgentOps', icon: 'grid', hub: true, mobileOnly: true },
   { to: '/boarding', key: 'navBoarding', icon: 'board' },
   { to: '/materials', key: 'navMaterials', icon: 'box' },
   { to: '/fleet', key: 'navFleet', icon: 'ship' },
 ];
 
 /** Customer destinations: only what a booking customer needs every day. */
-const CUSTOMER_NAV: ReadonlyArray<{ to: string; key: string; icon: IconName }> = [
+const CUSTOMER_NAV: ReadonlyArray<NavItem> = [
   { to: '/', key: 'navHome', icon: 'home' },
   { to: '/book', key: 'navBook', icon: 'navBook' },
   { to: '/bookings', key: 'navBookings', icon: 'navBookings' },
@@ -40,7 +61,7 @@ const CUSTOMER_NAV: ReadonlyArray<{ to: string; key: string; icon: IconName }> =
  * behind the ? button, so none of them is repeated here.
  */
 function AccountMenu() {
-  const { t } = useLanguage();
+  const { t, lang, setLang } = useLanguage();
   const { user, signOut } = useAuth();
   const { toast } = useUi();
   const navigate = useNavigate();
@@ -75,6 +96,15 @@ function AccountMenu() {
           </div>
           <Link role="menuitem" className="account-item" to="/settings" onClick={() => setOpen(false)}>{t('profile')}</Link>
           <Link role="menuitem" className="account-item" to="/settings?tab=security" onClick={() => setOpen(false)}>{t('securityTab')}</Link>
+          {/* Language lives here now, between Security and All settings. The menu stays open so
+              the whole menu switches language in place. */}
+          <div className="account-lang" data-tour="language">
+            <span className="account-lang-label">{t('languageTitle')}</span>
+            <div className="lang-toggle" role="group" aria-label={t('languageTitle')}>
+              <button type="button" className={lang === 'en' ? 'active' : ''} aria-pressed={lang === 'en'} onClick={() => setLang('en')}>EN</button>
+              <button type="button" className={lang === 'ar' ? 'active' : ''} aria-pressed={lang === 'ar'} onClick={() => setLang('ar')} lang="ar">العربية</button>
+            </div>
+          </div>
           <Link role="menuitem" className="account-item" to="/settings?tab=preferences" onClick={() => setOpen(false)}>{t('settingsLink')}</Link>
           <div className="account-sep" />
           <button role="menuitem" type="button" className="account-item account-signout" onClick={() => { setOpen(false); signOut(); toast(t('signedOut')); navigate('/signin'); }}>{t('signOut')}</button>
@@ -101,15 +131,43 @@ function ScreenError({ retry }: { retry: () => void }) {
 }
 
 export function Layout() {
-  const { lang, setLang, t } = useLanguage();
+  const { t } = useLanguage();
   const { user, signedOutByUser } = useAuth();
   const { isCustomer, setMode } = useWorkMode();
   const { resetDemoData } = useDemo();
   const { toast } = useUi();
   const { pathname, search } = useLocation();
   const [tourOpen, setTourOpen] = useState(false);
+  const [hubOpen, setHubOpen] = useState(false);
+  const hubRef = useRef<HTMLDivElement>(null);
+  const hubTriggerRef = useRef<HTMLButtonElement>(null);
+  const agentOpsActive = pathname === '/corporate' || pathname === '/operations';
+
+  // The Agent Ops chooser groups the two staff pages on the phone bar. It closes on navigation,
+  // Escape or a tap outside it — the same dismissal the profile menu uses.
+  useEffect(() => { setHubOpen(false); }, [pathname]);
+  useEffect(() => {
+    if (!hubOpen) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      const target = e.target as Node;
+      if (hubRef.current?.contains(target) || hubTriggerRef.current?.contains(target)) return;
+      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
+      setHubOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close); };
+  }, [hubOpen]);
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [pathname]);
+
+  // On phones the navigation row scrolls sideways once the staff view has more destinations than
+  // fit, so bring the active one into view after every navigation or view change.
+  useEffect(() => {
+    const list = document.querySelector<HTMLElement>('.nav-list');
+    if (!list || list.scrollWidth <= list.clientWidth) return;
+    list.querySelector<HTMLElement>('.nav-btn.active')?.scrollIntoView?.({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }, [pathname, isCustomer]);
 
   // Each step opens its own page, so the tour can start from anywhere.
   const startTour = useCallback(() => setTourOpen(true), []);
@@ -142,10 +200,6 @@ export function Layout() {
           <div className="header-tag">{t('productTag')}</div>
           <div className="header-spacer" />
           <div className="head-actions">
-            <div className="lang-toggle" data-tour="language">
-              <button type="button" className={lang === 'en' ? 'active' : ''} aria-pressed={lang === 'en'} onClick={() => setLang('en')}>EN</button>
-              <button type="button" className={lang === 'ar' ? 'active' : ''} aria-pressed={lang === 'ar'} onClick={() => setLang('ar')} lang="ar">العربية</button>
-            </div>
             {/* Signed-out visitors can open only the public ATCO page; the tour needs an account. */}
             {user && <button type="button" className="tour-btn" data-tour="account" aria-label={t('tourStart')} title={t('tourStart')} onClick={startTour}>?</button>}
             {/* Opens the same Notifications settings page the profile menu used to link to. */}
@@ -164,9 +218,17 @@ export function Layout() {
             </div>
             <small>{t('wsDemoHint')}</small>
           </div>
-          <nav className="nav-list" aria-label={t('mainNavigation')} data-tour="nav">
-            {(isCustomer ? CUSTOMER_NAV : NAV_ITEMS).map(item => (
-              <NavLink key={item.to} to={item.to} end className={({ isActive }) => `nav-btn${isActive ? ' active' : ''}`}
+          <nav className={`nav-list${isCustomer ? '' : ' nav-list-staff'}`} aria-label={t('mainNavigation')} data-tour="nav">
+            {(isCustomer ? CUSTOMER_NAV : NAV_ITEMS).map(item => item.hub ? (
+              <button key={item.key} type="button" ref={hubTriggerRef} data-tour={`nav-${item.key}`}
+                className={`nav-btn nav-hub${agentOpsActive ? ' active' : ''}${item.mobileOnly ? ' nav-mobile-only' : ''}`}
+                aria-haspopup="menu" aria-expanded={hubOpen} onClick={() => setHubOpen(open => !open)}>
+                <Icon name={item.icon} />
+                <span className="nav-full">{t(item.key)}</span>
+                <span className="nav-short">{t(`${item.key}Short`)}</span>
+              </button>
+            ) : (
+              <NavLink key={item.to} to={item.to} end className={({ isActive }) => `nav-btn${isActive ? ' active' : ''}${item.mobileOnly ? ' nav-mobile-only' : ''}${item.desktopOnly ? ' nav-desktop-only' : ''}`}
                 data-tour={`nav-${item.key}`}>
                 <Icon name={item.icon} />
                 <span className="nav-full">{t(item.key)}</span>
@@ -174,6 +236,17 @@ export function Layout() {
               </NavLink>
             ))}
           </nav>
+          {/* Phone-only chooser: both underlying pages keep their own routes and demo state. */}
+          {hubOpen && !isCustomer && (
+            <div className="nav-hub-pop" role="menu" aria-label={t('navAgentOps')} ref={hubRef}>
+              {AGENT_OPS_LINKS.map(item => (
+                <Link key={item.to} role="menuitem" className="nav-hub-item" to={item.to} onClick={() => setHubOpen(false)}>
+                  <Icon name={item.icon} />
+                  <span>{t(item.key)}</span>
+                </Link>
+              ))}
+            </div>
+          )}
           <div className="side-note"><strong>{t('sampleWorkspace')}</strong><span>{t('demoSideNote')}</span></div>
           <button type="button" className="side-reset" onClick={onReset}><Icon name="reset" />{t('resetDemo')}</button>
         </aside>

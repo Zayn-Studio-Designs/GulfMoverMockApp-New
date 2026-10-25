@@ -32,6 +32,14 @@ beforeEach(() => {
 const heading = () => screen.getByRole('heading', { level: 1 });
 const click = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
 
+/** The interface language now lives in the profile menu: open it, switch, then dismiss it. */
+const switchLanguage = (name: 'EN' | 'العربية') => {
+  if (!screen.queryByRole('menu')) click(document.documentElement.lang === 'ar' ? 'قائمة الحساب' : 'Account menu');
+  fireEvent.click(screen.getByRole('button', { name }));
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('menu')).toBeNull();
+};
+
 describe('navigation', () => {
   test('customer view shows only customer destinations', async () => {
     await renderApp();
@@ -95,13 +103,13 @@ describe('customer home', () => {
 describe('language toggle', () => {
   test('Arabic translates the UI and switches to RTL; English restores it', async () => {
     await renderApp('/operations');
-    click('العربية');
+    switchLanguage('العربية');
     expect(document.documentElement.dir).toBe('rtl');
     expect(document.documentElement.lang).toBe('ar');
     expect(heading()).toHaveTextContent('نظرة عامة على العمليات');
     expect(screen.getAllByText('منطقة الرسو المعتمدة أ (تجريبي)').length).toBeGreaterThan(0);
     expect(screen.queryByText('Approved Anchorage A (Demo)')).toBeNull();
-    click('EN');
+    switchLanguage('EN');
     expect(document.documentElement.dir).toBe('ltr');
     expect(heading()).toHaveTextContent('Operations overview');
   });
@@ -109,7 +117,7 @@ describe('language toggle', () => {
   test('demo state survives a language switch', async () => {
     await renderApp('/book');
     click(/Material transfer/);
-    click('العربية');
+    switchLanguage('العربية');
     expect(screen.getByRole('button', { name: /نقل مواد/ })).toHaveAttribute('aria-pressed', 'true');
   });
 });
@@ -461,7 +469,7 @@ describe('header: profile menu and notifications bell', () => {
 
   test('in Arabic the header order and the bell label are translated', async () => {
     await renderApp('/');
-    click('العربية');
+    switchLanguage('العربية');
     expect(await screen.findByRole('link', { name: 'الإشعارات' })).toHaveAttribute('href', '/settings?tab=notifications');
     const help = screen.getByRole('button', { name: 'جولة تعريفية' });
     const bell = screen.getByRole('link', { name: 'الإشعارات' });
@@ -474,6 +482,178 @@ describe('header: profile menu and notifications bell', () => {
     expect(within(menu).queryByRole('menuitem', { name: 'الإشعارات' })).toBeNull();
     expect(within(menu).queryByRole('menuitem', { name: 'الشركة' })).toBeNull();
     expect(within(menu).getByRole('menuitem', { name: 'تسجيل الخروج' })).toBeInTheDocument();
+  });
+});
+
+describe('navigation, header and booking banner', () => {
+  const stylesheet = () => readFileSync(path.join(process.cwd(), 'src/styles/index.css'), 'utf8');
+  const order = (a: Element, b: Element) =>
+    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  test('the profile menu holds the language selector between Security and All settings', async () => {
+    await renderApp('/');
+    click('Account menu');
+    const menu = screen.getByRole('menu');
+    const security = within(menu).getByRole('menuitem', { name: 'Security & password' });
+    const language = within(menu).getByRole('group', { name: 'Language' });
+    const allSettings = within(menu).getByRole('menuitem', { name: 'All settings' });
+    expect(order(security, language)).toBe(true);
+    expect(order(language, allSettings)).toBe(true);
+    // Among the menu items, All settings is immediately above Sign out.
+    expect(within(menu).getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+      'Profile', 'Security & password', 'All settings', 'Sign out',
+    ]);
+    expect(within(language).getByRole('button', { name: 'EN' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(language).getByRole('button', { name: 'العربية' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('the language switch has left the header and still switches to RTL and back', async () => {
+    await renderApp('/');
+    const header = document.querySelector('.app-header') as HTMLElement;
+    expect(header.querySelector('.lang-toggle')).toBeNull();
+    const help = screen.getByRole('button', { name: 'Take the tour' });
+    const bell = screen.getByRole('link', { name: 'Notifications' });
+    const profile = screen.getByRole('button', { name: 'Account menu' });
+    expect([help, bell, profile].every(el => header.contains(el))).toBe(true);
+    expect(order(help, bell)).toBe(true);
+    expect(order(bell, profile)).toBe(true);
+
+    switchLanguage('العربية');
+    expect(document.documentElement.dir).toBe('rtl');
+    expect(screen.getByRole('link', { name: 'الإشعارات' })).toBeInTheDocument();
+    switchLanguage('EN');
+    expect(document.documentElement.dir).toBe('ltr');
+  });
+
+  test('the staff navigation starts at Home and keeps its desktop destinations', async () => {
+    await renderApp();
+    click('ATCO staff (demo)');
+    const nav = (await screen.findAllByRole('navigation', { name: 'Main navigation' }))[0];
+    expect(within(nav).getAllByRole('link')[0]).toHaveAccessibleName('Home');
+    for (const name of ['Home', 'My Bookings', 'Corporate / Agent', 'Operations', 'Boarding Desk', 'Materials', 'Fleet']) {
+      expect(within(nav).getByRole('link', { name })).toBeInTheDocument();
+    }
+    // Phone row: Home is added; Book Transfer, Corporate/Agent and Operations are desktop-only,
+    // the last two behind the single Agent Ops entry.
+    expect(nav.className).toContain('nav-list-staff');
+    expect(within(nav).getByRole('link', { name: 'Home' }).className).toContain('nav-mobile-only');
+    for (const name of ['Book Transfer', 'Corporate / Agent', 'Operations']) {
+      expect(within(nav).getByRole('link', { name }).className).toContain('nav-desktop-only');
+    }
+    const hub = within(nav).getByRole('button', { name: /Agent Ops/ });
+    expect(hub).toHaveAttribute('aria-haspopup', 'menu');
+    expect(hub).toHaveAttribute('aria-expanded', 'false');
+    expect(hub.className).toContain('nav-mobile-only');
+    // Six entries reach the phone bar: Home, Bookings, Agent Ops, Boarding, Materials, Fleet.
+    expect(nav.querySelectorAll('.nav-btn:not(.nav-desktop-only)').length).toBe(6);
+  });
+
+  test('the customer navigation is unchanged', async () => {
+    await renderApp();
+    const nav = (await screen.findAllByRole('navigation', { name: 'Main navigation' }))[0];
+    expect(within(nav).getAllByRole('link').map(link => link.getAttribute('data-tour'))).toEqual([
+      'nav-navHome', 'nav-navBook', 'nav-navBookings', 'nav-navAccount',
+    ]);
+    expect(nav.className).not.toContain('nav-list-staff');
+    expect(within(nav).queryByRole('link', { name: 'Operations' })).toBeNull();
+  });
+
+  // jsdom does not lay these out, so the rules that implement the requested layout are guarded here.
+  test('navigation labels are never underlined', () => {
+    const sheet = stylesheet();
+    expect(sheet).toMatch(/\.nav-btn\{[^}]*text-decoration:none/);
+    expect(sheet).not.toMatch(/\.nav-btn[^{}]*\{[^}]*text-decoration:underline/);
+  });
+
+  test('the phone staff row scrolls sideways with unsqueezed items', () => {
+    const sheet = stylesheet();
+    expect(sheet).toMatch(/\.nav-list\{justify-content:flex-start;overflow-x:auto/);
+    expect(sheet).toMatch(/\.nav-list-staff \.nav-btn\{flex:0 0 auto;width:auto;min-width:74px\}/);
+    expect(sheet).toMatch(/@media\(min-width:781px\)\{\.nav-mobile-only\{display:none\}\}/);
+    expect(sheet).toMatch(/@media\(max-width:780px\)\{\.nav-desktop-only\{display:none\}\}/);
+  });
+
+  test('the booking-start banner uses light text on the green panel', () => {
+    expect(stylesheet()).toMatch(/\.hero-panel h1,\.hero-panel h2,\.hero-panel h3\{color:#fff\}/);
+  });
+
+  test('the header drops the subtitle only at widths where it cannot fit', () => {
+    // 375 px and up keep the full “Marine transfers · Ras Tanura” line; 320 px would cut it off.
+    expect(stylesheet()).toMatch(/@media\(max-width:360px\)\{\.brand-sub\{display:none\}\}/);
+  });
+});
+
+describe('phone staff Agent Ops entry', () => {
+  const openStaffNav = async () => {
+    await renderApp();
+    click('ATCO staff (demo)');
+    const nav = (await screen.findAllByRole('navigation', { name: 'Main navigation' }))[0];
+    return { nav, hub: within(nav).getByRole('button', { name: /Agent Ops/ }) };
+  };
+  const chooser = () => screen.getByRole('menu', { name: 'Agent Ops' });
+
+  test('groups the Corporate/Agent and Operations pages behind one bar entry', async () => {
+    const { hub } = await openStaffNav();
+    fireEvent.click(hub);
+    expect(hub).toHaveAttribute('aria-expanded', 'true');
+    expect(within(chooser()).getAllByRole('menuitem').map(item => item.textContent)).toEqual([
+      'Corporate / Agent', 'Operations',
+    ]);
+  });
+
+  test('both grouped destinations open their own page and leave demo data intact', async () => {
+    const { nav, hub } = await openStaffNav();
+    fireEvent.click(hub);
+    fireEvent.click(within(chooser()).getByRole('menuitem', { name: 'Operations' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Operations overview' })).toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: 'Agent Ops' })).toBeNull();
+    // The entry stays marked while either of its pages is open.
+    expect(within(nav).getByRole('button', { name: /Agent Ops/ })).toHaveClass('active');
+
+    fireEvent.click(within(nav).getByRole('button', { name: /Agent Ops/ }));
+    fireEvent.click(within(chooser()).getByRole('menuitem', { name: 'Corporate / Agent' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Corporate & agent workspace' })).toBeInTheDocument();
+    // Navigating through the chooser does not reset the workspace or the sample bookings.
+    expect(localStorage.getItem('gm-demo-workspace')).toBe('staff');
+    fireEvent.click(within(nav).getByRole('link', { name: 'Home' }));
+    expect(await screen.findByText('GM-DEMO-0248')).toBeInTheDocument();
+  });
+
+  test('Escape and an outside tap dismiss the chooser', async () => {
+    const { hub } = await openStaffNav();
+    fireEvent.click(hub);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menu', { name: 'Agent Ops' })).toBeNull();
+    fireEvent.click(hub);
+    expect(chooser()).toBeInTheDocument();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('menu', { name: 'Agent Ops' })).toBeNull();
+  });
+
+  test('the chooser is styled as a panel above the phone bar', () => {
+    const sheet = readFileSync(path.join(process.cwd(), 'src/styles/index.css'), 'utf8');
+    expect(sheet).toMatch(/\.nav-hub-pop\{position:absolute[^}]*bottom:calc\(100% \+ 8px\)/);
+    expect(sheet).toMatch(/@media\(max-width:780px\)\{\s*\.nav-hub\[aria-expanded="true"\]/);
+  });
+});
+
+describe('guided tour language step', () => {
+  test('the English tour explains that the language switch sits in the profile menu', async () => {
+    await renderApp('/');
+    click('Take the tour');
+    await screen.findByRole('dialog', { name: 'Welcome to ATCO Marine' });
+    for (let i = 0; i < 7; i++) fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Next/ }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Open your profile menu');
+    expect(screen.getByRole('dialog')).toHaveTextContent('English or العربية');
+  });
+
+  test('the Arabic tour explains the new location in Arabic', async () => {
+    await renderApp('/');
+    switchLanguage('العربية');
+    click('جولة تعريفية');
+    await screen.findByRole('dialog');
+    for (let i = 0; i < 7; i++) fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /التالي/ }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('افتح قائمة حسابك');
   });
 });
 
