@@ -202,6 +202,15 @@ describe('production mode: real auth service behind the same interface', () => {
     expect(api.user).toBeNull();
   });
 
+  it('a rejected sign-up surfaces an error and never fakes confirmation or a session', async () => {
+    svc.signUp.mockRejectedValueOnce(new AuthOperationError('User already registered', 'user_already_exists', 422));
+    renderAuth();
+    await waitFor(() => expect(api.authMode).toBe('production'));
+    await expect(api.signUp({ email: 'taken@example.test', username: 'taken', company: 'Co', password: 'pw-real-1', confirm: 'pw-real-1' })).resolves.toBe('errEmailTaken');
+    expect(api.user).toBeNull();
+    expect(api.confirmationPending).toBeNull();
+  });
+
   it('sign out clears the user and calls the service', async () => {
     svc.signIn.mockResolvedValueOnce({ userId: 'auth-user-1', session: sessionOf('signed-in@example.test', 'User') });
     svc.signOut.mockResolvedValueOnce(undefined);

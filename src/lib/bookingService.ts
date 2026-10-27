@@ -322,7 +322,7 @@ export async function getSailingManifest(sailingId: string, env?: EnvSource): Pr
   const client = requireDataClient(env);
   await requireSessionUser(client);
   const { data } = await run(client.from('booking_legs')
-    .select('leg, passengers, booking:bookings(reference, contact_name, contact_phone, organization:organizations(legal_name))')
+    .select('leg, passengers, booking:bookings(reference, contact_name, contact_phone, organization:organizations!bookings_organization_id_fkey(legal_name))')
     .eq('sailing_id', sailingId).order('created_at', { ascending: true }).limit(1000));
   return (Array.isArray(data) ? data as Record<string, unknown>[] : []).map(row => {
     const booking = one(row.booking);

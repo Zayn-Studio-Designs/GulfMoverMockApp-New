@@ -556,3 +556,38 @@ devices and Safari camera scanning, screen readers and a native Arabic-speaker r
 load/soak/rate limiting, and concurrency beyond ~10 simultaneous writers. See the Phase 6 report for
 the ~76% mock-scope estimate and the explicit statement that this is **not** a production readiness
 claim.
+
+## Verification — Phase 7 ATCO requirements (branch `feature/phase7-atco-requirements`)
+
+Local stack only (native `supabase stack`, loopback `127.0.0.1`, fictional `example.test` data).
+No hosted project contacted; no real money, mail or credentials involved.
+
+| Check | Command / method | Result |
+|---|---|---|
+| Type check | `npm run typecheck` | Pass — 0 errors |
+| Full suite | `npm test` | Pass — 28 files, 454 passed, 1 skipped |
+| Phase 7 DB suite | `npx vitest run src/tests/integration/phase7.atco.integration.test.ts` | Pass — 9/9 (tariff/terms, individual booking + idempotent replay, stranger isolation, agent booking + cross-company isolation, amend/cancel + seat release, sandbox initiate/verify/invoice + gated refund, minimum-sailing status, materials ATCO fields + attachment rejection, staff reports + role gating) |
+| Phase 6 security | `npx vitest run src/tests/integration/phase6.security.integration.test.ts` | Pass — 20/20 (after narrowing `tariffs`/`service_policies`/`material_tariffs` revokes to include `authenticated, service_role`; column-grant probe is 0 rows) |
+| Production build | `npm run build` | Pass |
+| Diff hygiene | `git diff --check` | Clean |
+| Browser journeys | `npm run test:e2e:local` (production build on `http://127.0.0.1:4321`) | Pass — 52/52 |
+
+Findings fixed during this run:
+- Double-backslash regex literals in `_reserve_booking`/`amend_booking`/materials validation rejected
+  every real contact email/phone (fixed in-place; backslash-free POSIX classes).
+- Ambiguous `status` OUT-parameter in booking RPCs (qualified to `sp.status`).
+- `report_revenue_by_sailing` returned `numeric` sums against `bigint` OUT columns (cast).
+- Missing unique constraint on `invoices.booking_id` broke idempotent verify (added).
+- `trg_notify_payment_event` wrote a non-existent `payload` column (rewritten to the Phase 5 `emit_notification` event-key path).
+- Phase 7's `agent_organization_id` FK made the sailing-manifest PostgREST embed
+  (`organization:organizations`) ambiguous, emptying the ATCO reservations view; pinned to
+  `organizations!bookings_organization_id_fkey` in `getSailingManifest`.
+- Reported "browser signup failure" did not reproduce: browser signup returns HTTP 200, creates the
+  local user, sends the Mailpit confirmation, and shows the confirmation-pending state. The earlier
+  failure was a stale preview server (demo build on port 4317 backed by a previous stack's ports).
+  Added regression test: rejected sign-up surfaces `errEmailTaken` with no session and no
+  confirmation-pending flag (`src/tests/authCutover.test.tsx`).
+
+Still unverified: hosted Supabase, live payment provider + webhooks, ZATCA e-invoicing compliance,
+physical-device camera decoding, real SMTP/WhatsApp delivery, load/soak testing. Sandbox payments and
+provisional policies are foundations only and must not be treated as live billing or legal text.
