@@ -30,7 +30,7 @@ function PasswordField({ id, label, value, onChange, autoComplete, hint }: {
 
 export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mode }) {
   const { t, lang, setLang } = useLanguage();
-  const { user, signIn, signUp, signInAsGuest, signInWithProvider, requestResetCode, resetPassword } = useAuth();
+  const { user, signIn, signUp, signInAsGuest, signInWithProvider, requestResetCode, requestResetEmail, resetPassword, authMode, sessionLoading, confirmationPending, authUnavailable } = useAuth();
   const { toast } = useUi();
   const navigate = useNavigate();
   const location = useLocation();
@@ -40,11 +40,15 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
   const [form, setForm] = useState({ login: '', email: '', username: '', company: '', password: '', confirm: '', code: '' });
   const [remember, setRemember] = useState(true);
   // Reset step 2 starts once a (demo) code has been issued; the code is shown on screen instead of emailed.
+  // Production reset is single-step: the emailed link does the reset, so only a "sent" acknowledgement shows.
   const [sentCode, setSentCode] = useState('');
+  const [resetEmailSent, setResetEmailSent] = useState(false);
+  const isDemo = authMode === 'demo';
+  const isProduction = authMode === 'production';
   const set = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }));
   const from = (location.state as { from?: string } | null)?.from ?? '/';
 
-  const switchMode = (m: Mode) => { setMode(m); setError(''); setSentCode(''); setForm(f => ({ ...f, password: '', confirm: '', code: '' })); };
+  const switchMode = (m: Mode) => { setMode(m); setError(''); setSentCode(''); setResetEmailSent(false); setForm(f => ({ ...f, password: '', confirm: '', code: '' })); };
 
   const sendCode = () => {
     const res = requestResetCode(form.email);
@@ -54,9 +58,24 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
     toast(t('codeSent'));
   };
 
+  /** Production: request the emailed reset link (explicit configured redirect; fails clearly if unset). */
+  const sendEmail = async () => {
+    setBusy(true);
+    const err = await requestResetEmail(form.email);
+    setBusy(false);
+    if (err) { setError(err); return; }
+    setError('');
+    setResetEmailSent(true);
+  };
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (mode === 'reset' && !sentCode) { sendCode(); return; }
+    if (mode === 'reset' && !sentCode && !(isProduction && resetEmailSent)) {
+      // Demo shows the code on screen; production sends the emailed link.
+      if (isProduction) { await sendEmail(); return; }
+      sendCode();
+      return;
+    }
     setBusy(true);
     const err = mode === 'signin' ? await signIn(form.login, form.password, remember)
       : mode === 'signup' ? await signUp({ email: form.email, username: form.username, company: form.company, password: form.password, confirm: form.confirm })
@@ -84,11 +103,45 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
 
   if (user) return <Navigate to={from} replace />;
 
+  /* Production configuration problem: fail loudly, never fall back to the demo. */
+  if (isProduction && authUnavailable) {
+    return (
+      <div className="auth-page">
+        <div className="auth-top"><Brand /></div>
+        <main className="auth-main">
+          <div className="card card-pad auth-card">
+            <h1 className="page-title" style={{ fontSize: 28 }}>{t('authConfigErrorTitle')}</h1>
+            <div className="notice danger" role="alert" style={{ marginBottom: 16 }}>{t('authConfigErrorBody')}</div>
+            <div className="inset small" role="list">
+              <strong>{t('authConfigIssueLabel')}</strong>
+              <ul style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+                {authUnavailable.issues.map(issue => <li key={issue} role="listitem"><code dir="ltr">{issue}</code></li>)}
+              </ul>
+            </div>
+            <button type="button" className="btn btn-outline" style={{ marginTop: 16 }} onClick={() => window.location.reload()}>{t('screenErrorRetry')}</button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  /* Production: never redirect while a persisted session is still being restored. */
+  if (isProduction && sessionLoading) {
+    return (
+      <div className="auth-page">
+        <div className="auth-top"><Brand /></div>
+        <main className="auth-main">
+          <div className="card card-pad auth-card" role="status">{t('authLoading')}</div>
+        </main>
+      </div>
+    );
+  }
+
   const title = mode === 'signin' ? t('signInTitle') : mode === 'signup' ? t('signUpTitle') : t('resetTitle');
 
   return (
     <div className="auth-page">
-      <div className="demo-banner"><span className="dot" /><span>{t('demoBanner')}</span></div>
+      <div className="demo-banner"><span className="dot" /><span>{isDemo ? t('demoBanner') : t('prodBanner')}</span></div>
       <div className="auth-top">
         <Brand />
         <div className="lang-toggle">
@@ -99,9 +152,15 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
       <main className="auth-main">
         <div className="card card-pad auth-card">
           <h1 className="page-title" style={{ fontSize: 28 }}>{title}</h1>
-          <p className="page-sub" style={{ marginBottom: 18 }}>{mode === 'reset' ? t('resetSub') : t('authSub')}</p>
-          <div className="notice warn" style={{ marginBottom: 18 }}>{t('authDemoNote')}</div>
+          <p className="page-sub" style={{ marginBottom: 18 }}>{mode === 'reset' ? (isProduction ? t('resetProdSub') : t('resetSub')) : t('authSub')}</p>
+          <div className="notice warn" style={{ marginBottom: 18 }}>{isDemo ? t('authDemoNote') : t('prodAuthNote')}</div>
           {error && <div className="notice danger" role="alert" style={{ marginBottom: 16 }}>{t(error)}</div>}
+          {isProduction && confirmationPending && (
+            <div className="notice blue" role="status" style={{ marginBottom: 16 }}>
+              <strong>{t('confirmPendingTitle')}</strong>
+              {t('confirmPendingBody').replace('{email}', confirmationPending)}
+            </div>
+          )}
           <form className="grid" onSubmit={submit} noValidate>
             {mode === 'signin' && (
               <div className="field">
@@ -115,7 +174,7 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
                 <input id="auth-email" type="email" autoComplete="email" value={form.email} readOnly={mode === 'reset' && !!sentCode} onChange={e => set('email')(e.target.value)} />
               </div>
             )}
-            {mode === 'reset' && sentCode && (
+            {isDemo && mode === 'reset' && sentCode && (
               <>
                 <div className="notice blue" role="status">
                   <strong>{t('demoCodeTitle')}</strong>
@@ -127,6 +186,12 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
                   <small><button type="button" className="link-btn" style={{ padding: 0 }} onClick={sendCode}>{t('resendCode')}</button></small>
                 </div>
               </>
+            )}
+            {isProduction && mode === 'reset' && resetEmailSent && (
+              <div className="notice blue" role="status">
+                <strong>{t('resetEmailSentTitle')}</strong>
+                {t('resetEmailSentBody')}
+              </div>
             )}
             {mode === 'signup' && (
               <>
@@ -141,11 +206,11 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
                 </div>
               </>
             )}
-            {(mode !== 'reset' || sentCode) && (
+            {(mode !== 'reset' || (isDemo && sentCode)) && (
               <PasswordField id="auth-password" label={mode === 'reset' ? t('newPassword') : t('password')} value={form.password} onChange={set('password')}
                 autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} hint={mode === 'signin' ? undefined : t('passwordHint')} />
             )}
-            {(mode === 'signup' || (mode === 'reset' && sentCode)) && (
+            {(mode === 'signup' || (isDemo && mode === 'reset' && !!sentCode)) && (
               <PasswordField id="auth-confirm" label={t('confirmPassword')} value={form.confirm} onChange={set('confirm')} autoComplete="new-password" />
             )}
             {mode === 'signin' && (
@@ -155,16 +220,18 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
               </div>
             )}
             {mode === 'signup' && <p className="small muted" style={{ margin: 0 }}>{t('termsNote')}</p>}
-            <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
-              {mode === 'signin' ? t('signInBtn') : mode === 'signup' ? t('signUpBtn') : sentCode ? t('resetBtn') : t('sendCode')}
-            </button>
+            {!(isProduction && mode === 'reset' && resetEmailSent) && (
+              <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
+                {mode === 'signin' ? t('signInBtn') : mode === 'signup' ? t('signUpBtn') : sentCode ? t('resetBtn') : t('sendCode')}
+              </button>
+            )}
           </form>
           <div className="auth-switch">
             {mode === 'signin' && <>{t('noAccount')} <button type="button" className="link-btn" onClick={() => switchMode('signup')}>{t('signUpTitle')}</button></>}
             {mode === 'signup' && <>{t('haveAccount')} <button type="button" className="link-btn" onClick={() => switchMode('signin')}>{t('signInBtn')}</button></>}
             {mode === 'reset' && <button type="button" className="link-btn" onClick={() => switchMode('signin')}>{t('backToSignIn')}</button>}
           </div>
-          {mode !== 'reset' && (
+          {isDemo && mode !== 'reset' && (
             <>
               <div className="auth-or"><span>{t('orDivider')}</span></div>
               {/* Simulated provider options — frontend demo only, labelled as such on the overlay. */}

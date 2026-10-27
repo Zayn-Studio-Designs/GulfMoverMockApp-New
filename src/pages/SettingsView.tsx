@@ -146,8 +146,9 @@ function CompanyTab() {
 
 function SecurityTab() {
   const { t } = useLanguage();
-  const { user, changeEmail, changePassword, requestResetCode, resetPassword } = useAuth();
+  const { user, changeEmail, changePassword, requestResetCode, resetPassword, authMode } = useAuth();
   const { toast } = useUi();
+  const isDemoAuth = authMode === 'demo';
   const [email, setEmail] = useState({ next: '', password: '' });
   const [emailError, setEmailError] = useState('');
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
@@ -181,6 +182,28 @@ function SecurityTab() {
     setResetError(err ?? '');
     if (!err) { setReset({ sent: '', code: '', next: '', confirm: '' }); toast(t('passwordChanged')); }
   };
+
+  // PRODUCTION: Supabase handles the password inside the active session; email
+  // changes and the demo reset-code flow belong to the demo experience only, so
+  // those cards are hidden rather than silently faking success (errDemoOnly).
+  if (!isDemoAuth) {
+    return (
+      <section className="card card-pad" aria-labelledby="set-password">
+        <h2 id="set-password" className="card-title">{t('securityTitle')}</h2>
+        <p className="card-desc">{t('prodPasswordSub')}</p>
+        <form className="grid" onSubmit={savePassword} noValidate style={{ marginTop: 14 }}>
+          {pwError && <div className="notice danger" role="alert">{t(pwError)}</div>}
+          <div className="form-grid">
+            <PasswordInput id="set-pw-new" label={t('newPassword')} value={pw.next} onChange={v => setPw(p => ({ ...p, next: v }))} autoComplete="new-password" hint={t('passwordHint')} />
+            <PasswordInput id="set-pw-confirm" label={t('confirmPassword')} value={pw.confirm} onChange={v => setPw(p => ({ ...p, confirm: v }))} autoComplete="new-password" />
+          </div>
+          {/* The "current password" field is intentionally omitted: Supabase updates the
+              password within the authenticated session and has no re-confirmation check. */}
+          <div><button type="submit" className="btn btn-primary">{t('changePasswordBtn')}</button></div>
+        </form>
+      </section>
+    );
+  }
 
   return (
     <>
@@ -302,9 +325,10 @@ function PreferencesTab() {
 
 function AccountTab() {
   const { t } = useLanguage();
-  const { signOut, deleteAccount } = useAuth();
+  const { signOut, deleteAccount, authMode } = useAuth();
   const { toast, openModal } = useUi();
   const navigate = useNavigate();
+  const isDemoAuth = authMode === 'demo';
   const doSignOut = () => { signOut(); toast(t('signedOut')); navigate('/signin', { replace: true }); };
   const askDelete = () => openModal({
     title: t('deleteAccount'), desc: t('deleteConfirm'), confirmText: t('deleteAccount'), requireReason: true,
@@ -317,21 +341,33 @@ function AccountTab() {
         <p className="card-desc">{t('signOutSub')}</p>
         <div style={{ marginTop: 14 }}><button type="button" className="btn btn-navy" onClick={doSignOut}>{t('signOut')}</button></div>
       </section>
-      <section className="card card-pad danger-zone" aria-labelledby="set-delete">
-        <h2 id="set-delete" className="card-title">{t('deleteAccount')}</h2>
-        <p className="card-desc">{t('deleteSub')}</p>
-        <div style={{ marginTop: 14 }}><button type="button" className="btn btn-danger" onClick={askDelete}>{t('deleteAccount')}</button></div>
-      </section>
+      {/* Account deletion removes the local demo account only; it stays a demo-only
+          action. In production, account/data deletion is a later, server-backed step. */}
+      {isDemoAuth && (
+        <section className="card card-pad danger-zone" aria-labelledby="set-delete">
+          <h2 id="set-delete" className="card-title">{t('deleteAccount')}</h2>
+          <p className="card-desc">{t('deleteSub')}</p>
+          <div style={{ marginTop: 14 }}><button type="button" className="btn btn-danger" onClick={askDelete}>{t('deleteAccount')}</button></div>
+        </section>
+      )}
     </>
   );
 }
 
 export default function SettingsView() {
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, authMode } = useAuth();
   const [params, setParams] = useSearchParams();
+  const isDemoAuth = authMode === 'demo';
+  // Demo settings manage the local demo account. Production exposes only what is
+  // real in this checkpoint (password, browser preferences, ATCO info, sign-out);
+  // profile/company/notifications writes stay demo-only until profile provisioning.
+  const visibleTabs: readonly Tab[] = (isDemoAuth
+    ? SETTINGS_TABS
+    : SETTINGS_TABS.filter(key => key === 'security' || key === 'preferences' || key === 'account' || key === 'atco'));
   const requested = params.get('tab') as Tab | null;
-  const tab: Tab = requested && SETTINGS_TABS.includes(requested) ? requested : 'profile';
+  const fallbackTab: Tab = isDemoAuth ? 'profile' : 'security';
+  const tab: Tab = requested && visibleTabs.includes(requested) ? requested : fallbackTab;
   // On phones the tabs scroll sideways: keep the open one (e.g. ATCO information) in view.
   useEffect(() => {
     document.querySelector('.settings-tab.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -354,7 +390,7 @@ export default function SettingsView() {
             </div>
           </div>
           <nav className="settings-tabs" aria-label={t('settingsTitle')}>
-            {SETTINGS_TABS.map(key => (
+            {visibleTabs.map(key => (
               <button key={key} type="button" className={`settings-tab${tab === key ? ' active' : ''}`} aria-current={tab === key ? 'page' : undefined}
                 onClick={() => setParams(key === 'profile' ? {} : { tab: key }, { replace: true })}>
                 {t(TAB_LABEL[key])}

@@ -130,9 +130,34 @@ function ScreenError({ retry }: { retry: () => void }) {
   );
 }
 
+/** Production-only blocking screens inside the layout: config error and session restore. */
+function ProductionAuthScreen({ loading }: { loading: boolean }) {
+  const { t } = useLanguage();
+  const { authUnavailable } = useAuth();
+  return (
+    <main id="app-main" tabIndex={-1} style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+      {loading ? (
+        <div className="card card-pad" role="status">{t('authLoading')}</div>
+      ) : (
+        <div className="card card-pad" role="alert" style={{ maxWidth: 640 }}>
+          <h1 className="page-title">{t('authConfigErrorTitle')}</h1>
+          <div className="notice danger">{t('authConfigErrorBody')}</div>
+          <div className="inset small">
+            <strong>{t('authConfigIssueLabel')}</strong>
+            <ul style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+              {(authUnavailable?.issues ?? []).map(issue => <li key={issue}><code dir="ltr">{issue}</code></li>)}
+            </ul>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}
+
 export function Layout() {
   const { t } = useLanguage();
-  const { user, signedOutByUser } = useAuth();
+  const { user, signedOutByUser, authMode, sessionLoading, authUnavailable } = useAuth();
+  const isDemoAuth = authMode === 'demo';
   const { isCustomer, setMode } = useWorkMode();
   const { resetDemoData } = useDemo();
   const { toast } = useUi();
@@ -184,6 +209,12 @@ export function Layout() {
   }, [userId, isGuest, startTour]);
 
   const publicAtcoInfo = pathname === '/settings' && new URLSearchParams(search).get('tab') === 'atco';
+  // Production gates run BEFORE any redirect: restoring a session or a broken
+  // configuration must never bounce the user to /signin or show demo screens.
+  if (!isDemoAuth) {
+    if (authUnavailable) return <ProductionAuthScreen loading={false} />;
+    if (sessionLoading && !user) return <ProductionAuthScreen loading />;
+  }
   if (!user && !publicAtcoInfo) return <Navigate to="/signin" replace state={signedOutByUser ? undefined : { from: pathname }} />;
 
   const onReset = () => {
@@ -193,7 +224,7 @@ export function Layout() {
 
   return (
     <>
-      <div className="demo-banner"><span className="dot" /><span>{t('demoBanner')}</span></div>
+      <div className="demo-banner"><span className="dot" /><span>{isDemoAuth ? t('demoBanner') : t('prodBanner')}</span></div>
       <header className="app-header">
         <div className="header-inner">
           <Brand />

@@ -1,8 +1,27 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
+} from 'react';
+import type { Session } from '@supabase/supabase-js';
+import * as supabaseAuth from '../lib/authService';
+import {
+  AuthInputError, AuthNotAvailableError, AuthOperationError, type SignUpInput as SupabaseSignUpInput,
+} from '../lib/authService';
+import { getAppConfig, type AppConfig, type EnvSource, type SupabaseConfigIssue } from '../lib/supabase';
 
 // DEMO ACCOUNTS ONLY — not real authentication. Accounts live in this browser's localStorage,
 // there is no server, and nothing is sent anywhere. Passwords are stored as a salted SHA-256
 // hash so the plain text is never kept, but users must still be told not to use a real password.
+//
+// MODE-AWARE AUTHENTICATION: with no VITE_APP_MODE=production the provider below is the exact
+// demo implementation from earlier checkpoints, completely untouched. Only when production
+// mode is explicitly selected (and validated by src/lib/supabase.ts) does this file use the
+// Checkpoint 1 Supabase auth service. Both modes expose the same context shape, so the shell
+// works unchanged; AuthView / Layout / SettingsView branch on `authMode` for the small
+// production-specific affordances (no guest/provider flows, no on-screen reset code, etc.).
+//
+// Profile / company / notification writes stay demo-only in this checkpoint (they belong to
+// the later company-registration phase): in production mode those settings cards are hidden
+// and every backend write returns 'errDemoOnly' — never a silent fake success.
 
 export interface NotificationPrefs {
   emailBookings: boolean;
@@ -33,7 +52,9 @@ export type PublicAccount = Omit<Account, 'salt' | 'passwordHash'>;
 export type AuthError =
   | 'errEmail' | 'errUsername' | 'errCompany' | 'errPasswordRules' | 'errPasswordMatch'
   | 'errEmailTaken' | 'errUsernameTaken' | 'errSignIn' | 'errCurrentPassword' | 'errNoAccount'
-  | 'errPhone' | 'errWebsite' | 'errResetCode' | 'errSameEmail';
+  | 'errPhone' | 'errWebsite' | 'errResetCode' | 'errSameEmail'
+  // Production (Supabase) mode:
+  | 'errEmailNotConfirmed' | 'errAuthGeneric' | 'errDemoOnly' | 'errResetRedirect';
 
 export type ProfilePatch = Partial<Pick<Account,
   'username' | 'fullName' | 'phone' | 'company' | 'companyLogo' | 'companyAddress' | 'companyWebsite' | 'avatar' | 'notifications'>>;
@@ -148,14 +169,28 @@ const toPublic = ({ salt: _salt, passwordHash: _hash, ...rest }: Account): Publi
 
 interface SignUpInput { email: string; username: string; company: string; password: string; confirm: string }
 
-interface AuthContextValue {
+/** Authentication is not usable at all in this mode/configuration (production mode only). */
+export interface AuthUnavailable {
+  reason: 'demo-mode' | 'config-error';
+  issues: readonly SupabaseConfigIssue[];
+}
+
+export interface AuthContextValue {
   user: PublicAccount | null;
   /** True after the user signed out on purpose (so we don't send them back to their last page). */
   signedOutByUser: boolean;
+  /** Which authentication backend backs this context. */
+  authMode: 'demo' | 'production';
+  /** Production mode only: true while the persisted Supabase session is being restored. */
+  sessionLoading: boolean;
+  /** Set when the authentication backend (not a single operation) is unusable. */
+  authUnavailable: AuthUnavailable | null;
+  /** Production sign-up that returned no session: confirmation of the email is required first. */
+  confirmationPending: string | null;
   signUp: (input: SignUpInput) => Promise<AuthError | null>;
   signIn: (login: string, password: string, remember?: boolean) => Promise<AuthError | null>;
   signInAsGuest: () => Promise<void>;
-  /** Simulated provider sign-in: session only, no real identity provider is contacted. */
+  /** Simulated provider sign-in: session only, no real identity provider is contacted (demo mode). */
   signInWithProvider: (provider: DemoProvider) => Promise<void>;
   signOut: () => void;
   updateProfile: (patch: ProfilePatch) => AuthError | null;
@@ -163,13 +198,19 @@ interface AuthContextValue {
   changePassword: (current: string, next: string, confirm: string) => Promise<AuthError | null>;
   /** Demo stand-in for "email me a reset code": returns the code so the demo can display it. */
   requestResetCode: (email: string) => { code: string } | { error: AuthError };
+  /** Production: emails a password-reset link with a configured redirect (fails clearly if unset). */
+  requestResetEmail: (email: string) => Promise<AuthError | null>;
   resetPassword: (email: string, code: string, next: string, confirm: string) => Promise<AuthError | null>;
   deleteAccount: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+/* ------------------------------------------------------------------------- */
+/* Demo mode: the original demo implementation, unchanged in behaviour.       */
+/* ------------------------------------------------------------------------- */
+
+function DemoAuthProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccountsState] = useState<Account[]>(loadAccounts);
   const [sessionId, setSessionId] = useState<string | null>(loadSession);
   const [signedOutByUser, setSignedOutByUser] = useState(false);
@@ -315,11 +356,248 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     startSession(null);
   }, [accounts, current, setAccounts, startSession]);
 
-  const value = useMemo(() => ({
-    user, signedOutByUser, signUp, signIn, signInAsGuest, signInWithProvider, signOut, updateProfile, changeEmail, changePassword, requestResetCode, resetPassword, deleteAccount,
-  }), [user, signedOutByUser, signUp, signIn, signInAsGuest, signOut, updateProfile, changeEmail, changePassword, requestResetCode, resetPassword, deleteAccount]);
+  const requestResetEmail = useCallback(async (email: string): Promise<AuthError | null> => {
+    if (!isValidEmail(email)) return 'errEmail';
+    // Demo "email" keeps the code on screen via requestResetCode; no real email is sent.
+    const outcome = requestResetCode(email);
+    return 'error' in outcome ? outcome.error : null;
+  }, [requestResetCode]);
+
+  const value = useMemo<AuthContextValue>(() => ({
+    user,
+    signedOutByUser,
+    authMode: 'demo',
+    sessionLoading: false,
+    authUnavailable: null,
+    confirmationPending: null,
+    signUp,
+    signIn,
+    signInAsGuest,
+    signInWithProvider,
+    signOut,
+    updateProfile,
+    changeEmail,
+    changePassword,
+    requestResetCode,
+    requestResetEmail,
+    resetPassword,
+    deleteAccount,
+  }), [user, signedOutByUser, signUp, signIn, signInAsGuest, signOut, updateProfile, changeEmail,
+    changePassword, requestResetCode, requestResetEmail, resetPassword, deleteAccount]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/* --------------------------------------------------------------------- */
+/* Production mode: Supabase Auth behind the same context interface.      */
+/* --------------------------------------------------------------------- */
+
+/** Maps a Supabase user onto the account shape the UI consumes (demo fields stay neutral). */
+function toPublicUser(session: Session | null): PublicAccount | null {
+  const u = session?.user;
+  if (!u) return null;
+  let displayName = '';
+  if (u.user_metadata && typeof u.user_metadata === 'object') {
+    const raw = (u.user_metadata as Record<string, unknown>)['display_name'];
+    if (typeof raw === 'string') displayName = raw.trim();
+  }
+  return {
+    id: u.id,
+    email: u.email ?? '',
+    username: displayName || (u.email ? u.email.split('@')[0] : '') || 'user',
+    fullName: displayName,
+    phone: '', company: '', companyLogo: '', companyAddress: '', companyWebsite: '', avatar: '',
+    notifications: { ...DEFAULT_NOTIFICATIONS },
+    createdAt: u.created_at ?? new Date().toISOString(),
+  };
+}
+
+function SupabaseAuthProvider({ children }: { children: ReactNode }) {
+  const env: EnvSource = import.meta.env;
+  // Resolved once per provider mount; getSupabaseClient itself memoizes the client.
+  const app = useMemo<AppConfig>(() => getAppConfig(env), [env]);
+  const [user, setUser] = useState<PublicAccount | null>(null);
+  // Loading state stays separate from "signed out" so a restored session is never redirected.
+  const [sessionLoading, setSessionLoading] = useState(() => app.mode === 'production' && app.supabase !== null);
+  const [signedOutByUser, setSignedOutByUser] = useState(false);
+  const [confirmationPending, setConfirmationPending] = useState<string | null>(null);
+  const [authUnavailable, setAuthUnavailable] = useState<AuthUnavailable | null>(() =>
+    app.mode === 'production' && 'error' in app ? { reason: 'config-error', issues: app.error.issues } : null);
+
+  const fromSession = useCallback((session: Session | null): PublicAccount | null => toPublicUser(session), []);
+
+  // Restore the persisted session once, and keep listening for later auth-state changes.
+  useEffect(() => {
+    if (app.mode !== 'production') return;
+    if (app.supabase === null) { setSessionLoading(false); return; } // configuration error: nothing to restore
+    let active = true;
+    const stopListening = supabaseAuth.onAuthStateChange((event, session) => {
+      if (!active) return;
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setSignedOutByUser(true);
+        setConfirmationPending(null);
+        return;
+      }
+      // SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED and PASSWORD_RECOVERY all carry the session.
+      if (session) {
+        setUser(fromSession(session));
+        setConfirmationPending(null);
+        setSignedOutByUser(false);
+      }
+    });
+    void (async () => {
+      try {
+        const restored = await supabaseAuth.getSession(env);
+        if (!active) return;
+        setUser(toPublicUser(restored));
+      } catch {
+        // Restore failure (e.g. offline/expired): present the signed-out state; a later
+        // sign-in retries against the still-persisted token. Not a configuration problem.
+      } finally {
+        if (active) setSessionLoading(false);
+      }
+    })();
+    return () => { active = false; stopListening(); };
+  }, [app, env, fromSession]);
+
+  /** Maps a Supabase auth-service failure to an interface error key; never echoes inputs. */
+  const mapAuthFailure = useCallback((error: unknown, fallback: AuthError = 'errAuthGeneric'): AuthError => {
+    if (error instanceof AuthNotAvailableError) {
+      setAuthUnavailable({ reason: error.reason, issues: error.issues ?? [] });
+      return fallback;
+    }
+    if (error instanceof AuthInputError) {
+      if (/redirect/i.test(error.message)) return 'errResetRedirect';
+      if (/password/i.test(error.message)) return 'errPasswordRules';
+      return 'errEmail'; // email input problems (blank email); fixed text, no echo
+    }
+    if (error instanceof AuthOperationError) {
+      switch (error.code) {
+        case 'user_already_exists': case 'email_exists': return 'errEmailTaken';
+        case 'invalid_credentials': return 'errSignIn';
+        case 'email_not_confirmed': return 'errEmailNotConfirmed';
+        case 'weak_password': return 'errPasswordRules';
+        default: return fallback;
+      }
+    }
+    return fallback;
+  }, []);
+
+  const signUp = useCallback(async ({ email, password, confirm, username }: SignUpInput): Promise<AuthError | null> => {
+    if (!isValidEmail(email)) return 'errEmail';
+    if (!isValidPassword(password)) return 'errPasswordRules';
+    if (password !== confirm) return 'errPasswordMatch';
+    if (authUnavailable) return null; // the configuration banner is the only relevant UI here
+    const serviceInput: SupabaseSignUpInput =
+      username.trim() ? { email, password, displayName: username.trim() } : { email, password };
+    try {
+      const result = await supabaseAuth.signUp(serviceInput, env);
+      if (result.session) {
+        setUser(fromSession(result.session));
+        return null;
+      }
+      // Email confirmation required: no session until the emailed link is used.
+      setConfirmationPending(result.email);
+      return null;
+    } catch (error) {
+      return mapAuthFailure(error);
+    }
+  }, [authUnavailable, env, fromSession, mapAuthFailure]);
+
+  const signIn = useCallback(async (login: string, password: string, _remember?: boolean): Promise<AuthError | null> => {
+    if (!login.trim()) return 'errEmail';
+    if (!password.trim()) return 'errSignIn'; // fixed generic text: no per-field hints, no echo
+    if (authUnavailable) return null; // the configuration banner is the only relevant UI here
+    try {
+      const result = await supabaseAuth.signIn(login.trim(), password, env);
+      setUser(toPublicUser(result.session));
+      return null;
+    } catch (error) {
+      return mapAuthFailure(error, 'errSignIn');
+    }
+  }, [authUnavailable, env, mapAuthFailure]);
+
+  const signOut = useCallback(() => {
+    setUser(null); setSignedOutByUser(true); setConfirmationPending(null); // optimistic: UI switches instantly
+    void supabaseAuth.signOut(env).catch(() => {
+      // Server unreachable: the restore-on-reload path re-uses the still-stored token rather
+      // than pretending the session is already gone server-side.
+    });
+  }, [env]);
+
+  // Guest and provider flows are demo-only presentation: not rendered in production mode.
+  const signInAsGuest = useCallback(async () => { /* unavailable in production */ }, []);
+  const signInWithProvider = useCallback(async () => { /* unavailable in production */ }, []);
+
+  // Demo-data writes are not real persistence in production mode; the Settings UI hides those
+  // cards, and any accidental use gets a clearly-labelled refusal (never a fake success).
+  const updateProfile = useCallback((): AuthError | null => 'errDemoOnly', []);
+  const changeEmail = useCallback(async (): Promise<AuthError | null> => 'errDemoOnly', []);
+  const resetPassword = useCallback(async (): Promise<AuthError | null> => 'errDemoOnly', []);
+  const requestResetCode = useCallback((): { code: string } | { error: AuthError } => ({ error: 'errDemoOnly' }), []);
+  const deleteAccount = useCallback(() => { /* hidden in production UI */ }, []);
+
+  const requestResetEmail = useCallback(async (email: string): Promise<AuthError | null> => {
+    if (!isValidEmail(email)) return 'errEmail';
+    const redirectTo = env['VITE_AUTH_RESET_REDIRECT_URL'];
+    if (typeof redirectTo !== 'string' || !redirectTo.trim()) return 'errResetRedirect'; // fail clearly, documented
+    try {
+      await supabaseAuth.requestPasswordReset(email, redirectTo.trim(), env);
+      return null;
+    } catch (error) {
+      return mapAuthFailure(error, 'errAuthGeneric');
+    }
+  }, [env, mapAuthFailure]);
+
+  const changePassword = useCallback(async (current: string, next: string, confirm: string): Promise<AuthError | null> => {
+    if (!user) return null; // only meaningful with an active session
+    if (!isValidPassword(next)) return 'errPasswordRules';
+    if (next !== confirm) return 'errPasswordMatch';
+    // Supabase updates a password inside the active session, so no current-password check is
+    // available; the production UI hides that field, and any typed value here is ignored
+    // rather than wrongly validated.
+    if (current.trim()) return 'errDemoOnly';
+    try {
+      await supabaseAuth.updatePassword(next, env);
+      return null;
+    } catch (error) {
+      return mapAuthFailure(error, 'errAuthGeneric');
+    }
+  }, [env, mapAuthFailure, user]);
+
+  const value = useMemo<AuthContextValue>(() => ({
+    user,
+    signedOutByUser,
+    authMode: 'production',
+    sessionLoading,
+    authUnavailable,
+    confirmationPending,
+    signUp,
+    signIn,
+    signInAsGuest,
+    signInWithProvider,
+    signOut,
+    updateProfile,
+    changeEmail,
+    changePassword,
+    requestResetCode,
+    requestResetEmail,
+    resetPassword,
+    deleteAccount,
+  }), [user, signedOutByUser, sessionLoading, authUnavailable, confirmationPending, signUp, signIn, signInAsGuest,
+    signInWithProvider, signOut, updateProfile, changeEmail, changePassword, requestResetCode, requestResetEmail,
+    resetPassword, deleteAccount]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const env: EnvSource = import.meta.env;
+  const mode = useMemo(() => getAppConfig(env).mode, [env]);
+  return mode === 'production'
+    ? <SupabaseAuthProvider>{children}</SupabaseAuthProvider>
+    : <DemoAuthProvider>{children}</DemoAuthProvider>;
 }
 
 export function useAuth(): AuthContextValue {
