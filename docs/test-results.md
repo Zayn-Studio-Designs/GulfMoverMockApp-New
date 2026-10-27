@@ -383,3 +383,35 @@ Two local dev servers: production mode pointing at the **unreachable placeholder
 - **No live or local Supabase**: real GoTrue sign-up/confirmation/recovery e-mails, real RLS reads and real `register_company` calls from this frontend were **not** exercised (no Supabase stack in this environment). All Supabase behaviour in the automated tests is mocked.
 - No migrations were created or applied; no remote project was linked or contacted; nothing was deployed.
 - Safari/WebKit, tablet widths and dark mode were not re-checked for the new screens.
+
+## Verification — 2026-10-27 (branch `feature/phase3-approval-bookings`, based on `feature/phase2-company-onboarding` @ `88b0ed6`) — Phase 3: approvals, roles, live bookings
+
+Implementation notes: `docs/backend/phase3-approval-bookings.md`. Everything below ran in this environment; nothing ran against a remote/hosted Supabase project.
+
+### Local Supabase stack
+
+* Supabase CLI 2.122.0 + Docker, images from Docker Hub (`public.ecr.aws`/`ghcr.io` were not reachable), scratch copy of `supabase/config.toml` with `experimental.stack = false`, e-mail confirmation **on**, local rate limits raised and `/auth/reset-callback` redirects allowed (committed config unchanged — findings in the Phase 3 doc §6).
+* `supabase db reset --local`: all **10** migrations (8 existing + 2 new) applied cleanly to a clean database.
+* **Defect found by the real database (not visible with mocks):** approving a company failed with a foreign-key violation for any ATCO reviewer without a `profiles` row (`organizations.approved_by → profiles`). Fixed by an explicit `reviewer_profile_missing` refusal plus the documented provisioning script; re-verified on a clean reset.
+
+### Results (final code)
+
+| Check | Command | Result |
+|---|---|---|
+| Type check | `npm run typecheck` | **Pass (exit 0)** |
+| Unit/UI tests | `npm test` | **Pass (exit 0)** — 18 files passed, 1 skipped; **339 passed**, 24 skipped (the integration file skips by design without local-stack variables) |
+| Local Supabase integration | `npm run test:integration` (GM_IT_* set, local stack) | **Pass (exit 0)** — **24/24** real tests: GoTrue sign-up with Mailpit confirmation, wrong-password refusal, sign-out, password-reset e-mail + recovery session + new password, reused recovery link refused; registration idempotency/mismatch; `my_company_memberships` scoping; approval by super_admin, refusals for customer / company admin / operations / anon / raw PATCH; 5 concurrent approvals → 1 event; rejection with reason, reason hidden from member; invalid ids/decisions; profile-less and suspended reviewers refused; conflict of interest; no self-promotion or role/membership/event forging; anon reads refused; staff-only operations writes, `seats_booked` not writable, capacity and future-date guards; booking persistence; outbound+return atomicity; idempotent retries (incl. 6 concurrent); **10 parallel requests on a 5-seat sailing → exactly 5 reserved**; pending/non-member/cross-company/anon booking refused; server validation; closed/cancelled sailings; visibility for creator / booker / company admin / other company / ops; no direct booking edits or deletes |
+| Browser journeys | `npm run test:e2e:local` (Chromium, app in production mode on the local stack) | **Pass (exit 0)** — **27/27** checks: customer sign-up → e-mail confirmation → sign-in → company registration (pending) → booking and ATCO screen refused while pending; admin provisioned out-of-band → review → approve (DB: approved_by + exactly `submitted,approved` events); vessel, routes and two sailings created (07:00 Saudi stored as 04:00 UTC); customer signs in again → approved → books outbound + return → server reference, no price/payment claim, two legs persisted, detail reopened and survives reload; admin schedule shows 2 of 6 seats and manifest lists the booking; rejection (reason required; member sees state but not reason); password recovery from the e-mailed link through `/auth/reset-callback`, new password works, link reuse refused; mobile 390 px Arabic RTL My bookings and mobile admin screens without horizontal overflow; no page errors |
+| Catalog privilege check | `has_table_privilege` / `has_function_privilege` | `anon` has no privilege on all 11 public tables and no EXECUTE on the 7 app functions |
+| Production build | `npm run build` | **Pass (exit 0)** — 156 modules; `main-…js` 614.79 kB (172.25 kB gzip); the >500 kB chunk warning pre-exists |
+| Whitespace | `git diff --check` | **Pass (exit 0)** |
+
+Screenshots from the final browser run: `docs/screenshots/phase3/` (fictional `example.test` accounts only).
+
+### Issues found and fixed during verification
+
+`reviewer_profile_missing` FK defect (DB); pre-existing `isValidTime()` always returning false (U); staff "My bookings" briefly querying all bookings before roles loaded (U); company-review screen overflowing on 390 px phones (browser); missing `noCapacity` translation in the demo (key audit); production reset button and production banner wording.
+
+### Not verified
+
+Any hosted/remote Supabase project, real SMTP delivery, production Auth settings, Safari/WebKit, tablet widths, dark mode on the new screens, load beyond 10 concurrent requests, and accessibility with assistive technology.

@@ -26,6 +26,8 @@ The terminal prints `Local: http://localhost:3000/`. The server only listens on 
 | `npm run preview` | Serve the production build (Vite prints the URL, normally http://localhost:4173/) |
 | `npm run typecheck` | TypeScript check |
 | `npm test` | Run the test suite once (`npm run test:watch` to watch) |
+| `npm run test:integration` | Real **local** Supabase suite (auth + Mailpit, RLS, RPCs). Skipped unless the `GM_IT_*` variables point at a loopback stack — see `docs/backend/phase3-approval-bookings.md` §4 |
+| `npm run test:e2e:local` | Chromium journeys against the app in production mode on the local stack (same doc, §4) |
 
 **Note on `node_modules/`:** the repository still contains a committed macOS `node_modules/` folder. `npm ci` replaces it with the right files for your computer, so Git may then show many changed files under `node_modules/` — do not commit those.
 

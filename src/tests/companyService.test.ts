@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fake, fakeClient } from './helpers/fakeSupabase';
 import {
   CompanyServiceError, buildRegisterCompanyArgs, classifyPostgrestError, clearRegistrationKey,
-  deriveOnboardingState, fetchOnboardingSnapshot, loadRegistrationKey, newRegistrationKey, registerCompany,
+  bookableOrganizations, deriveOnboardingState, fetchOnboardingSnapshot, loadRegistrationKey, newRegistrationKey, registerCompany,
   saveRegistrationKey, validateRegistrationInput, type CompanyRegistrationInput, type OnboardingSnapshot,
 } from '../lib/companyService';
 
@@ -156,7 +156,7 @@ describe('registerCompany', () => {
 });
 
 describe('fetchOnboardingSnapshot (read-only, RLS-filtered)', () => {
-  it('reads profile, memberships with embedded organisation and platform roles, filtered to the session user', async () => {
+  it('reads profile and platform roles filtered to the session user, and memberships via the caller-scoped RPC', async () => {
     fake.tables.profiles = { data: { status: 'active' }, error: null, status: 200 };
     fake.setMemberships([{ orgId: 'org-1', org: { legalName: 'Gulf Test Logistics LLC', status: 'pending' } }]);
     const snapshot = await fetchOnboardingSnapshot(PROD_ENV);
@@ -170,8 +170,8 @@ describe('fetchOnboardingSnapshot (read-only, RLS-filtered)', () => {
     });
     const byTable = Object.fromEntries(fake.queries.map(q => [q.table, q]));
     expect(byTable.profiles.filters).toEqual([['eq', 'id', 'auth-user-1']]);
-    expect(byTable.organization_memberships.filters).toEqual([['eq', 'user_id', 'auth-user-1']]);
-    expect(byTable.organization_memberships.select).toContain('organizations(');
+    expect(byTable.organization_memberships).toBeUndefined(); // no direct membership/organisation table read
+    expect(fakeClient.rpc).toHaveBeenCalledWith('my_company_memberships');
     expect(byTable.role_assignments.filters).toEqual([['eq', 'user_id', 'auth-user-1'], ['is', 'organization_id', null]]);
     expect(fake.writeAttempts).toEqual([]);
   });
@@ -181,15 +181,15 @@ describe('fetchOnboardingSnapshot (read-only, RLS-filtered)', () => {
     await expect(fetchOnboardingSnapshot(PROD_ENV)).rejects.toMatchObject({ kind: 'not-authenticated' });
     expect(fakeClient.from).not.toHaveBeenCalled();
     fake.session = { user: { id: 'auth-user-1' } };
-    fake.tables.organization_memberships = { data: null, error: { message: 'Failed to fetch', code: '' }, status: 0 };
+    fake.tables['rpc:my_company_memberships'] = { data: null, error: { message: 'Failed to fetch', code: '' }, status: 0 };
     await expect(fetchOnboardingSnapshot(PROD_ENV)).rejects.toMatchObject({ kind: 'network' });
   });
 });
 
 describe('deriveOnboardingState', () => {
   const base: OnboardingSnapshot = { profile: { status: 'active' }, memberships: [], platformRoles: [] };
-  const member = (status: string, org: null | 'pending' | 'approved') => ({
-    organizationId: `org-${status}-${org}`, membershipRole: 'company_admin', membershipStatus: status,
+  const member = (status: string, org: null | 'pending' | 'approved' | 'rejected' | 'suspended', role = 'company_admin') => ({
+    organizationId: `org-${status}-${org}`, membershipRole: role, membershipStatus: status,
     organization: org === null ? null : { id: `org-${status}-${org}`, legalName: `Co ${org}`, displayName: null, status: org },
   });
 
@@ -200,10 +200,21 @@ describe('deriveOnboardingState', () => {
     expect(deriveOnboardingState({ ...base, memberships: [member('active', 'approved')] }).kind).toBe('approved');
     expect(deriveOnboardingState({ ...base, memberships: [member('invited', null)] }).kind).toBe('invited');
     expect(deriveOnboardingState({ ...base, memberships: [member('active', null)] }).kind).toBe('restricted');
-    expect(deriveOnboardingState({ ...base, memberships: [member('suspended', null)] }).kind).toBe('restricted');
+    expect(deriveOnboardingState({ ...base, memberships: [member('suspended', 'approved')] }).kind).toBe('restricted');
+    // Phase 3: rejected and suspended companies are now distinguishable (my_company_memberships).
+    expect(deriveOnboardingState({ ...base, memberships: [member('active', 'rejected')] }).kind).toBe('rejected');
+    expect(deriveOnboardingState({ ...base, memberships: [member('active', 'suspended')] }).kind).toBe('suspended');
     expect(deriveOnboardingState({ ...base, platformRoles: ['operations'] })).toEqual({ kind: 'platform-staff', roles: ['operations'] });
     expect(deriveOnboardingState({ ...base, profile: { status: 'suspended' }, memberships: [member('active', 'approved')] }))
       .toEqual({ kind: 'account-suspended' });
+  });
+
+  it('only approved organisations with an active admin/booker membership are bookable', () => {
+    const snapshot: OnboardingSnapshot = { ...base, memberships: [
+      member('active', 'approved'), member('active', 'pending'), member('suspended', 'approved'),
+      { ...member('active', 'rejected'), organizationId: 'x' }, member('invited', 'approved', 'company_booker'),
+    ] };
+    expect(bookableOrganizations(snapshot).map(o => o.id)).toEqual(['org-active-approved']);
   });
 
   it('prefers an approved company over a pending one and never reports approval without it', () => {

@@ -31,16 +31,23 @@ export const fake = {
   queries: [] as RecordedQuery[],
   rpc: vi.fn<RpcHandler>(),
   writeAttempts: [] as string[],
+  /** Tables a test explicitly allows direct writes to (ATCO operations tables only). */
+  writableTables: new Set<string>(),
+  /** Allowed writes, recorded: [table, method, payload]. */
+  writes: [] as Array<[string, string, unknown]>,
 
   reset() {
     this.session = { user: { id: 'auth-user-1' } };
     this.tables = {
       profiles: ok(null),
-      organization_memberships: ok([]),
       role_assignments: ok([]),
+      // Read-only RPC served from here so `fake.rpc` only ever records write/business calls.
+      'rpc:my_company_memberships': ok([]),
     };
     this.queries = [];
     this.writeAttempts = [];
+    this.writableTables = new Set();
+    this.writes = [];
     this.rpc.mockReset();
     this.rpc.mockImplementation(() => ({ data: null, error: { message: 'no rpc handler configured', code: 'TEST' }, status: 500 }));
     client.auth.getSession.mockClear();
@@ -48,13 +55,15 @@ export const fake = {
     client.rpc.mockClear();
   },
 
-  /** Convenience: memberships as PostgREST returns them, with embedded organisation (or null when RLS hides it). */
-  setMemberships(rows: Array<{ orgId: string; role?: string; status?: string; org: null | { legalName: string; displayName?: string | null; status: string } }>) {
-    this.tables.organization_memberships = ok(rows.map(r => ({
+  /** Convenience: rows exactly as my_company_memberships() returns them. */
+  setMemberships(rows: Array<{ orgId: string; role?: string; status?: string; org: { legalName: string; displayName?: string | null; status: string } }>) {
+    this.tables['rpc:my_company_memberships'] = ok(rows.map(r => ({
       organization_id: r.orgId,
+      legal_name: r.org.legalName,
+      display_name: r.org.displayName ?? null,
+      organization_status: r.org.status,
       membership_role: r.role ?? 'company_admin',
-      status: r.status ?? 'active',
-      organizations: r.org === null ? null : { id: r.orgId, legal_name: r.org.legalName, display_name: r.org.displayName ?? null, status: r.org.status },
+      membership_status: r.status ?? 'active',
     })));
   },
 };
@@ -63,19 +72,26 @@ function builder(table: string) {
   const recorded: RecordedQuery = { table, filters: [] };
   fake.queries.push(recorded);
   const respond = () => Promise.resolve(fake.tables[table] ?? ok(null));
-  const forbidden = (method: string) => () => {
-    fake.writeAttempts.push(`${table}.${method}`);
-    throw new Error(`Direct ${method} on ${table} is not allowed from the client`);
+  const write = (method: string) => (payload?: unknown) => {
+    if (!fake.writableTables.has(table)) {
+      fake.writeAttempts.push(`${table}.${method}`);
+      throw new Error(`Direct ${method} on ${table} is not allowed from the client`);
+    }
+    fake.writes.push([table, method, payload]);
+    return b;
   };
+  const filter = (op: string) => (column: string, value: unknown) => { recorded.filters.push([op, column, value]); return b; };
   const b = {
     select(columns: string) { recorded.select = columns; return b; },
-    eq(column: string, value: unknown) { recorded.filters.push(['eq', column, value]); return b; },
-    is(column: string, value: unknown) { recorded.filters.push(['is', column, value]); return b; },
+    eq: filter('eq'), is: filter('is'), gt: filter('gt'), gte: filter('gte'), ilike: filter('ilike'),
+    order: filter('order'), limit: (n: number) => { recorded.filters.push(['limit', '', n]); return b; },
+    range: (from: number, to: number) => { recorded.filters.push(['range', String(from), to]); return b; },
     maybeSingle() { return respond(); },
-    insert: forbidden('insert'),
-    update: forbidden('update'),
-    upsert: forbidden('upsert'),
-    delete: forbidden('delete'),
+    single() { return respond(); },
+    insert: write('insert'),
+    update: write('update'),
+    upsert: write('upsert'),
+    delete: write('delete'),
     then<T1, T2>(onFulfilled?: (value: FakeResponse) => T1, onRejected?: (reason: unknown) => T2) {
       return respond().then(onFulfilled, onRejected);
     },
@@ -88,7 +104,10 @@ const client = {
     getSession: vi.fn(async () => ({ data: { session: fake.session }, error: null })),
   },
   from: vi.fn((table: string) => builder(table)),
-  rpc: vi.fn(async (fn: string, args: Record<string, unknown>) => fake.rpc(fn, args)),
+  rpc: vi.fn(async (fn: string, args: Record<string, unknown> = {}) => {
+    const served = fake.tables[`rpc:${fn}`];
+    return served ?? fake.rpc(fn, args);
+  }),
 };
 
 export const fakeClient = client;

@@ -18,6 +18,11 @@ import SettingsView from './pages/SettingsView';
 import AuthView from './pages/AuthView';
 import PasswordRecoveryView from './pages/PasswordRecoveryView';
 import OnboardingView from './pages/OnboardingView';
+import ProductionBookingView from './pages/ProductionBookingView';
+import ProductionBookingsView from './pages/ProductionBookingsView';
+import AdminCompaniesView from './pages/AdminCompaniesView';
+import AdminOperationsView from './pages/AdminOperationsView';
+import { NotConnectedView } from './components/ProductionUi';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { OnboardingProvider } from './context/OnboardingContext';
 import { RECOVERY_PATH } from './lib/recoveryLink';
@@ -42,6 +47,15 @@ function RecoveryRedirect() {
   return null;
 }
 
+/**
+ * Production and demo never share data: in production a route renders its Supabase-backed page
+ * (or an honest "not connected" screen); in demo it renders the original offline page.
+ */
+function ByMode({ demo, production }: { demo: ReactNode; production: ReactNode }) {
+  const { authMode } = useAuth();
+  return <>{authMode === 'production' ? production : demo}</>;
+}
+
 export function AppRoutes() {
   return (
     <>
@@ -52,14 +66,17 @@ export function AppRoutes() {
       <Route path="/signup" element={<AuthView initialMode="signup" />} />
       <Route path={RECOVERY_PATH} element={<PasswordRecoveryView />} />
       <Route element={<Layout />}>
-        <Route path="/" element={<CustomerHome />} />
-        <Route path="/book" element={<BookingView />} />
-        <Route path="/bookings" element={<MyBookingsView />} />
-        <Route path="/corporate" element={<CorporateView />} />
-        <Route path="/operations" element={<OperationsView />} />
-        <Route path="/boarding" element={<BoardingView />} />
-        <Route path="/materials" element={<MaterialsView />} />
-        <Route path="/fleet" element={<FleetView />} />
+        <Route path="/" element={<ByMode demo={<CustomerHome />} production={<Navigate to="/onboarding" replace />} />} />
+        <Route path="/book" element={<ByMode demo={<BookingView />} production={<ProductionBookingView />} />} />
+        <Route path="/bookings" element={<ByMode demo={<MyBookingsView />} production={<ProductionBookingsView />} />} />
+        <Route path="/bookings/:reference" element={<ByMode demo={<MyBookingsView />} production={<ProductionBookingsView />} />} />
+        <Route path="/corporate" element={<ByMode demo={<CorporateView />} production={<NotConnectedView />} />} />
+        <Route path="/operations" element={<ByMode demo={<OperationsView />} production={<NotConnectedView />} />} />
+        <Route path="/boarding" element={<ByMode demo={<BoardingView />} production={<NotConnectedView />} />} />
+        <Route path="/materials" element={<ByMode demo={<MaterialsView />} production={<NotConnectedView />} />} />
+        <Route path="/fleet" element={<ByMode demo={<FleetView />} production={<NotConnectedView />} />} />
+        <Route path="/admin/companies" element={<AdminCompaniesView />} />
+        <Route path="/admin/operations" element={<AdminOperationsView />} />
         <Route path="/settings" element={<SettingsView />} />
         <Route path="/onboarding" element={<OnboardingView />} />
         <Route path="*" element={<Navigate to="/" replace />} />

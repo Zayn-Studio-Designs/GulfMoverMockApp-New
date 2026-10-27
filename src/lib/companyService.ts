@@ -14,9 +14,9 @@ import { getAppConfig, type EnvSource } from './supabase';
  * `role_assignments`, `approval_events` or `profiles`, never sends a user id,
  * role, status or approval field, and never uses a service-role key.
  *
- * READ PATH — `profiles`, `organization_memberships` (+ embedded
- * `organizations`) and `role_assignments` through the caller's own session,
- * so Row Level Security decides what is visible. The session's user id is used
+ * READ PATH — `profiles` and `role_assignments` through the caller's own session
+ * (RLS decides what is visible) and the caller-scoped read-only RPC
+ * `my_company_memberships()` for the caller's own memberships and organisation status. The session's user id is used
  * only as a query filter (RLS remains the authority).
  *
  * IDEMPOTENCY — the RPC is keyed by a client-generated `p_registration_key`.
@@ -308,11 +308,8 @@ export interface MembershipSnapshot {
   readonly membershipRole: string;
   readonly membershipStatus: string;
   /**
-   * The organisation row as RLS lets the member see it, or null when it is hidden.
-   * Under the provisional visibility rule (A20, migration 20261026162000) members see
-   * only APPROVED or PENDING organisations through an ACTIVE membership, so null means
-   * "rejected or suspended organisation, or inactive membership" — the client cannot
-   * tell which.
+   * The member's own organisation as returned by my_company_memberships() (name and
+   * status only — never the rejection reason). Null only if the row was malformed.
    */
   readonly organization: { readonly id: string; readonly legalName: string; readonly displayName: string | null; readonly status: OrganizationStatus } | null;
 }
@@ -345,9 +342,9 @@ export async function fetchOnboardingSnapshot(env?: EnvSource): Promise<Onboardi
   try {
     const [profile, memberships, roles] = await Promise.all([
       client.from('profiles').select('status').eq('id', userId).maybeSingle(),
-      client.from('organization_memberships')
-        .select('organization_id, membership_role, status, organizations(id, legal_name, display_name, status)')
-        .eq('user_id', userId),
+      // Caller-scoped RPC (migration 20261027120000): own memberships WITH organisation status,
+      // including rejected/suspended companies that the table policies hide from members.
+      client.rpc('my_company_memberships'),
       client.from('role_assignments').select('role, status').eq('user_id', userId).is('organization_id', null),
     ]);
     for (const result of [profile, memberships, roles]) {
@@ -363,8 +360,10 @@ export async function fetchOnboardingSnapshot(env?: EnvSource): Promise<Onboardi
         .map(row => ({
           organizationId: row.organization_id as string,
           membershipRole: String(row.membership_role ?? ''),
-          membershipStatus: String(row.status ?? ''),
-          organization: parseOrganization(row.organizations),
+          membershipStatus: String(row.membership_status ?? ''),
+          organization: parseOrganization({
+            id: row.organization_id, legal_name: row.legal_name, display_name: row.display_name, status: row.organization_status,
+          }),
         })),
       platformRoles: roleRows
         .filter(row => row.status === 'active' && typeof row.role === 'string')
@@ -383,6 +382,14 @@ export interface OrganizationSummary {
   readonly membershipRole: string;
 }
 
+/** Approved organisations in which the user is an active admin/booker: the only ones that may book. */
+export function bookableOrganizations(snapshot: OnboardingSnapshot): OrganizationSummary[] {
+  return snapshot.memberships
+    .filter(m => m.membershipStatus === 'active' && m.organization?.status === 'approved'
+      && (m.membershipRole === 'company_admin' || m.membershipRole === 'company_booker'))
+    .map(m => ({ id: m.organizationId, name: m.organization!.displayName || m.organization!.legalName, status: 'approved', membershipRole: m.membershipRole }));
+}
+
 export type OnboardingState =
   /** Profile suspended by ATCO: no registration possible (RPC guard P4). */
   | { readonly kind: 'account-suspended' }
@@ -392,7 +399,11 @@ export type OnboardingState =
   | { readonly kind: 'pending'; readonly organizations: readonly OrganizationSummary[] }
   /** Membership invitation not yet active (no acceptance flow exists yet). */
   | { readonly kind: 'invited' }
-  /** Membership exists but the company is hidden (rejected/suspended) or the membership is suspended. */
+  /** ATCO rejected the registration (the reason is not shown to members — pending ATCO decision). */
+  | { readonly kind: 'rejected'; readonly organizations: readonly OrganizationSummary[] }
+  /** ATCO suspended the company. */
+  | { readonly kind: 'suspended'; readonly organizations: readonly OrganizationSummary[] }
+  /** The membership itself is suspended (or otherwise not active). */
   | { readonly kind: 'restricted' }
   /** ATCO platform staff account without a company membership. */
   | { readonly kind: 'platform-staff'; readonly roles: readonly string[] }
@@ -415,6 +426,10 @@ export function deriveOnboardingState(snapshot: OnboardingSnapshot): OnboardingS
   const pending = summaries('pending');
   if (pending.length > 0) return { kind: 'pending', organizations: pending };
   if (snapshot.memberships.some(m => m.membershipStatus === 'invited')) return { kind: 'invited' };
+  const rejected = summaries('rejected');
+  if (rejected.length > 0) return { kind: 'rejected', organizations: rejected };
+  const suspended = summaries('suspended');
+  if (suspended.length > 0) return { kind: 'suspended', organizations: suspended };
   if (snapshot.memberships.length > 0) return { kind: 'restricted' };
   if (snapshot.platformRoles.length > 0) return { kind: 'platform-staff', roles: snapshot.platformRoles };
   return { kind: 'no-company' };

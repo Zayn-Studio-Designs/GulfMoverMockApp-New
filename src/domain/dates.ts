@@ -58,7 +58,23 @@ export function isValidDateString(value: string): boolean {
 
 /** Validates an HH:MM 24-hour departure time. */
 export function isValidTime(value: string): boolean {
-  const m = /^([01]\d|2[0-3]):[0-5]\d$/.exec(value);
+  // Two capture groups: hours AND minutes (the minutes group was missing, so every time failed).
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
   if (!m) return false;
   return Number(m[1]) < 24 && Number(m[2]) < 60;
+}
+
+/**
+ * Phase 3: Saudi-local date + HH:MM (as entered by ATCO staff) → an absolute ISO instant.
+ * Saudi Arabia is UTC+3 with no daylight saving, so the offset is fixed.
+ */
+export function saudiDateTimeToIso(date: string, time: string): string | null {
+  if (!isValidDateString(date) || !isValidTime(time)) return null;
+  return new Date(`${date}T${time}:00+03:00`).toISOString();
+}
+
+/** An ISO instant → its Saudi-local calendar date and HH:MM time (for display and edit forms). */
+export function saudiDateTimeParts(iso: string): { date: string; time: string } {
+  const at = new Date(iso);
+  return { date: saudiLocalDate(at), time: saudiLocalTime(at) };
 }

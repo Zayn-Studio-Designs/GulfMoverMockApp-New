@@ -57,6 +57,10 @@ function TextField({ id, field, label, hint, value, onChange, error, maxLength, 
   );
 }
 
+const ORG_STATUS_KEY: Record<OrganizationSummary['status'], string> = {
+  pending: 'onbStatusPending', approved: 'onbStatusApproved', rejected: 'onbStatusRejected', suspended: 'onbStatusSuspended',
+};
+
 function OrganizationList({ organizations }: { organizations: readonly OrganizationSummary[] }) {
   const { t } = useLanguage();
   return (
@@ -67,8 +71,8 @@ function OrganizationList({ organizations }: { organizations: readonly Organizat
             <div className="request-title">{org.name}</div>
             <div className="request-meta">{t(org.membershipRole === 'company_admin' ? 'onbRoleAdmin' : 'onbRoleBooker')}</div>
           </div>
-          <Pill tone={org.status === 'approved' ? 'pill-green' : 'pill-gold'}>
-            {t(org.status === 'approved' ? 'onbStatusApproved' : 'onbStatusPending')}
+          <Pill tone={org.status === 'approved' ? 'pill-green' : org.status === 'pending' ? 'pill-gold' : 'pill-red'}>
+            {t(ORG_STATUS_KEY[org.status])}
           </Pill>
         </div>
       ))}
@@ -295,11 +299,30 @@ export default function OnboardingView() {
           <StateCard title={t('onbApprovedTitle')}>
             {t('onbApprovedBody')}
             <OrganizationList organizations={state.organizations} />
+            <div style={{ marginTop: 14 }}><Link className="btn btn-primary btn-small" to="/book">{t('pbBookCta')}</Link></div>
           </StateCard>
         );
         break;
       case 'invited':
         content = <StateCard title={t('onbInvitedTitle')} tone="blue">{t('onbInvitedBody')}<div style={{ marginTop: 10 }}><ContactAtcoLink /></div></StateCard>;
+        break;
+      case 'rejected':
+        content = (
+          <StateCard title={t('onbRejectedTitle')} tone="danger">
+            {t('onbRejectedBody')}
+            <OrganizationList organizations={state.organizations} />
+            <div style={{ marginTop: 10 }}><ContactAtcoLink /></div>
+          </StateCard>
+        );
+        break;
+      case 'suspended':
+        content = (
+          <StateCard title={t('onbSuspendedCoTitle')} tone="danger">
+            {t('onbSuspendedCoBody')}
+            <OrganizationList organizations={state.organizations} />
+            <div style={{ marginTop: 10 }}><ContactAtcoLink /></div>
+          </StateCard>
+        );
         break;
       case 'restricted':
         content = <StateCard title={t('onbRestrictedTitle')} tone="danger">{t('onbRestrictedBody')}<div style={{ marginTop: 10 }}><ContactAtcoLink /></div></StateCard>;

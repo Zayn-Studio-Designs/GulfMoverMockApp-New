@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useAuth } from './AuthContext';
 import {
   CompanyServiceError, deriveOnboardingState, fetchOnboardingSnapshot,
-  type CompanyServiceErrorKind, type OnboardingState,
+  type CompanyServiceErrorKind, type OnboardingSnapshot, type OnboardingState,
 } from '../lib/companyService';
 
 /**
@@ -16,7 +16,8 @@ export type OnboardingStatus =
   | { readonly phase: 'signed-out' }
   | { readonly phase: 'loading' }
   | { readonly phase: 'error'; readonly error: CompanyServiceErrorKind }
-  | { readonly phase: 'ready'; readonly state: OnboardingState };
+  /** `snapshot` carries the server-read platform roles and memberships (the real authority for UI guards). */
+  | { readonly phase: 'ready'; readonly state: OnboardingState; readonly snapshot: OnboardingSnapshot };
 
 interface OnboardingContextValue {
   status: OnboardingStatus;
@@ -45,7 +46,8 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     setStatus(s => (sameUser && s.phase === 'ready' ? s : { phase: 'loading' }));
     let next: OnboardingStatus;
     try {
-      next = { phase: 'ready', state: deriveOnboardingState(await fetchOnboardingSnapshot()) };
+      const snapshot = await fetchOnboardingSnapshot();
+      next = { phase: 'ready', state: deriveOnboardingState(snapshot), snapshot };
     } catch (error) {
       next = { phase: 'error', error: error instanceof CompanyServiceError ? error.kind : 'unknown' };
     }
@@ -60,6 +62,16 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({ status, refresh: load }), [status, load]);
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
+}
+
+/**
+ * The signed-in user's ACTIVE platform roles as read from role_assignments under RLS, or null
+ * while unknown (loading, error, signed out, demo). UI guards use this only to decide what to
+ * show; the database re-checks every privileged operation.
+ */
+export function usePlatformRoles(): readonly string[] | null {
+  const { status } = useOnboarding();
+  return status.phase === 'ready' ? status.snapshot.platformRoles : null;
 }
 
 export function useOnboarding(): OnboardingContextValue {

@@ -245,7 +245,7 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
             {mode === 'signup' && <p className="small muted" style={{ margin: 0 }}>{t('termsNote')}</p>}
             {!(isProduction && mode === 'reset' && resetEmailSent) && (
               <button type="submit" className="btn btn-primary btn-block" disabled={busy}>
-                {mode === 'signin' ? t('signInBtn') : mode === 'signup' ? t('signUpBtn') : sentCode ? t('resetBtn') : t('sendCode')}
+                {mode === 'signin' ? t('signInBtn') : mode === 'signup' ? t('signUpBtn') : sentCode ? t('resetBtn') : isProduction ? t('sendResetLink') : t('sendCode')}
               </button>
             )}
           </form>

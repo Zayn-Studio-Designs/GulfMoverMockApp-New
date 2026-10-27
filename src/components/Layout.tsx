@@ -8,7 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useDemo } from '../context/DemoContext';
 import { useWorkMode } from '../context/WorkModeContext';
 import { useUi } from '../context/UiContext';
-import { useOnboarding } from '../context/OnboardingContext';
+import { useOnboarding, usePlatformRoles } from '../context/OnboardingContext';
 import { Icon, type IconName } from './Icon';
 import { Tour, hasSeenTour, markTourSeen } from './Tour';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -56,9 +56,18 @@ const CUSTOMER_NAV: ReadonlyArray<NavItem> = [
   { to: '/settings', key: 'navAccount', icon: 'user' },
 ];
 
-/** Production only: company onboarding is the one customer destination backed by Supabase. */
-const ONBOARDING_NAV: NavItem = { to: '/onboarding', key: 'navCompany', icon: 'navCorporate' };
-const PRODUCTION_CUSTOMER_NAV: ReadonlyArray<NavItem> = [...CUSTOMER_NAV.slice(0, 3), ONBOARDING_NAV, ...CUSTOMER_NAV.slice(3)];
+/** Production navigation: only Supabase-backed destinations. */
+const PRODUCTION_CUSTOMER_NAV: ReadonlyArray<NavItem> = [
+  { to: '/onboarding', key: 'navCompany', icon: 'navCorporate' },
+  { to: '/book', key: 'navBook', icon: 'navBook' },
+  { to: '/bookings', key: 'navBookings', icon: 'navBookings' },
+  { to: '/settings', key: 'navAccount', icon: 'user' },
+];
+/** ATCO destinations, shown only when the SERVER-READ platform roles include one of `roles`. */
+const PRODUCTION_STAFF_NAV: ReadonlyArray<NavItem & { roles: readonly string[] }> = [
+  { to: '/admin/companies', key: 'navReview', icon: 'list', roles: ['super_admin', 'operations'] },
+  { to: '/admin/operations', key: 'navAdminOps', icon: 'ship', roles: ['super_admin', 'operations'] },
+];
 
 /**
  * Production only: states plainly which parts of the app are live, and the user's next
@@ -229,13 +238,18 @@ export function Layout() {
 
   // New accounts get the tour once, on their first visit; the demo guest can start it from the ? button.
   // The tour follows the current demo view, and restarts from step 1 if the view is switched.
+  // It describes demo screens, so production never starts it.
   const userId = user?.id;
   const isGuest = user?.email === DEMO_GUEST.email;
+  const platformRoles = usePlatformRoles();
+  const navItems: ReadonlyArray<NavItem> = isDemoAuth
+    ? (isCustomer ? CUSTOMER_NAV : NAV_ITEMS)
+    : [...PRODUCTION_CUSTOMER_NAV, ...PRODUCTION_STAFF_NAV.filter(item => platformRoles?.some(r => item.roles.includes(r)))];
   useEffect(() => {
-    if (!userId || isGuest || hasSeenTour(userId)) return;
+    if (!isDemoAuth || !userId || isGuest || hasSeenTour(userId)) return;
     markTourSeen(userId);
     startTour();
-  }, [userId, isGuest, startTour]);
+  }, [isDemoAuth, userId, isGuest, startTour]);
 
   const publicAtcoInfo = pathname === '/settings' && new URLSearchParams(search).get('tab') === 'atco';
   // Production gates run BEFORE any redirect: restoring a session or a broken
@@ -261,7 +275,7 @@ export function Layout() {
           <div className="header-spacer" />
           <div className="head-actions">
             {/* Signed-out visitors can open only the public ATCO page; the tour needs an account. */}
-            {user && <button type="button" className="tour-btn" data-tour="account" aria-label={t('tourStart')} title={t('tourStart')} onClick={startTour}>?</button>}
+            {user && isDemoAuth && <button type="button" className="tour-btn" data-tour="account" aria-label={t('tourStart')} title={t('tourStart')} onClick={startTour}>?</button>}
             {/* Opens the same Notifications settings page the profile menu used to link to. */}
             {user && <Link className="bell-btn" to="/settings?tab=notifications" aria-label={t('notificationsTitle')} title={t('notificationsTitle')}><Icon name="bell" /></Link>}
             <AccountMenu />
@@ -271,15 +285,19 @@ export function Layout() {
       <div className="shell">
         <aside className="sidebar" aria-label={t('mainNavigation')}>
           <div className="side-label">{t('workspace')}</div>
-          <div className="ws-switch" role="group" data-tour="ws-switch" aria-label={t('wsSwitchGroup')}>
-            <div className="ws-seg">
-              <button type="button" className={`ws-btn${isCustomer ? ' active' : ''}`} aria-pressed={isCustomer} onClick={() => setMode('customer')}>{t('wsCustomerLabel')}</button>
-              <button type="button" className={`ws-btn${isCustomer ? '' : ' active'}`} aria-pressed={!isCustomer} onClick={() => setMode('staff')}>{t('wsStaffLabel')}</button>
+          {/* The customer/staff switch is a demo presentation aid. Production never offers it:
+              ATCO screens appear only for accounts whose server-side roles allow them. */}
+          {isDemoAuth && (
+            <div className="ws-switch" role="group" data-tour="ws-switch" aria-label={t('wsSwitchGroup')}>
+              <div className="ws-seg">
+                <button type="button" className={`ws-btn${isCustomer ? ' active' : ''}`} aria-pressed={isCustomer} onClick={() => setMode('customer')}>{t('wsCustomerLabel')}</button>
+                <button type="button" className={`ws-btn${isCustomer ? '' : ' active'}`} aria-pressed={!isCustomer} onClick={() => setMode('staff')}>{t('wsStaffLabel')}</button>
+              </div>
+              <small>{t('wsDemoHint')}</small>
             </div>
-            <small>{t('wsDemoHint')}</small>
-          </div>
-          <nav className={`nav-list${isCustomer ? '' : ' nav-list-staff'}`} aria-label={t('mainNavigation')} data-tour="nav">
-            {(isCustomer ? (isDemoAuth ? CUSTOMER_NAV : PRODUCTION_CUSTOMER_NAV) : NAV_ITEMS).map(item => item.hub ? (
+          )}
+          <nav className={`nav-list${isCustomer || !isDemoAuth ? '' : ' nav-list-staff'}`} aria-label={t('mainNavigation')} data-tour="nav">
+            {navItems.map(item => item.hub ? (
               <button key={item.key} type="button" ref={hubTriggerRef} data-tour={`nav-${item.key}`}
                 className={`nav-btn nav-hub${agentOpsActive ? ' active' : ''}${item.mobileOnly ? ' nav-mobile-only' : ''}`}
                 aria-haspopup="menu" aria-expanded={hubOpen} onClick={() => setHubOpen(open => !open)}>
@@ -307,15 +325,15 @@ export function Layout() {
               ))}
             </div>
           )}
-          <div className="side-note"><strong>{t('sampleWorkspace')}</strong><span>{t('demoSideNote')}</span></div>
-          <button type="button" className="side-reset" onClick={onReset}><Icon name="reset" />{t('resetDemo')}</button>
+          {isDemoAuth && <div className="side-note"><strong>{t('sampleWorkspace')}</strong><span>{t('demoSideNote')}</span></div>}
+          {isDemoAuth && <button type="button" className="side-reset" onClick={onReset}><Icon name="reset" />{t('resetDemo')}</button>}
         </aside>
         <main className="main" id="app-main" tabIndex={-1}>
           {!isDemoAuth && user && pathname !== '/onboarding' && <ProductionScopeNotice />}
           <ErrorBoundary resetKey={pathname} fallback={retry => <ScreenError retry={retry} />}>
             <Outlet />
           </ErrorBoundary>
-          <button type="button" className="mobile-reset" onClick={onReset}><Icon name="reset" />{t('resetDemo')}</button>
+          {isDemoAuth && <button type="button" className="mobile-reset" onClick={onReset}><Icon name="reset" />{t('resetDemo')}</button>}
         </main>
       </div>
       {tourOpen && user && <Tour key={isCustomer ? 'customer' : 'staff'} mode={isCustomer ? 'customer' : 'staff'} onClose={closeTour} />}

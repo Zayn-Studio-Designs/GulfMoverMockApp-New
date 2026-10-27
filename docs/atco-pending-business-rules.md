@@ -130,3 +130,29 @@ test of this migration has executed. Outstanding:
 and byte-identical (SHA-256 `886c7f7b2598ae50ae78b29f970e0cefdf69f8b60e76dfe1ae46
 da14528af088`) at the time of this record. This document does not represent ATCO
 approval.*
+
+---
+
+## Phase 3 additions — approvals, roles and bookings (2026-10-27, branch `feature/phase3-approval-bookings`)
+
+Implemented as the **narrowest defensible defaults** in migrations `20261027120000_company_review.sql` and
+`20261027121000_operations_bookings.sql`. None is ATCO-confirmed. Each is a small migration change if ATCO decides otherwise.
+
+| # | Provisional rule now enforced | Decision needed from ATCO |
+|---|---|---|
+| P11 | Only an active **`super_admin`** may approve or reject a company; `operations` may view registrations only (Phase 1 matrix). | Should operations (or another role) also decide? |
+| P12 | Decisions: `pending → approved` and `pending → rejected` (reason required, ≤ 500 chars). Suspension, reinstatement and return-to-pending have **no** application path. | Is a suspension/reinstatement workflow needed, and must a suspension reason be recorded? |
+| P13 | A reviewer may not decide on a company they created or belong to. A reviewer needs an active profile. | Confirm conflict-of-interest rule. |
+| P14 | The **rejection reason is not shown** to the company (members see only "not approved"). | May companies see the reason? In which language? |
+| P15 | Only active admins/bookers of an **approved** company may book. **Individual (non-company) customers cannot book** in production. | Does checkout require an account? Are individuals allowed, and on what terms? |
+| P16 | A `company_booker` sees only bookings they created; the `company_admin` sees all of the company's bookings. | Confirm corporate visibility. |
+| P17 | ATCO `super_admin` and `operations` see every booking (manifests); `finance` and `boarding_staff` see none yet. | Which staff roles may see passenger names/contact details? |
+| P18 | `super_admin` and `operations` may create/edit vessels, routes and sailings; nothing can be deleted. | Who owns schedule changes? Approval for changes after bookings exist? |
+| P19 | Booking stores lead passenger name, contact e-mail, contact phone, optional extra names and optional PO reference — no ID numbers. | Which passenger/permit fields are legally required, and their retention period? |
+| P20 | A booking only **holds seats** (`reserved`). No price, VAT, payment, ticket, clearance or boarding state is recorded. | Fares, VAT treatment, payment methods and timing, and when a reservation becomes a ticket. |
+| P21 | No cancellation or amendment by customers; a cancelled sailing keeps its bookings as reserved. | Cancellation/refund/no-show policy and what happens to bookings on a cancelled sailing. |
+| P22 | Seat capacity is entered per sailing by ATCO; a vessel's passenger capacity is optional and caps sailings when recorded. Technical upper bound 1,000. | Confirm vessel capacities and any per-route load limits. |
+| P23 | The 4-ticket minimum is shown as information only; bookings are not blocked or cancelled when it is not met. | What happens operationally when the minimum is not reached? |
+| P24 | Platform roles are granted only out-of-band by the database owner (`supabase/scripts/provision_platform_role.sql`). | Who authorises staff provisioning and how is it recorded? |
+
+*Recorded 2026-10-27. This section does not represent ATCO approval.*

@@ -250,18 +250,21 @@ describe('onboarding states', () => {
     expect(fake.rpc).not.toHaveBeenCalled();
   });
 
-  it('an approved member sees the approval and the honest note that bookings are not connected yet', async () => {
+  it('an approved member sees the approval, a link to book, and that payment/tickets/boarding are not connected', async () => {
     fake.setMemberships([{ orgId: 'org-1', role: 'company_booker', org: { legalName: 'Approved Co LLC', displayName: 'Approved Co', status: 'approved' } }]);
     renderApp();
     expect(await screen.findByRole('heading', { name: 'Company approved by ATCO' })).toBeTruthy();
-    expect(screen.getByText(/Live company bookings are not connected yet/)).toBeTruthy();
+    expect(screen.getByText(/payment, tickets and boarding are not connected yet/)).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: 'Book a sailing' }).length).toBeGreaterThan(0);
     expect(screen.getByText('Approved Co')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Company details' })).toBeNull();
   });
 
   it.each([
-    ['restricted (company hidden by RLS)', () => fake.setMemberships([{ orgId: 'org-x', org: null }]), 'Company access is restricted'],
-    ['invited', () => fake.setMemberships([{ orgId: 'org-x', status: 'invited', org: null }]), 'Company invitation not yet active'],
+    ['restricted (membership suspended)', () => fake.setMemberships([{ orgId: 'org-x', status: 'suspended', org: { legalName: 'Co X', status: 'approved' } }]), 'Company access is restricted'],
+    ['invited', () => fake.setMemberships([{ orgId: 'org-x', status: 'invited', org: { legalName: 'Co X', status: 'approved' } }]), 'Company invitation not yet active'],
+    ['rejected company', () => fake.setMemberships([{ orgId: 'org-x', org: { legalName: 'Rejected Co', status: 'rejected' } }]), 'Registration not approved by ATCO'],
+    ['suspended company', () => fake.setMemberships([{ orgId: 'org-x', org: { legalName: 'Suspended Co', status: 'suspended' } }]), 'Company suspended by ATCO'],
     ['suspended profile', () => { fake.tables.profiles = { data: { status: 'suspended' }, error: null, status: 200 }; }, 'Your account is suspended'],
     ['ATCO staff', () => { fake.tables.role_assignments = { data: [{ role: 'operations', status: 'active' }], error: null, status: 200 }; }, 'ATCO staff account'],
   ])('%s: shows its own next action and no registration form', async (_label, setup, heading) => {
@@ -273,11 +276,11 @@ describe('onboarding states', () => {
   });
 
   it('a status read failure is reported, nothing is assumed, and retry recovers', async () => {
-    fake.tables.organization_memberships = networkFailure;
+    fake.tables['rpc:my_company_memberships'] = networkFailure;
     renderApp();
     expect(await screen.findByText('We could not load your company status. Nothing has been changed.')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Company details' })).toBeNull();
-    fake.tables.organization_memberships = { data: [], error: null, status: 200 };
+    fake.tables['rpc:my_company_memberships'] = { data: [], error: null, status: 200 };
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('heading', { name: 'Company details' })).toBeTruthy();
   });
@@ -323,8 +326,8 @@ describe('authentication boundary', () => {
 
 describe('production vs demo', () => {
   it('production never falls back to demo: live badge, scope notice, no guest pass', async () => {
-    renderApp('/');
-    expect(await screen.findByText(/Live in this build: sign-in and company registration only/)).toBeTruthy();
+    renderApp('/bookings');
+    expect(await screen.findByText(/Live in this build: sign-in, company registration and ATCO review, sailings and seat reservations/)).toBeTruthy();
     expect(await screen.findByText('Next step: register your company with ATCO.')).toBeTruthy();
     expect(screen.getAllByRole('link', { name: /Company registration|Company/ }).length).toBeGreaterThan(0);
     expect(screen.queryByText('Explore as demo guest')).toBeNull();
@@ -382,8 +385,8 @@ describe('English and Arabic', () => {
 
   it('a form first shown in Arabic defaults the preferred language to Arabic', async () => {
     fake.rpc.mockImplementationOnce(() => { becomePending(); return created(); });
-    fake.tables.organization_memberships = { data: [], error: null, status: 200 };
-    renderApp('/');
+    fake.tables['rpc:my_company_memberships'] = { data: [], error: null, status: 200 };
+    renderApp('/bookings');
     await screen.findByText(/Live in this build/);
     act(() => switchLang('ar'));
     fireEvent.click(screen.getByRole('link', { name: 'عرض حالة الشركة' }));
