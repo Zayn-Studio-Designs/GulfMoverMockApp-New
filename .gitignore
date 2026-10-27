@@ -4,3 +4,9 @@ node_modules/
 .env.*
 !.env.example
 dist/
+
+# Local development runtime artifacts: redirect command output and local stack
+# environment dumps can contain local-stack development keys, so they are never
+# committed. Keep logs and env dumps outside version control.
+*.log
+*-local.json

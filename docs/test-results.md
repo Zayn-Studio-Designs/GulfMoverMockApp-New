@@ -499,3 +499,60 @@ Translation table repaired and extended: 918 → 985 keys in **both** languages.
 existing values. See `docs/backend/phase5-operations.md` for the ~74% feature-weighted estimate.
 Camera decoding of rendered QR pixels, real devices/Safari, screen readers, real SMTP and
 high-volume performance remain unverified.
+
+## Verification — 2026-10-27 (branch `feature/phase6-verification-hardening`, base `de08e5d6`)
+
+macOS, Node v26.7.0. Local native Supabase CLI stack on loopback only (`supabase db query` instead
+of `psql`, `GM_IT_SQL_DRIVER=supabase`). No hosted project was contacted. Fictional data throughout.
+Full narrative, feature-by-feature results and limitations: `docs/backend/phase6-verification-hardening.md`.
+
+| Command | Exit | Result |
+|---|---:|---|
+| `npm run typecheck` | 0 | no errors |
+| `npm test` | 0 | **375 passed**; 70 integration tests skipped without stack variables (21 files passed, 6 skipped) |
+| `npm run build` | 0 | main JS 648.03 kB / 181.11 kB gzip; pre-existing >500 kB warning only |
+| `git diff --check` | 0 | no whitespace errors |
+| `npm run test:integration` with local variables | 0 | **70/70**, 6 files (24 auth/approval/booking, 9 Phase 4, 9 Phase 5, **20 Phase 6 security**, **3 QR image decode**, **5 upgrade**) |
+| `npm run test:e2e:local` with local variables | 0 | **52/52** real Chromium + local Supabase checks |
+| `supabase db reset --db-url … --version 20261027121000` then `supabase migration up --db-url …` | 0 | all 17 migrations applied cleanly; genuine Phase 4 → current upgrade |
+| `npm run test:e2e:local` again on the upgraded database | 0 | **52/52** |
+
+### New in this phase
+
+- **`supabase/migrations/20261030100000_revoke_trigger_function_execute.sql`** (additive): revokes the
+  default `PUBLIC` `EXECUTE` grant still held by five Phase 1 trigger functions, and drops four
+  organisation-membership write policies left inert after Phase 5 revoked the write grants. Neither
+  finding was exploitable; both were least-privilege inconsistencies. No previously applied migration
+  was edited.
+- **`src/tests/integration/phase6.security.integration.test.ts`** (20 DB tests): RLS on all 19 public
+  tables, no `anon`/`PUBLIC` function execute, no `SECURITY DEFINER` function without a pinned
+  `search_path`, no direct write grants, cross-company isolation across every Phase 3–5 table,
+  owner-only tickets/QR/notifications, and a new **concurrent-acceptance** race (4 parallel accepts →
+  one membership, one `accepted` event).
+- **`src/tests/integration/phase6.qr-decode.integration.test.ts`** (3 tests): the real server QR secret
+  is rendered by the app's own encoder in Chromium, screenshotted to a real PNG, decoded by an
+  independent decoder (Apple Vision via `scripts/qr/decode.swift`; any `cmd <png>` decoder works via
+  `GM_QR_DECODER`), asserted to equal the secret exactly and to contain no PII, then used to board
+  (exactly once) with a tampered payload refused by the server. Skips with an explicit reason when no
+  decoder is supplied — Chromium's own `BarcodeDetector` is absent in every configuration available
+  here.
+- **`src/tests/integration/phase6.upgrade.integration.test.ts`** (5 tests): runs the ticket
+  migration's **own** backfill statement against legacy-shaped reservations — correct count per leg,
+  recorded names only (never invented), well-formed references and QR secrets, idempotent on repeat,
+  usable afterwards, and post-upgrade reservations still ticketed by the trigger.
+
+Measured on the migrated database: 19 public tables / 0 without RLS · 0 public functions executable
+by `anon` or `PUBLIC` · 32 `SECURITY DEFINER` functions / 0 without a pinned `search_path` · 0 views
+in the exposed schema · 0 trigger functions with a `PUBLIC` grant.
+
+Local artifact hygiene: `phase4-dev.log`, `phase5-*.log`, `phase5-local.json` and
+`phase6-stack-start.log` were disposable runtime artifacts, are absent from the working tree, and were
+never committed on any branch (`git log --all --diff-filter=A` shows no added log, local-key JSON or
+real `.env` file). `.gitignore` now covers `*.log` and `*-local.json`. **No key rotation is
+indicated.** Only `.env.example` is tracked and it holds placeholders.
+
+Still unverified: hosted Supabase (never contacted), payments/invoices/refunds/VAT (not built), real
+devices and Safari camera scanning, screen readers and a native Arabic-speaker review, real SMTP,
+load/soak/rate limiting, and concurrency beyond ~10 simultaneous writers. See the Phase 6 report for
+the ~76% mock-scope estimate and the explicit statement that this is **not** a production readiness
+claim.
