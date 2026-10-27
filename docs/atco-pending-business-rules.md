@@ -156,3 +156,21 @@ Implemented as the **narrowest defensible defaults** in migrations `202610271200
 | P24 | Platform roles are granted only out-of-band by the database owner (`supabase/scripts/provision_platform_role.sql`). | Who authorises staff provisioning and how is it recorded? |
 
 *Recorded 2026-10-27. This section does not represent ATCO approval.*
+
+## Phase 4 checkpoint — internal tickets/boarding, not ATCO approval
+
+| Item | Implemented conservative behavior | ATCO decision outstanding |
+|---|---|---|
+| Ticket issuance | One reservation ticket per passenger per leg on successful booking, including existing reservations. No payment claim. Unknown names stay NULL. | When must payment or named-passenger identity be required? P20 is extended technically, not commercially approved. |
+| Ticket privacy | Only booking creator retrieves tickets/QR; company admins retain existing booking visibility but not a colleague's QR. | Should company admins distribute tickets on behalf of travellers, and under what consent/security rules? |
+| Boarding staff | Active, non-suspended super_admin/operations/boarding_staff can see a minimal manifest and record boarding. No contact email/phone or QR secret in manifest. | Confirm staff responsibilities, passenger fields and retention (P17/P19). |
+| Internal readiness | pending/ready/blocked; operations/super_admin records reason and audit. Boarding fails closed unless ready. | Confirm operational gate/checklist and readiness invalidation after vessel/schedule edits. This is NOT official marine/port clearance. |
+| Minimum four tickets | Shared sailing reservation count warning only; no automatic cancellation or rejection. | Meaning/timing of the threshold remains unresolved (P23). |
+| Cancellation | Cancelled ticket/sailing cannot board; no new customer cancellation, refund or exception override path. | Define cancellation/refund/no-show and post-boarding corrections. |
+| Manual QR entry | Staff can enter ticket reference or paste opaque QR payload. Camera not connected in production. | Identity/physical ticket handover procedures; camera support to test separately. |
+| E–H | Materials, charter requests, company invitations/member management and notifications remain incomplete. | Review statuses/roles, invite expiry/delivery and notification recipients must be agreed during those features. |
+
+Phase 4 local database and browser verification is recorded in
+[phase4-operational-platform.md](backend/phase4-operational-platform.md). No hosted
+configuration was changed. Safe internal tracking must not be presented as a legal
+permit, verified payment, ATCO sign-off or production readiness.

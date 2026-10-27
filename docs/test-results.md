@@ -415,3 +415,45 @@ Screenshots from the final browser run: `docs/screenshots/phase3/` (fictional `e
 ### Not verified
 
 Any hosted/remote Supabase project, real SMTP delivery, production Auth settings, Safari/WebKit, tablet widths, dark mode on the new screens, load beyond 10 concurrent requests, and accessibility with assistive technology.
+
+## Phase 4 implementation checkpoint — 2026-10-28
+
+Base `b832ce2`, branch `feature/phase4-operational-platform-build`. Full scope/reproduction:
+[Phase 4 report](backend/phase4-operational-platform.md). No hosted database or deployment.
+
+Baseline: typecheck exit 2 (one Array.at ES2020 test error); unit suite exit 1
+(337 passed, 2 async UI timeouts, 24 skipped); build exit 0. Targeted two failing
+files passed serially (58/58). Replaced Array.at with ES2020-compatible slice;
+bounded Vitest to two workers, without reducing assertions or increasing timeouts.
+
+Final actual commands:
+
+| Check | Exit | Actual result |
+|---|---:|---|
+| `npm run typecheck` | 0 | no errors |
+| `npm test` | 0 | **363 passed**, 33 skipped without local-stack variables; 20 files passed, 2 skipped |
+| `npm run build` | 0 | main JS 630.00 kB / 176.40 kB gzip; existing >500 kB warning |
+| `npm run test:integration` with local variables | 0 | **33/33**, 2 files: all 24 existing plus 9 new real DB tests |
+| `npm run test:e2e:local` with local variables | 0 | **35/35** real Chromium/local Supabase checks |
+| `git diff --check` | 0 | no whitespace errors |
+
+Native CLI local stack `gm-phase4-build` (Docker/psql unavailable); all 12 migrations
+present, ticket table verified. Owner SQL in tests uses the CLI JSON driver via
+`GM_IT_SQL_DRIVER=supabase`; no system-wide install or new package dependency.
+
+DB coverage added: suspended staff including self-reactivation denied; revoked staff;
+suspended company role helpers; internal schedule actor columns denied; automatic
+idempotent issuance; NULL uncollected names; QR column secrecy and creator-only retrieval;
+other-user ticket/manifest/readiness/boarding denial; pending readiness, wrong sailing,
+unknown QR, blocked/cancelled ticket and sailing refusal; idempotent audited readiness;
+**8 concurrent scans → exactly 1 boarded, 7 already_boarded, 1 correct-actor audit event**.
+
+Browser additions: four persisted tickets for two passengers/two legs, private QR SVG,
+no-payment notice, pending-readiness refusal, manual-reference boarding and duplicate
+refusal, owner status after reload, Arabic RTL phone ticket and boarding/readiness
+screens without overflow; no uncaught page errors. Existing confirmation, registration,
+approval/rejection, schedule, bookings and recovery browser journeys still pass.
+Screenshots were not requested and were not taken. Camera scanning/QR pixel decoding,
+hosted Supabase, real SMTP, Safari, screen readers, populated legacy-ticket backfill
+and higher-volume performance remain unverified. Materials/charters/members/notifications
+are not implemented by this checkpoint. See the Phase 4 report for the ~55% estimate.

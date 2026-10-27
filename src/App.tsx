@@ -22,6 +22,7 @@ import ProductionBookingView from './pages/ProductionBookingView';
 import ProductionBookingsView from './pages/ProductionBookingsView';
 import AdminCompaniesView from './pages/AdminCompaniesView';
 import AdminOperationsView from './pages/AdminOperationsView';
+import ProductionBoardingView from './pages/ProductionBoardingView';
 import { NotConnectedView } from './components/ProductionUi';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { OnboardingProvider } from './context/OnboardingContext';
@@ -72,11 +73,12 @@ export function AppRoutes() {
         <Route path="/bookings/:reference" element={<ByMode demo={<MyBookingsView />} production={<ProductionBookingsView />} />} />
         <Route path="/corporate" element={<ByMode demo={<CorporateView />} production={<NotConnectedView />} />} />
         <Route path="/operations" element={<ByMode demo={<OperationsView />} production={<NotConnectedView />} />} />
-        <Route path="/boarding" element={<ByMode demo={<BoardingView />} production={<NotConnectedView />} />} />
+        <Route path="/boarding" element={<ByMode demo={<BoardingView />} production={<ProductionBoardingView />} />} />
         <Route path="/materials" element={<ByMode demo={<MaterialsView />} production={<NotConnectedView />} />} />
         <Route path="/fleet" element={<ByMode demo={<FleetView />} production={<NotConnectedView />} />} />
         <Route path="/admin/companies" element={<AdminCompaniesView />} />
         <Route path="/admin/operations" element={<AdminOperationsView />} />
+        <Route path="/admin/boarding" element={<ProductionBoardingView />} />
         <Route path="/settings" element={<SettingsView />} />
         <Route path="/onboarding" element={<OnboardingView />} />
         <Route path="*" element={<Navigate to="/" replace />} />

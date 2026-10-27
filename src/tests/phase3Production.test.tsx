@@ -119,7 +119,7 @@ describe('navigation reflects server-side roles, not a UI switch', () => {
   });
 
   it('demo-only modules are shown as not connected in production, never as working demo screens', async () => {
-    for (const path of ['/operations', '/boarding', '/materials', '/fleet', '/corporate']) {
+    for (const path of ['/operations', '/materials', '/fleet', '/corporate']) {
       const view = renderApp(path);
       expect(await screen.findByRole('heading', { name: 'Not connected in this build' })).toBeTruthy();
       expect(screen.queryByText(/DEMO DATA/)).toBeNull();
@@ -253,7 +253,7 @@ describe('production booking', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reserve seats' }));
     expect(await screen.findByRole('heading', { name: 'Seats reserved' })).toBeTruthy();
     expect(screen.getByText('GM-1A2B3C4D')).toBeTruthy();
-    expect(screen.getByText(/It is not paid, ticketed or cleared for boarding/)).toBeTruthy();
+    expect(screen.getByText(/No payment is verified; boarding requires separate internal readiness/)).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/SAR\s?\d|Payment recorded|Paid/);
 
     expect(fake.rpc).toHaveBeenCalledTimes(1);
@@ -358,9 +358,11 @@ describe('My bookings (server-backed)', () => {
     fireEvent.click(screen.getByRole('link', { name: 'Open booking' }));
     expect(await screen.findByRole('heading', { name: /Booking reference/ })).toBeTruthy();
     expect(screen.getByText('Seat reservation')).toBeTruthy();
-    expect(screen.getAllByText('Not connected yet')).toHaveLength(3); // payment, clearance, boarding
+    expect(screen.getAllByText('Not connected yet')).toHaveLength(1); // payment only
+    expect(screen.getByText('Separate internal decision')).toBeTruthy();
+    expect(screen.getByText('See individual ticket status')).toBeTruthy();
     expect(screen.getByText('Second Person')).toBeTruthy();
-    const detailQuery = fake.queries.filter(q => q.table === 'bookings').at(-1)!;
+    const detailQuery = fake.queries.filter(q => q.table === 'bookings').slice(-1)[0]!;
     expect(detailQuery.filters).toContainEqual(['eq', 'reference', 'GM-1A2B3C4D']);
   });
 

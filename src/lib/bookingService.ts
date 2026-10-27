@@ -28,6 +28,7 @@ export interface Sailing {
   readonly departsAt: string;
   readonly seatCapacity: number;
   readonly seatsBooked: number;
+  readonly readinessStatus: 'pending' | 'ready' | 'blocked';
   readonly status: SailingStatus;
   readonly route: Route;
   readonly vessel: { readonly id: string; readonly name: string };
@@ -87,6 +88,7 @@ function toSailing(row: Record<string, unknown>): Sailing {
   const status = row.status === 'closed' || row.status === 'cancelled' ? row.status : 'open';
   return {
     id: row.id, departsAt: s(row.departs_at), seatCapacity: n(row.seat_capacity), seatsBooked: n(row.seats_booked),
+    readinessStatus: row.readiness_status === 'ready' || row.readiness_status === 'blocked' ? row.readiness_status : 'pending',
     status, route: toRoute(one(row.route)), vessel: { id: s(vessel.id), name: s(vessel.name) },
   };
 }
@@ -118,7 +120,7 @@ function toBooking(row: Record<string, unknown>): Booking {
   };
 }
 
-const SAILING_SELECT = 'id, departs_at, seat_capacity, seats_booked, status, route:routes(id, origin, destination, status), vessel:vessels(id, name)';
+const SAILING_SELECT = 'id, departs_at, seat_capacity, seats_booked, status, readiness_status, route:routes(id, origin, destination, status), vessel:vessels(id, name)';
 const BOOKING_SELECT = 'id, reference, status, passenger_count, contact_name, contact_email, contact_phone, passenger_names, po_reference, organization_id, created_at, '
   + 'booking_legs(leg, passengers, sailing:sailings(id, departs_at, status, route:routes(origin, destination), vessel:vessels(name)))';
 

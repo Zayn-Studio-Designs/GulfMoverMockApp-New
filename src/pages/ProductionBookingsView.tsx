@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { ProductionTickets } from '../components/ProductionTickets';
 import { Link, useParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { usePlatformRoles } from '../context/OnboardingContext';
@@ -9,7 +10,8 @@ import { ProdPageHeader, SailingTime, dataErrorKey } from '../components/Product
  * Production "My bookings" (`/bookings`) and booking detail (`/bookings/:reference`).
  * Records come from the `bookings` table under RLS: the creator, their company admin and ATCO
  * operations can see a booking — nobody else, whatever reference they type into the URL.
- * Every status shown is the server's; payment, clearance and boarding are not connected.
+ * Reservation and ticket states come from the database. Payment is not connected;
+ * internal readiness is separate from port/legal clearance.
  */
 
 function legLabel(t: (k: string) => string, leg: 'outbound' | 'return') {
@@ -21,8 +23,8 @@ function StatusGrid() {
   const rows: Array<[string, string, string]> = [
     ['pbStatusReservation', 'pbStatusReserved', 'pill-green'],
     ['pbStatusPayment', 'pbStatusNotConnected', 'pill-neutral'],
-    ['pbStatusOps', 'pbStatusNotConnected', 'pill-neutral'],
-    ['pbStatusBoarding', 'pbStatusNotConnected', 'pill-neutral'],
+    ['pbStatusOps', 'p4ReadinessSeparate', 'pill-neutral'],
+    ['pbStatusBoarding', 'p4BoardingTicketStatus', 'pill-neutral'],
   ];
   return (
     <div className="status-grid" style={{ marginTop: 14 }}>
@@ -87,6 +89,7 @@ function BookingDetail({ reference }: { reference: string }) {
           </div>
         </section>
       )}
+      {booking && <ProductionTickets booking={booking} />}
     </>
   );
 }

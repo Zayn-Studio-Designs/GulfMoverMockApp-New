@@ -316,15 +316,15 @@ suite('local Supabase: operations data and bookings', () => {
       expect((await user.client.from('vessels').insert({ name: 'Rogue vessel' }).select()).error?.code).toBe('42501');
       expect((await user.client.from('routes').insert({ origin: 'X', destination: 'Y' }).select()).error?.code).toBe('42501');
       expect((await user.client.from('sailings').insert({ route_id: outRoute, vessel_id: vessel, departs_at: futureIso(5), seat_capacity: 5 }).select()).error?.code).toBe('42501');
-      const upd = await user.client.from('vessels').update({ name: 'Renamed' }).eq('id', vessel).select();
+      const upd = await user.client.from('vessels').update({ name: 'Renamed' }).eq('id', vessel).select('id');
       expect(upd.data ?? []).toEqual([]); // RLS filters the row out: nothing updated
     }
     const sailing = await newSailing(outRoute, 30, 4);
     const forge = await ops.client.from('sailings').update({ seats_booked: 0, seat_capacity: 4 } as never).eq('id', sailing).select();
     expect(forge.error?.code).toBe('42501'); // no column privilege on seats_booked
-    const tooBig = await ops.client.from('sailings').insert({ route_id: outRoute, vessel_id: vessel, departs_at: futureIso(31), seat_capacity: 13 }).select();
+    const tooBig = await ops.client.from('sailings').insert({ route_id: outRoute, vessel_id: vessel, departs_at: futureIso(31), seat_capacity: 13 }).select('id');
     expect(tooBig.error?.message).toMatch(/exceeds the vessel/);
-    const past = await ops.client.from('sailings').insert({ route_id: outRoute, vessel_id: vessel, departs_at: futureIso(-1), seat_capacity: 3 }).select();
+    const past = await ops.client.from('sailings').insert({ route_id: outRoute, vessel_id: vessel, departs_at: futureIso(-1), seat_capacity: 3 }).select('id');
     expect(past.error?.message).toMatch(/must be in the future/);
     expect(sql(`select created_by = ${quote(ops.id)} from public.sailings where id = ${quote(sailing)}`)).toBe('t');
     // Everyone signed in can read the schedule.
@@ -405,9 +405,9 @@ suite('local Supabase: operations data and bookings', () => {
     expect((await book(bookerA, bookingArgs(orgA, sailing, { p_passenger_names: ['a', 'b'] }))).error?.message).toMatch(/more names than passengers/);
     await ops.client.from('sailings').update({ status: 'closed' }).eq('id', sailing);
     expect((await book(bookerA, bookingArgs(orgA, sailing))).error?.message).toMatch(/^sailing_unavailable/);
-    const cancel = await ops.client.from('sailings').update({ status: 'cancelled' }).eq('id', sailing).select();
+    const cancel = await ops.client.from('sailings').update({ status: 'cancelled' }).eq('id', sailing).select('id');
     expect(cancel.error).toBeNull();
-    const reopen = await ops.client.from('sailings').update({ status: 'open' }).eq('id', sailing).select();
+    const reopen = await ops.client.from('sailings').update({ status: 'open' }).eq('id', sailing).select('id');
     expect(reopen.error?.message).toMatch(/cannot be reopened/);
   });
 

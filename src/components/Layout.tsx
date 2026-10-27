@@ -67,6 +67,7 @@ const PRODUCTION_CUSTOMER_NAV: ReadonlyArray<NavItem> = [
 const PRODUCTION_STAFF_NAV: ReadonlyArray<NavItem & { roles: readonly string[] }> = [
   { to: '/admin/companies', key: 'navReview', icon: 'list', roles: ['super_admin', 'operations'] },
   { to: '/admin/operations', key: 'navAdminOps', icon: 'ship', roles: ['super_admin', 'operations'] },
+  { to: '/admin/boarding', key: 'p4Boarding', icon: 'board', roles: ['super_admin', 'operations', 'boarding_staff'] },
 ];
 
 /**

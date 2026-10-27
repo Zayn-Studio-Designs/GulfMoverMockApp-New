@@ -71,7 +71,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
  */
 export function usePlatformRoles(): readonly string[] | null {
   const { status } = useOnboarding();
-  return status.phase === 'ready' ? status.snapshot.platformRoles : null;
+  return status.phase === 'ready'
+    ? status.snapshot.profile?.status === 'suspended' ? [] : status.snapshot.platformRoles
+    : null;
 }
 
 export function useOnboarding(): OnboardingContextValue {

@@ -25,9 +25,19 @@ const RUN = randomUUID().slice(0, 6);
 const PASSWORD = 'e2e-Passw0rd-local';
 const results = [];
 const check = (name, ok, detail = '') => { results.push({ name, ok }); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`); };
-const sql = q => execFileSync('psql', [DB, '-At', '-v', 'ON_ERROR_STOP=1', '-c', q], { encoding: 'utf8' }).trim();
+const sql = q => {
+  if (process.env.GM_IT_SQL_DRIVER === 'supabase') {
+    const url = new URL(DB); url.searchParams.set('sslmode', 'disable');
+    const output = execFileSync('supabase', ['db', 'query', '--db-url', url.href, q, '--output-format', 'json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    if (!output.startsWith('[')) return '';
+    return JSON.parse(output).map(row => Object.values(row).map(v => v === null ? '' : String(v)).join('|')).join('\n').trim();
+  }
+  return execFileSync('psql', [DB, '-At', '-v', 'ON_ERROR_STOP=1', '-c', q], { encoding: 'utf8' }).trim();
+};
 const quote = v => `'${String(v).replace(/'/g, "''")}'`;
-mkdirSync(SHOTS, { recursive: true });
+const capture = process.env.GM_E2E_CAPTURE_SCREENSHOTS === '1';
+if (capture) mkdirSync(SHOTS, { recursive: true });
+const screenshot = (page, name) => capture ? page.screenshot({ path: `${SHOTS}/${name}`, fullPage: true }) : Promise.resolve();
 
 async function mailLink(address) {
   for (let i = 0; i < 40; i++) {
@@ -101,7 +111,7 @@ try {
   check('customer: booking refused while pending', await visible(customer.getByRole('heading', { name: 'Booking needs an approved company' })));
   await customer.goto(`${APP}/admin/companies`);
   check('customer: ATCO review screen refused', await visible(customer.getByRole('heading', { name: 'ATCO staff access required' })));
-  await customer.screenshot({ path: `${SHOTS}/customer-pending-desktop.png`, fullPage: true });
+  await screenshot(customer, 'customer-pending-desktop.png');
 
   /* ---------------- ATCO admin: provisioned out-of-band, reviews and schedules ---------------- */
   const admin = await newPage({ width: 1366, height: 900 });
@@ -115,7 +125,7 @@ try {
   await admin.getByRole('button', { name: 'Search companies' }).click();
   await admin.getByRole('button', { name: 'Open record' }).first().click();
   await admin.getByText('Registration submitted').waitFor();
-  await admin.screenshot({ path: `${SHOTS}/admin-review-desktop.png`, fullPage: true });
+  await screenshot(admin, 'admin-review-desktop.png');
   await admin.getByRole('button', { name: 'Approve company' }).click();
   await admin.getByText('Company approved. The decision is recorded in the audit history.').waitFor();
   const orgId = sql(`select id from public.organizations where legal_name = ${quote(company)}`);
@@ -175,13 +185,41 @@ try {
     sql(`select b.passenger_count || ':' || count(l.*) from public.bookings b join public.booking_legs l on l.booking_id = b.id where b.reference = ${quote(reference)} group by b.passenger_count`) === '2:2');
   await customer.getByRole('link', { name: 'View booking details' }).click();
   await customer.getByRole('heading', { name: /Booking reference/ }).waitFor();
-  await customer.getByText('E2E Lead Passenger').waitFor();
+  await customer.getByText('E2E Lead Passenger', { exact: true }).waitFor();
   check('customer: reopened booking shows saved record and separate statuses',
-    (await customer.getByText('Not connected yet', { exact: true }).count()) === 3);
+    (await customer.getByText('Not connected yet', { exact: true }).count()) === 1);
   await customer.reload();
   await customer.getByRole('heading', { name: /Booking reference/ }).waitFor();
   check('customer: booking still there after a full page reload', await customer.getByText(reference).isVisible());
-  await customer.screenshot({ path: `${SHOTS}/customer-booking-desktop.png`, fullPage: true });
+  await screenshot(customer, 'customer-booking-desktop.png');
+
+  /* ---------------- Phase 4: tickets, QR, readiness and boarding ---------------- */
+  await customer.getByRole('heading', { name: 'Reservation tickets' }).waitFor();
+  const ticketCount = sql(`select count(*) from public.tickets t join public.bookings b on b.id=t.booking_id where b.reference=${quote(reference)}`);
+  check('tickets: two passengers on each separate leg persist exactly four tickets', ticketCount === '4');
+  await customer.getByRole('button', { name: 'Show private QR' }).first().click();
+  await customer.getByRole('img', { name: 'Ticket verification QR' }).waitFor();
+  check('tickets: owner retrieves opaque QR and sees no-payment disclaimer', await customer.getByText(/No real payment made/).isVisible());
+  const ticketRef = sql(`select t.reference from public.tickets t join public.bookings b on b.id=t.booking_id join public.booking_legs l on l.id=t.booking_leg_id where b.reference=${quote(reference)} and l.leg='outbound' order by t.passenger_index limit 1`);
+  const sailingId = sql(`select l.sailing_id from public.booking_legs l join public.bookings b on b.id=l.booking_id where b.reference=${quote(reference)} and l.leg='outbound'`);
+  await admin.goto(`${APP}/admin/boarding`);
+  await admin.getByRole('heading', { name: 'Boarding & readiness' }).waitFor();
+  await admin.getByLabel('Selected sailing').selectOption(sailingId);
+  await admin.getByLabel('Ticket reference or QR payload').fill(ticketRef);
+  await admin.getByRole('button', { name: 'Validate and record boarding', exact: true }).click();
+  check('boarding: server refuses pending internal readiness', await visible(admin.getByText('Internal readiness has not been recorded as ready. Boarding refused.')));
+  await admin.getByLabel('Readiness decision').selectOption('ready');
+  await admin.locator('#p4-reason').fill('Fictional internal readiness exercise, not a legal clearance');
+  await admin.getByRole('button', { name: 'Save internal decision' }).click();
+  await admin.getByText('Internal readiness decision recorded.', { exact: true }).waitFor();
+  await admin.getByRole('button', { name: 'Validate and record boarding', exact: true }).click();
+  check('boarding: manual reference records server-confirmed boarding', await visible(admin.getByText('Boarding recorded successfully.', { exact: true })));
+  await admin.getByRole('button', { name: 'Validate and record boarding', exact: true }).click();
+  check('boarding: duplicate rejected without second audit event', await visible(admin.getByText('Already boarded. No duplicate boarding recorded.')) && sql(`select count(*) from public.boarding_events e join public.tickets t on t.id=e.ticket_id where t.reference=${quote(ticketRef)}`) === '1');
+  await customer.reload();
+  check('tickets: owner sees persisted boarded status after reload', await visible(customer.getByText('Boarded', { exact: true })));
+  await admin.goto(`${APP}/admin/operations`);
+  await admin.getByRole('heading', { name: 'Vessels and sailings' }).waitFor();
 
   /* ---------------- admin: reservations on the departure ---------------- */
   await admin.reload();
@@ -190,7 +228,7 @@ try {
   check('admin: schedule shows 2 of 6 seats reserved', await row.getByText(/2 of 6 seats reserved/).isVisible());
   await row.getByRole('button', { name: 'View reservations' }).click();
   await admin.getByRole('heading', { name: 'Reservations on this departure' }).waitFor();
-  check('admin: manifest lists the customer booking', await admin.getByRole('cell', { name: reference }).isVisible());
+  check('admin: manifest lists the customer booking', await visible(admin.getByRole('cell', { name: reference })));
 
   /* ---------------- rejection journey ---------------- */
   const rejectedEmail = `e2e-${RUN}-rejected@example.test`;
@@ -255,7 +293,9 @@ try {
   check('mobile Arabic: My bookings in RTL with Arabic headings', (await mobile.evaluate(() => document.documentElement.dir)) === 'rtl');
   check('mobile Arabic: the booking is listed', await mobile.getByText(reference).isVisible());
   check('mobile Arabic: no horizontal overflow', await noOverflow(mobile));
-  await mobile.screenshot({ path: `${SHOTS}/customer-bookings-ar-mobile.png`, fullPage: true });
+  await screenshot(mobile, 'customer-bookings-ar-mobile.png');
+  await mobile.getByRole('link', { name: 'فتح الحجز' }).first().click();
+  check('mobile Arabic: reservation tickets render without horizontal overflow', await visible(mobile.getByRole('heading', { name: 'تذاكر الحجز' })) && await noOverflow(mobile));
 
   const adminMobile = await newPage({ width: 390, height: 844 });
   await signIn(adminMobile, adminEmail);
@@ -265,7 +305,13 @@ try {
   await adminMobile.goto(`${APP}/admin/operations`);
   await adminMobile.getByRole('heading', { name: 'Vessels and sailings' }).waitFor();
   check('mobile: admin operations screen has no horizontal overflow', await noOverflow(adminMobile));
-  await adminMobile.screenshot({ path: `${SHOTS}/admin-operations-mobile.png`, fullPage: true });
+  await screenshot(adminMobile, 'admin-operations-mobile.png');
+  await adminMobile.goto(`${APP}/admin/boarding`);
+  await adminMobile.getByLabel('Selected sailing').selectOption(sailingId);
+  await adminMobile.getByRole('button', { name: 'Account menu' }).click();
+  await adminMobile.getByRole('button', { name: 'العربية' }).click();
+  await adminMobile.keyboard.press('Escape');
+  check('mobile Arabic: boarding/readiness actions and manifest fit without overflow', await visible(adminMobile.getByRole('heading', { name: 'الصعود والجاهزية' })) && await noOverflow(adminMobile));
 
   check('no uncaught page errors', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {

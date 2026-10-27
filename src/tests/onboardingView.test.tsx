@@ -250,11 +250,11 @@ describe('onboarding states', () => {
     expect(fake.rpc).not.toHaveBeenCalled();
   });
 
-  it('an approved member sees the approval, a link to book, and that payment/tickets/boarding are not connected', async () => {
+  it('an approved member sees the approval, a link to book, and the separate payment/readiness boundary', async () => {
     fake.setMemberships([{ orgId: 'org-1', role: 'company_booker', org: { legalName: 'Approved Co LLC', displayName: 'Approved Co', status: 'approved' } }]);
     renderApp();
     expect(await screen.findByRole('heading', { name: 'Company approved by ATCO' })).toBeTruthy();
-    expect(screen.getByText(/payment, tickets and boarding are not connected yet/)).toBeTruthy();
+    expect(screen.getByText(/Payment is not connected; boarding requires a separate internal readiness decision/)).toBeTruthy();
     expect(screen.getAllByRole('link', { name: 'Book a sailing' }).length).toBeGreaterThan(0);
     expect(screen.getByText('Approved Co')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Company details' })).toBeNull();

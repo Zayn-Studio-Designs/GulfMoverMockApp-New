@@ -42,6 +42,17 @@ const serviceClient = () =>
 
 /** Runs SQL as the local owner role and returns trimmed unaligned output. */
 export function sql(query: string): string {
+  if (process.env.GM_IT_SQL_DRIVER === 'supabase') {
+    // Native CLI stacks need no system-wide psql installation. Same local-only
+    // owner SQL; normalise JSON rows to psql's unaligned output for assertions.
+    if (!localStackConfigured) throw new Error('Local stack configuration required');
+    const url = new URL(IT.dbUrl);
+    url.searchParams.set('sslmode', 'disable'); // loopback native database only
+    const output = execFileSync('supabase', ['db', 'query', '--db-url', url.href, query, '--output-format', 'json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+    if (!output || !output.startsWith('[')) return '';
+    const rows = JSON.parse(output) as Array<Record<string, unknown>>;
+    return rows.map(row => Object.values(row).map(v => v === null ? '' : v === true ? 't' : v === false ? 'f' : String(v)).join('|')).join('\n').trim();
+  }
   return execFileSync('psql', [IT.dbUrl, '-At', '-v', 'ON_ERROR_STOP=1', '-c', query], { encoding: 'utf8' }).trim();
 }
 
