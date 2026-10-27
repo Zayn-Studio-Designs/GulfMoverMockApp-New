@@ -130,14 +130,21 @@ function requireAuthClient(env?: EnvSource): SupabaseClient {
   return config.supabase;
 }
 
+/**
+ * Client-side code given to the SDK's `AuthSessionMissingError` (it carries no server code):
+ * the operation needed a session — e.g. a password update after a recovery link expired.
+ */
+export const SESSION_MISSING_CODE = 'session_missing';
+
 /** Normalises a Supabase Auth error without forwarding credential values. */
 function toAuthOperationError(
-  error: { message?: unknown; code?: unknown; status?: unknown } | null | undefined,
+  error: { message?: unknown; code?: unknown; status?: unknown; name?: unknown } | null | undefined,
   context: string,
 ): AuthOperationError {
   const rawMessage = typeof error?.message === 'string' ? error.message.trim() : '';
   const message = rawMessage.length > 0 ? rawMessage : `Authentication request failed (${context}).`;
-  const code = typeof error?.code === 'string' && error.code.length > 0 ? error.code : null;
+  const serverCode = typeof error?.code === 'string' && error.code.length > 0 ? error.code : null;
+  const code = serverCode ?? (error?.name === 'AuthSessionMissingError' ? SESSION_MISSING_CODE : null);
   const status = typeof error?.status === 'number' && Number.isFinite(error.status) ? error.status : null;
   return new AuthOperationError(message, code, status);
 }

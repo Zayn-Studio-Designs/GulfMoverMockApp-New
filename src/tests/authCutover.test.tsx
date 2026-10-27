@@ -57,6 +57,7 @@ vi.mock('../lib/authService', () => {
     AuthNotAvailableError,
     AuthOperationError,
     AuthInputError,
+    SESSION_MISSING_CODE: 'session_missing',
   };
 });
 
@@ -175,11 +176,12 @@ describe('production mode: real auth service behind the same interface', () => {
     expect(svc.signIn.mock.calls[0].slice(0, 2)).toEqual(['sami@example.test', 'pw-real-1']);
   });
 
-  it('wrong credentials surface the localized errSignIn key, echoing nothing', async () => {
+  it('wrong credentials surface the localized email-only errSignInEmail key, echoing nothing', async () => {
     svc.signIn.mockRejectedValueOnce(new AuthOperationError('Invalid login credentials', 'invalid_credentials', 400));
     renderAuth();
     await waitFor(() => expect(api.authMode).toBe('production'));
-    await expect(api.signIn('sami@example.test', 'pw-wrong-1')).resolves.toBe('errSignIn');
+    // Phase 2: production accepts e-mail only, so the message no longer mentions usernames.
+    await expect(api.signIn('sami@example.test', 'pw-wrong-1')).resolves.toBe('errSignInEmail');
     expect(api.user).toBeNull();
   });
 
@@ -246,8 +248,9 @@ describe('production mode: real auth service behind the same interface', () => {
     expect(api.authUnavailable?.reason).toBe('config-error');
     expect(api.authUnavailable?.issues).toContain('missing-url');
     expect(api.authMode).toBe('production');
-    // The interface refuses to use the demo provider behind the user's back.
-    await expect(api.signIn('sami@example.test', 'pw-real-1')).resolves.toBeNull();
+    // The interface refuses to use the demo provider behind the user's back, and (Phase 2)
+    // reports the refusal as an error instead of a null "success".
+    await expect(api.signIn('sami@example.test', 'pw-real-1')).resolves.toBe('errAuthUnavailable');
     expect(svc.signIn).not.toHaveBeenCalled();
     expect(api.user).toBeNull();
   });

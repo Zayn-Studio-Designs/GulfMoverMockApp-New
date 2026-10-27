@@ -337,3 +337,49 @@ Full verification of the current frontend code — the first recorded run since 
 Not covered by this smoke test: staff pages (`/operations`, `/boarding`, `/materials`, `/fleet`), `/corporate`, booking wizard steps, mobile widths, dark mode, presentation frames, Safari/WebKit — these last had coverage in earlier recorded sessions and the full unit suite.
 
 **Limitations:** the unit suite runs in jsdom against Chromium-independent logic; the browser smoke test is ad hoc and not repeatable as a stored regression suite (no Playwright suite has ever been committed). Backend registration-RPC results (T1–T7 above, plus the authorized G2 subset from the 26–27 October sessions) are local-only and remain preliminary, awaiting the outstanding Groups 2/3 items.
+
+## Verification — 2026-10-27 (branch `feature/phase2-company-onboarding`, based on `backend/phase1` @ `6f87014`) — Phase 2: auth hardening and company onboarding
+
+Fresh clone of `origin/backend/phase1` (HEAD `6f870148828e54657d71f28b3df1a19707d97381`, verified to contain `6f87014`, no newer commits). Implementation notes: `docs/backend/phase2-company-onboarding.md`.
+
+### Baseline before any change (fresh clone, `npm ci`)
+
+| Check | Result |
+|---|---|
+| `npm run typecheck` | **Fail (exit 2)** — 11 errors: `node:fs`, `node:path` and `process` unresolved in `app.test.tsx`, `bootSound.test.ts`, `tickets.test.tsx`. `@types/node` was not declared in `package.json`/`package-lock.json`, so earlier passes depended on types present outside the project. Fixed by adding `@types/node@^22` as a devDependency (type-only; not in the browser bundle). |
+| `npm test` | Pass (exit 0) — 14 files, 220/220 |
+| `npm run build` | Pass (exit 0) — with the pre-existing ">500 kB chunk" warning |
+
+### Final results (all commands run from the project root)
+
+| Check | Command | Result | Detail |
+|---|---|---|---|
+| Type check | `npm run typecheck` | **Pass (exit 0)** | `tsc --noEmit`, 0 errors |
+| Tests | `npm test` | **Pass (exit 0)** | **17 files, 306/306 tests** (220 existing + 86 new), ~23 s |
+| Production build | `npm run build` | **Pass (exit 0)** | 148 modules; `main-…js` 541.61 kB (154.25 kB gzip). The >500 kB chunk-size warning is pre-existing (present in the baseline build) |
+| Whitespace | `git diff --check` | **Pass (exit 0)** | no output |
+
+New test files: `authPhase2.test.tsx` (30), `companyService.test.ts` (30), `onboardingView.test.tsx` (26), plus the shared in-memory fake `src/tests/helpers/fakeSupabase.ts`. Two existing assertions in `authCutover.test.tsx` were **updated, not removed**, because the intended contract changed: production wrong-credentials now returns the e-mail-only `errSignInEmail` (was `errSignIn`), and sign-in with a broken configuration now returns `errAuthUnavailable` (was `null`, i.e. reported as success).
+
+Coverage of the new tests: deterministic session-restore races (sign-out and sign-in during a pending `getSession()`, app sign-in during restore, normal restore, unsubscribe on unmount); unavailable/misconfigured auth and network failures never returning success; failed sign-out (context and Settings UI); confirmation-pending notice and its clearing; production config-error screen; e-mail-only production sign-in; no passwords/tokens in console output; recovery success, expired link, link without session, missing link, local validation, session lost during update, network/same-password failures, redirect of a recovery session from another page; demo regressions; RPC argument contract; client validation mirroring the RPC; error mapping for every RPC SQLSTATE and HTTP 0/5xx; no direct table writes; no calls without a session; duplicate-click suppression; same-key retry after uncertain failure and after reload; server validation rejection; payload mismatch re-reading status; pending/approved/restricted/invited/suspended/staff states; English/Arabic labels and RTL; production never falling back to demo.
+
+**Mutation check (race tests are real):** with the generation guard in `SupabaseAuthProvider` temporarily removed, the three race tests failed (3 failed / 2 passed in the race group); with the guard restored they pass. The code was restored byte-for-byte from a backup before continuing.
+
+### Ad-hoc Chromium smoke test (pre-installed Chromium, 390×844)
+
+Two local dev servers: production mode pointing at the **unreachable placeholder** `https://placeholder-ref.supabase.invalid` (no real project contacted) and demo mode. Inline Playwright script, stopped afterwards.
+
+| Check | Result |
+|---|---|
+| Production `/auth/reset-callback#error=…&error_code=otp_expired` through the real Supabase SDK | "This reset link has expired" shown, no new-password field |
+| Production `/auth/reset-callback` with no link | "only works from the link in a password-reset email" |
+| Production `/signin` | "Email" field present, "Email or username" absent, no demo guest pass |
+| Production `/onboarding` signed out | redirected to `/signin` |
+| Demo `/onboarding` (guest) | demo explanation card; Arabic switch → `dir=rtl`, Arabic title, no horizontal overflow |
+| Page errors | none |
+
+### Not tested here
+
+- **No live or local Supabase**: real GoTrue sign-up/confirmation/recovery e-mails, real RLS reads and real `register_company` calls from this frontend were **not** exercised (no Supabase stack in this environment). All Supabase behaviour in the automated tests is mocked.
+- No migrations were created or applied; no remote project was linked or contacted; nothing was deployed.
+- Safari/WebKit, tablet widths and dark mode were not re-checked for the new screens.

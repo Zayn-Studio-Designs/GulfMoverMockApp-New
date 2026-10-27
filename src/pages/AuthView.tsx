@@ -34,7 +34,9 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
   const { toast } = useUi();
   const navigate = useNavigate();
   const location = useLocation();
-  const [mode, setMode] = useState<Mode>(initialMode);
+  // The recovery page's "request a new reset link" opens this view directly in reset mode.
+  const requestedMode = (location.state as { mode?: Mode } | null)?.mode;
+  const [mode, setMode] = useState<Mode>(requestedMode === 'reset' ? 'reset' : initialMode);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ login: '', email: '', username: '', company: '', password: '', confirm: '', code: '' });
@@ -46,7 +48,8 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
   const isDemo = authMode === 'demo';
   const isProduction = authMode === 'production';
   const set = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }));
-  const from = (location.state as { from?: string } | null)?.from ?? '/';
+  // Production users land on their company-onboarding status; the demo keeps its home page.
+  const from = (location.state as { from?: string } | null)?.from ?? (isProduction ? '/onboarding' : '/');
 
   const switchMode = (m: Mode) => { setMode(m); setError(''); setSentCode(''); setResetEmailSent(false); setForm(f => ({ ...f, password: '', confirm: '', code: '' })); };
 
@@ -83,6 +86,15 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
     setBusy(false);
     if (err) { setError(err); return; }
     if (mode === 'reset') { toast(t('pwResetDone')); switchMode('signin'); return; }
+    if (isProduction && mode === 'signup') {
+      // With e-mail confirmation on there is no session yet: show the sign-in form with the
+      // "check your email" notice. If Supabase did return a session, the `if (user)` <Navigate>
+      // guard in the render takes over.
+      const email = form.email;
+      switchMode('signin');
+      setForm(f => ({ ...f, login: email }));
+      return;
+    }
     navigate(from, { replace: true });
   };
 
@@ -164,8 +176,10 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
           <form className="grid" onSubmit={submit} noValidate>
             {mode === 'signin' && (
               <div className="field">
-                <label htmlFor="auth-login">{t('emailOrUsername')}</label>
-                <input id="auth-login" autoComplete="username" value={form.login} onChange={e => set('login')(e.target.value)} />
+                {/* Production (Supabase) accepts an e-mail address only; the demo also accepts a username. */}
+                <label htmlFor="auth-login">{isProduction ? t('emailLabel') : t('emailOrUsername')}</label>
+                <input id="auth-login" type={isProduction ? 'email' : 'text'} dir={isProduction ? 'ltr' : undefined}
+                  autoComplete={isProduction ? 'email' : 'username'} value={form.login} onChange={e => set('login')(e.target.value)} />
               </div>
             )}
             {mode !== 'signin' && (
@@ -193,7 +207,7 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
                 {t('resetEmailSentBody')}
               </div>
             )}
-            {mode === 'signup' && (
+            {mode === 'signup' && isDemo && (
               <>
                 <div className="field">
                   <label htmlFor="auth-username">{t('username')}</label>
@@ -205,6 +219,15 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
                   <input id="auth-company" autoComplete="organization" value={form.company} onChange={e => set('company')(e.target.value)} />
                 </div>
               </>
+            )}
+            {/* Production sign-up creates the login only; the company is registered (and reviewed by
+                ATCO) after sign-in, so no company field is collected and silently dropped here. */}
+            {mode === 'signup' && isProduction && (
+              <div className="field">
+                <label htmlFor="auth-username">{t('displayNameLabel')}</label>
+                <input id="auth-username" autoComplete="name" value={form.username} onChange={e => set('username')(e.target.value)} />
+                <small>{t('displayNameHint')}</small>
+              </div>
             )}
             {(mode !== 'reset' || (isDemo && sentCode)) && (
               <PasswordField id="auth-password" label={mode === 'reset' ? t('newPassword') : t('password')} value={form.password} onChange={set('password')}

@@ -329,7 +329,18 @@ function AccountTab() {
   const { toast, openModal } = useUi();
   const navigate = useNavigate();
   const isDemoAuth = authMode === 'demo';
-  const doSignOut = () => { signOut(); toast(t('signedOut')); navigate('/signin', { replace: true }); };
+  const [signOutError, setSignOutError] = useState('');
+  const [signingOut, setSigningOut] = useState(false);
+  const doSignOut = async () => {
+    setSigningOut(true);
+    const err = await signOut();
+    setSigningOut(false);
+    // A failed sign-out keeps the session: say so instead of pretending the user left.
+    if (err) { setSignOutError(err); return; }
+    setSignOutError('');
+    toast(t('signedOut'));
+    navigate('/signin', { replace: true });
+  };
   const askDelete = () => openModal({
     title: t('deleteAccount'), desc: t('deleteConfirm'), confirmText: t('deleteAccount'), requireReason: true,
     onConfirm: () => { deleteAccount(); toast(t('accountDeleted')); navigate('/signin', { replace: true }); },
@@ -339,7 +350,8 @@ function AccountTab() {
       <section className="card card-pad" aria-labelledby="set-signout">
         <h2 id="set-signout" className="card-title">{t('signOut')}</h2>
         <p className="card-desc">{t('signOutSub')}</p>
-        <div style={{ marginTop: 14 }}><button type="button" className="btn btn-navy" onClick={doSignOut}>{t('signOut')}</button></div>
+        {signOutError && <div className="notice danger" role="alert" style={{ marginTop: 14 }}>{t(signOutError)}</div>}
+        <div style={{ marginTop: 14 }}><button type="button" className="btn btn-navy" onClick={doSignOut} disabled={signingOut}>{t('signOut')}</button></div>
       </section>
       {/* Account deletion removes the local demo account only; it stays a demo-only
           action. In production, account/data deletion is a later, server-backed step. */}

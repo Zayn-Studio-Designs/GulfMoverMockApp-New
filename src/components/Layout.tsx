@@ -8,6 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useDemo } from '../context/DemoContext';
 import { useWorkMode } from '../context/WorkModeContext';
 import { useUi } from '../context/UiContext';
+import { useOnboarding } from '../context/OnboardingContext';
 import { Icon, type IconName } from './Icon';
 import { Tour, hasSeenTour, markTourSeen } from './Tour';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -54,6 +55,27 @@ const CUSTOMER_NAV: ReadonlyArray<NavItem> = [
   { to: '/bookings', key: 'navBookings', icon: 'navBookings' },
   { to: '/settings', key: 'navAccount', icon: 'user' },
 ];
+
+/** Production only: company onboarding is the one customer destination backed by Supabase. */
+const ONBOARDING_NAV: NavItem = { to: '/onboarding', key: 'navCompany', icon: 'navCorporate' };
+const PRODUCTION_CUSTOMER_NAV: ReadonlyArray<NavItem> = [...CUSTOMER_NAV.slice(0, 3), ONBOARDING_NAV, ...CUSTOMER_NAV.slice(3)];
+
+/**
+ * Production only: states plainly which parts of the app are live, and the user's next
+ * onboarding step. Demo-data screens are never presented as connected production features.
+ */
+function ProductionScopeNotice() {
+  const { t } = useLanguage();
+  const { status } = useOnboarding();
+  const needsCompany = status.phase === 'ready' && status.state.kind === 'no-company';
+  return (
+    <div className={`notice ${needsCompany ? 'blue' : 'warn'}`} role="note" style={{ marginBottom: 18 }}>
+      {needsCompany && <strong>{t('prodNextRegister')}</strong>}
+      {t('prodScopeNotice')}{' '}
+      <Link to="/onboarding">{t('prodStatusLink')}</Link>
+    </div>
+  );
+}
 
 /**
  * Profile button with a small menu: account details, Settings and Sign out. Company details live in
@@ -107,7 +129,14 @@ function AccountMenu() {
           </div>
           <Link role="menuitem" className="account-item" to="/settings?tab=preferences" onClick={() => setOpen(false)}>{t('settingsLink')}</Link>
           <div className="account-sep" />
-          <button role="menuitem" type="button" className="account-item account-signout" onClick={() => { setOpen(false); signOut(); toast(t('signedOut')); navigate('/signin'); }}>{t('signOut')}</button>
+          <button role="menuitem" type="button" className="account-item account-signout" onClick={async () => {
+            setOpen(false);
+            // Only claim "signed out" once the session has really ended; a failure keeps the user signed in.
+            const err = await signOut();
+            if (err) { toast(t(err)); return; }
+            toast(t('signedOut'));
+            navigate('/signin');
+          }}>{t('signOut')}</button>
         </div>
       )}
     </div>
@@ -250,7 +279,7 @@ export function Layout() {
             <small>{t('wsDemoHint')}</small>
           </div>
           <nav className={`nav-list${isCustomer ? '' : ' nav-list-staff'}`} aria-label={t('mainNavigation')} data-tour="nav">
-            {(isCustomer ? CUSTOMER_NAV : NAV_ITEMS).map(item => item.hub ? (
+            {(isCustomer ? (isDemoAuth ? CUSTOMER_NAV : PRODUCTION_CUSTOMER_NAV) : NAV_ITEMS).map(item => item.hub ? (
               <button key={item.key} type="button" ref={hubTriggerRef} data-tour={`nav-${item.key}`}
                 className={`nav-btn nav-hub${agentOpsActive ? ' active' : ''}${item.mobileOnly ? ' nav-mobile-only' : ''}`}
                 aria-haspopup="menu" aria-expanded={hubOpen} onClick={() => setHubOpen(open => !open)}>
@@ -282,6 +311,7 @@ export function Layout() {
           <button type="button" className="side-reset" onClick={onReset}><Icon name="reset" />{t('resetDemo')}</button>
         </aside>
         <main className="main" id="app-main" tabIndex={-1}>
+          {!isDemoAuth && user && pathname !== '/onboarding' && <ProductionScopeNotice />}
           <ErrorBoundary resetKey={pathname} fallback={retry => <ScreenError retry={retry} />}>
             <Outlet />
           </ErrorBoundary>

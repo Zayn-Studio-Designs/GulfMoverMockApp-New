@@ -1,5 +1,5 @@
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import * as supabaseAuth from '../lib/authService';
@@ -7,6 +7,7 @@ import {
   AuthInputError, AuthNotAvailableError, AuthOperationError, type SignUpInput as SupabaseSignUpInput,
 } from '../lib/authService';
 import { getAppConfig, type AppConfig, type EnvSource, type SupabaseConfigIssue } from '../lib/supabase';
+import { readRecoveryLinkSignal, type RecoveryLinkSignal } from '../lib/recoveryLink';
 
 // DEMO ACCOUNTS ONLY — not real authentication. Accounts live in this browser's localStorage,
 // there is no server, and nothing is sent anywhere. Passwords are stored as a salted SHA-256
@@ -54,7 +55,18 @@ export type AuthError =
   | 'errEmailTaken' | 'errUsernameTaken' | 'errSignIn' | 'errCurrentPassword' | 'errNoAccount'
   | 'errPhone' | 'errWebsite' | 'errResetCode' | 'errSameEmail'
   // Production (Supabase) mode:
-  | 'errEmailNotConfirmed' | 'errAuthGeneric' | 'errDemoOnly' | 'errResetRedirect';
+  | 'errEmailNotConfirmed' | 'errAuthGeneric' | 'errDemoOnly' | 'errResetRedirect'
+  | 'errAuthUnavailable' | 'errAuthNetwork' | 'errSignInEmail' | 'errSignOutFailed'
+  | 'errSessionRequired' | 'errRecoveryExpired' | 'errSamePassword';
+
+/**
+ * Password-recovery progress (production only; always 'none' in demo mode):
+ * - 'verifying': the URL carried a recovery link and the SDK is still exchanging it;
+ * - 'ready': Supabase issued a recovery session (PASSWORD_RECOVERY) — a new password may be set;
+ * - 'invalid': the link was expired/invalid, or no recovery session could be established;
+ * - 'completed': the new password was accepted by Supabase.
+ */
+export type PasswordRecoveryState = 'none' | 'verifying' | 'ready' | 'invalid' | 'completed';
 
 export type ProfilePatch = Partial<Pick<Account,
   'username' | 'fullName' | 'phone' | 'company' | 'companyLogo' | 'companyAddress' | 'companyWebsite' | 'avatar' | 'notifications'>>;
@@ -192,7 +204,8 @@ export interface AuthContextValue {
   signInAsGuest: () => Promise<void>;
   /** Simulated provider sign-in: session only, no real identity provider is contacted (demo mode). */
   signInWithProvider: (provider: DemoProvider) => Promise<void>;
-  signOut: () => void;
+  /** Resolves null only once the session is really gone; otherwise an error key and the user stays signed in. */
+  signOut: () => Promise<AuthError | null>;
   updateProfile: (patch: ProfilePatch) => AuthError | null;
   changeEmail: (email: string, password: string) => Promise<AuthError | null>;
   changePassword: (current: string, next: string, confirm: string) => Promise<AuthError | null>;
@@ -202,6 +215,12 @@ export interface AuthContextValue {
   requestResetEmail: (email: string) => Promise<AuthError | null>;
   resetPassword: (email: string, code: string, next: string, confirm: string) => Promise<AuthError | null>;
   deleteAccount: () => void;
+  /** Production password-recovery progress (see PasswordRecoveryState). */
+  recovery: PasswordRecoveryState;
+  /** Error code from an invalid/expired recovery redirect (e.g. 'otp_expired'), else null. */
+  recoveryLinkError: string | null;
+  /** Sets the new password inside the Supabase recovery session (production only). */
+  completePasswordRecovery: (next: string, confirm: string) => Promise<AuthError | null>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -209,6 +228,9 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 /* ------------------------------------------------------------------------- */
 /* Demo mode: the original demo implementation, unchanged in behaviour.       */
 /* ------------------------------------------------------------------------- */
+
+/** Demo resets use the on-screen code; emailed recovery links exist only in production. */
+const demoRecoveryUnavailable = async (): Promise<AuthError | null> => 'errDemoOnly';
 
 function DemoAuthProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccountsState] = useState<Account[]>(loadAccounts);
@@ -284,7 +306,7 @@ function DemoAuthProvider({ children }: { children: ReactNode }) {
     startSession(providerAccount.id);
   }, [accounts, setAccounts, startSession]);
 
-  const signOut = useCallback(() => startSession(null), [startSession]);
+  const signOut = useCallback(async (): Promise<AuthError | null> => { startSession(null); return null; }, [startSession]);
 
   const updateProfile = useCallback((patch: ProfilePatch): AuthError | null => {
     if (!current) return null;
@@ -382,6 +404,9 @@ function DemoAuthProvider({ children }: { children: ReactNode }) {
     requestResetEmail,
     resetPassword,
     deleteAccount,
+    recovery: 'none',
+    recoveryLinkError: null,
+    completePasswordRecovery: demoRecoveryUnavailable,
   }), [user, signedOutByUser, signUp, signIn, signInAsGuest, signOut, updateProfile, changeEmail,
     changePassword, requestResetCode, requestResetEmail, resetPassword, deleteAccount]);
 
@@ -412,7 +437,10 @@ function toPublicUser(session: Session | null): PublicAccount | null {
   };
 }
 
-function SupabaseAuthProvider({ children }: { children: ReactNode }) {
+/** Network-level failures (no HTTP response, or a gateway/server error) — never shown as a credential problem. */
+const isNetworkFailure = (error: AuthOperationError) => error.code === null && (error.status === 0 || (error.status ?? 0) >= 500);
+
+function SupabaseAuthProvider({ children, recoverySignal }: { children: ReactNode; recoverySignal: RecoveryLinkSignal }) {
   const env: EnvSource = import.meta.env;
   // Resolved once per provider mount; getSupabaseClient itself memoizes the client.
   const app = useMemo<AppConfig>(() => getAppConfig(env), [env]);
@@ -423,8 +451,40 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const [confirmationPending, setConfirmationPending] = useState<string | null>(null);
   const [authUnavailable, setAuthUnavailable] = useState<AuthUnavailable | null>(() =>
     app.mode === 'production' && 'error' in app ? { reason: 'config-error', issues: app.error.issues } : null);
+  const [recovery, setRecovery] = useState<PasswordRecoveryState>(() =>
+    recoverySignal.kind === 'link' ? 'verifying' : recoverySignal.kind === 'error' ? 'invalid' : 'none');
+  const recoveryLinkError = recoverySignal.kind === 'error' ? recoverySignal.code : null;
 
-  const fromSession = useCallback((session: Session | null): PublicAccount | null => toPublicUser(session), []);
+  /**
+   * Session-race guard. Every authoritative change (an auth-state event, or a sign-in /
+   * sign-up / sign-out completed through this context) advances the generation. The initial
+   * getSession() result is applied only if nothing newer happened while it was in flight, so a
+   * stale "restored" session can never overwrite a later sign-out, and a stale "no session"
+   * can never undo a later sign-in.
+   */
+  const generation = useRef(0);
+  const hasSession = useRef(false);
+
+  const applySession = useCallback((session: Session | null) => {
+    generation.current += 1;
+    hasSession.current = session !== null;
+    setUser(toPublicUser(session));
+    if (session) {
+      // A real session supersedes any "check your email" notice from an earlier sign-up.
+      setConfirmationPending(null);
+      setSignedOutByUser(false);
+    }
+  }, []);
+
+  const applySignedOut = useCallback(() => {
+    generation.current += 1;
+    hasSession.current = false;
+    setUser(null);
+    setSignedOutByUser(true);
+    setConfirmationPending(null);
+    // A recovery session ends with the session; an expired-link report stays visible.
+    setRecovery(r => (r === 'ready' || r === 'verifying' || r === 'completed' ? 'none' : r));
+  }, []);
 
   // Restore the persisted session once, and keep listening for later auth-state changes.
   useEffect(() => {
@@ -434,38 +494,41 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     const stopListening = supabaseAuth.onAuthStateChange((event, session) => {
       if (!active) return;
       if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setSignedOutByUser(true);
-        setConfirmationPending(null);
-        return;
-      }
-      // SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED and PASSWORD_RECOVERY all carry the session.
-      if (session) {
-        setUser(fromSession(session));
-        setConfirmationPending(null);
-        setSignedOutByUser(false);
+        applySignedOut();
+      } else {
+        if (event === 'PASSWORD_RECOVERY') setRecovery('ready');
+        // SIGNED_IN, INITIAL_SESSION, TOKEN_REFRESHED, USER_UPDATED and PASSWORD_RECOVERY carry the
+        // current session; an event without one (INITIAL_SESSION when signed out) still counts as
+        // authoritative for the restore race.
+        if (session) applySession(session);
+        else generation.current += 1;
       }
     });
+    const startedAt = generation.current;
     void (async () => {
       try {
         const restored = await supabaseAuth.getSession(env);
         if (!active) return;
-        setUser(toPublicUser(restored));
+        if (generation.current === startedAt) applySession(restored);
       } catch {
         // Restore failure (e.g. offline/expired): present the signed-out state; a later
         // sign-in retries against the still-persisted token. Not a configuration problem.
       } finally {
-        if (active) setSessionLoading(false);
+        if (active) {
+          setSessionLoading(false);
+          // A recovery link that produced no session by the end of restoration is not usable.
+          setRecovery(r => (r === 'verifying' ? (hasSession.current ? 'ready' : 'invalid') : r));
+        }
       }
     })();
     return () => { active = false; stopListening(); };
-  }, [app, env, fromSession]);
+  }, [app, env, applySession, applySignedOut]);
 
   /** Maps a Supabase auth-service failure to an interface error key; never echoes inputs. */
   const mapAuthFailure = useCallback((error: unknown, fallback: AuthError = 'errAuthGeneric'): AuthError => {
     if (error instanceof AuthNotAvailableError) {
       setAuthUnavailable({ reason: error.reason, issues: error.issues ?? [] });
-      return fallback;
+      return 'errAuthUnavailable';
     }
     if (error instanceof AuthInputError) {
       if (/redirect/i.test(error.message)) return 'errResetRedirect';
@@ -475,10 +538,11 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     if (error instanceof AuthOperationError) {
       switch (error.code) {
         case 'user_already_exists': case 'email_exists': return 'errEmailTaken';
-        case 'invalid_credentials': return 'errSignIn';
+        case 'invalid_credentials': return 'errSignInEmail';
         case 'email_not_confirmed': return 'errEmailNotConfirmed';
         case 'weak_password': return 'errPasswordRules';
-        default: return fallback;
+        case 'same_password': return 'errSamePassword';
+        default: return isNetworkFailure(error) ? 'errAuthNetwork' : fallback;
       }
     }
     return fallback;
@@ -488,13 +552,13 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     if (!isValidEmail(email)) return 'errEmail';
     if (!isValidPassword(password)) return 'errPasswordRules';
     if (password !== confirm) return 'errPasswordMatch';
-    if (authUnavailable) return null; // the configuration banner is the only relevant UI here
+    if (authUnavailable) return 'errAuthUnavailable'; // never a silent "success"
     const serviceInput: SupabaseSignUpInput =
       username.trim() ? { email, password, displayName: username.trim() } : { email, password };
     try {
       const result = await supabaseAuth.signUp(serviceInput, env);
       if (result.session) {
-        setUser(fromSession(result.session));
+        applySession(result.session);
         return null;
       }
       // Email confirmation required: no session until the emailed link is used.
@@ -503,28 +567,32 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       return mapAuthFailure(error);
     }
-  }, [authUnavailable, env, fromSession, mapAuthFailure]);
+  }, [authUnavailable, env, applySession, mapAuthFailure]);
 
   const signIn = useCallback(async (login: string, password: string, _remember?: boolean): Promise<AuthError | null> => {
-    if (!login.trim()) return 'errEmail';
-    if (!password.trim()) return 'errSignIn'; // fixed generic text: no per-field hints, no echo
-    if (authUnavailable) return null; // the configuration banner is the only relevant UI here
+    if (!isValidEmail(login)) return 'errEmail'; // production accepts an email address only
+    if (!password.trim()) return 'errSignInEmail'; // fixed generic text: no per-field hints, no echo
+    if (authUnavailable) return 'errAuthUnavailable'; // never a silent "success"
     try {
       const result = await supabaseAuth.signIn(login.trim(), password, env);
-      setUser(toPublicUser(result.session));
+      applySession(result.session);
       return null;
     } catch (error) {
-      return mapAuthFailure(error, 'errSignIn');
+      return mapAuthFailure(error, 'errSignInEmail');
     }
-  }, [authUnavailable, env, mapAuthFailure]);
+  }, [authUnavailable, env, applySession, mapAuthFailure]);
 
-  const signOut = useCallback(() => {
-    setUser(null); setSignedOutByUser(true); setConfirmationPending(null); // optimistic: UI switches instantly
-    void supabaseAuth.signOut(env).catch(() => {
-      // Server unreachable: the restore-on-reload path re-uses the still-stored token rather
-      // than pretending the session is already gone server-side.
-    });
-  }, [env]);
+  /** Only reports success once Supabase has ended the session; on failure the user stays signed in. */
+  const signOut = useCallback(async (): Promise<AuthError | null> => {
+    if (authUnavailable) return 'errAuthUnavailable';
+    try {
+      await supabaseAuth.signOut(env);
+    } catch {
+      return 'errSignOutFailed';
+    }
+    applySignedOut();
+    return null;
+  }, [authUnavailable, env, applySignedOut]);
 
   // Guest and provider flows are demo-only presentation: not rendered in production mode.
   const signInAsGuest = useCallback(async () => { /* unavailable in production */ }, []);
@@ -540,6 +608,7 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
 
   const requestResetEmail = useCallback(async (email: string): Promise<AuthError | null> => {
     if (!isValidEmail(email)) return 'errEmail';
+    if (authUnavailable) return 'errAuthUnavailable';
     const redirectTo = env['VITE_AUTH_RESET_REDIRECT_URL'];
     if (typeof redirectTo !== 'string' || !redirectTo.trim()) return 'errResetRedirect'; // fail clearly, documented
     try {
@@ -548,10 +617,10 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       return mapAuthFailure(error, 'errAuthGeneric');
     }
-  }, [env, mapAuthFailure]);
+  }, [authUnavailable, env, mapAuthFailure]);
 
   const changePassword = useCallback(async (current: string, next: string, confirm: string): Promise<AuthError | null> => {
-    if (!user) return null; // only meaningful with an active session
+    if (!user) return 'errSessionRequired'; // only meaningful with an active session; never a fake success
     if (!isValidPassword(next)) return 'errPasswordRules';
     if (next !== confirm) return 'errPasswordMatch';
     // Supabase updates a password inside the active session, so no current-password check is
@@ -562,9 +631,33 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
       await supabaseAuth.updatePassword(next, env);
       return null;
     } catch (error) {
+      if (error instanceof AuthOperationError && error.code === supabaseAuth.SESSION_MISSING_CODE) return 'errSessionRequired';
       return mapAuthFailure(error, 'errAuthGeneric');
     }
   }, [env, mapAuthFailure, user]);
+
+  /** Recovery: the new password is set inside the recovery session Supabase issued for the email link. */
+  const completePasswordRecovery = useCallback(async (next: string, confirm: string): Promise<AuthError | null> => {
+    if (authUnavailable) return 'errAuthUnavailable';
+    if (recovery !== 'ready') return 'errRecoveryExpired';
+    if (!isValidPassword(next)) return 'errPasswordRules';
+    if (next !== confirm) return 'errPasswordMatch';
+    try {
+      await supabaseAuth.updatePassword(next, env);
+      setRecovery('completed');
+      return null;
+    } catch (error) {
+      if (error instanceof AuthOperationError) {
+        if (error.code === supabaseAuth.SESSION_MISSING_CODE || error.code === 'session_not_found'
+          || error.code === 'session_expired' || error.code === 'reauthentication_needed'
+          || error.status === 401 || error.status === 403) {
+          setRecovery('invalid');
+          return 'errRecoveryExpired';
+        }
+      }
+      return mapAuthFailure(error, 'errAuthGeneric');
+    }
+  }, [authUnavailable, env, mapAuthFailure, recovery]);
 
   const value = useMemo<AuthContextValue>(() => ({
     user,
@@ -585,18 +678,25 @@ function SupabaseAuthProvider({ children }: { children: ReactNode }) {
     requestResetEmail,
     resetPassword,
     deleteAccount,
+    recovery,
+    recoveryLinkError,
+    completePasswordRecovery,
   }), [user, signedOutByUser, sessionLoading, authUnavailable, confirmationPending, signUp, signIn, signInAsGuest,
     signInWithProvider, signOut, updateProfile, changeEmail, changePassword, requestResetCode, requestResetEmail,
-    resetPassword, deleteAccount]);
+    resetPassword, deleteAccount, recovery, recoveryLinkError, completePasswordRecovery]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  // Snapshot the recovery-link signal before the Supabase client is created: the SDK consumes
+  // and clears the URL fragment while it establishes the recovery session.
+  const [recoverySignal] = useState<RecoveryLinkSignal>(() =>
+    (typeof window === 'undefined' ? { kind: 'none' } : readRecoveryLinkSignal(window.location)));
   const env: EnvSource = import.meta.env;
   const mode = useMemo(() => getAppConfig(env).mode, [env]);
   return mode === 'production'
-    ? <SupabaseAuthProvider>{children}</SupabaseAuthProvider>
+    ? <SupabaseAuthProvider recoverySignal={recoverySignal}>{children}</SupabaseAuthProvider>
     : <DemoAuthProvider>{children}</DemoAuthProvider>;
 }
 
