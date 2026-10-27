@@ -457,3 +457,45 @@ Screenshots were not requested and were not taken. Camera scanning/QR pixel deco
 hosted Supabase, real SMTP, Safari, screen readers, populated legacy-ticket backfill
 and higher-volume performance remain unverified. Materials/charters/members/notifications
 are not implemented by this checkpoint. See the Phase 4 report for the ~55% estimate.
+
+## Verification — 2026-10-27 (branch `feature/phase5-remaining-operations`, base `e1ed860`)
+
+macOS, Node v26.7.0. Local checks use the native CLI stack `gm-phase5-build` on loopback
+(`supabase db query` instead of psql, `GM_IT_SQL_DRIVER=supabase`); no hosted project was used.
+
+| Command | Exit | Result |
+|---|---:|---|
+| `npm run typecheck` | 0 | no errors |
+| `npm test` | 0 | **375 passed**, 42 integration tests skipped without stack variables; 21 files passed, 3 skipped |
+| `npm run build` | 0 | 647.84 kB main JS / 181.02 kB gzip; existing >500 kB warning |
+| `npm run test:integration` with local variables | 0 | **42/42**, 3 files — 33 existing plus **9 new Phase 5 database tests** |
+| `npm run test:e2e:local` with local variables | 0 | **52/52** real Chromium + local Supabase checks (35 existing plus 17 new) |
+| `git diff --check` | 0 | no whitespace errors |
+
+New unit suite `src/tests/phase5.test.tsx` (12 tests): narrow RPC arguments with no
+actor/status forgery; safe error mapping without leaking database detail; refusal to read
+protected data without a session; optimistic `revision` on review; no direct table writes;
+production form submission with persisted history; request-key retention on a 503; allow-listed
+notification links with owner-scoped mark-read; Arabic coverage for every Phase 5 key; camera
+lifecycle (unsupported never prompts, denial surfaces a fallback, pending release on unmount).
+
+New DB coverage: own-company-admin-only invitations and refusal of direct membership writes;
+four concurrent invitation retries → one id and one audit event; scoped, single, admin-protected
+revocation that removes access; cancelled/expired invitations refused, unrelated invitations
+private; materials and charter requests persisting with retry safety, field boundary validation,
+single-success concurrent review and private audit; suspended reviewer refused with an existing
+JWT; stale invitation refused after the inviter loses authority; owner-only notifications
+deduplicated once per event with mark-read isolation.
+
+New browser journeys: invitation → acceptance as `company_booker` → revocation → revoked member
+cannot submit; materials and charter request submission, server reference, reload persistence,
+ATCO review with a reason and the customer seeing a planning-only decision; notification links
+and read state after reload; camera unsupported and permission-denied fallbacks that keep manual
+validation usable; Arabic RTL for materials, charters, company members and notifications at
+390 px with no horizontal overflow; no uncaught page errors.
+
+Translation table repaired and extended: 918 → 985 keys in **both** languages. Verified against
+`HEAD` that all 67 new keys per language are Phase 5 additions with **0 changed and 0 removed**
+existing values. See `docs/backend/phase5-operations.md` for the ~74% feature-weighted estimate.
+Camera decoding of rendered QR pixels, real devices/Safari, screen readers, real SMTP and
+high-volume performance remain unverified.

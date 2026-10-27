@@ -161,6 +161,7 @@ describe('Boarding Desk camera', () => {
 
   beforeEach(() => {
     pending.length = 0;
+    vi.stubGlobal('BarcodeDetector', class { async detect() { return []; } });
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: {
@@ -172,6 +173,7 @@ describe('Boarding Desk camera', () => {
     });
   });
   afterEach(() => {
+    vi.unstubAllGlobals();
     if (original) Object.defineProperty(navigator, 'mediaDevices', original);
     else delete (navigator as unknown as { mediaDevices?: unknown }).mediaDevices;
   });

@@ -23,6 +23,9 @@ import ProductionBookingsView from './pages/ProductionBookingsView';
 import AdminCompaniesView from './pages/AdminCompaniesView';
 import AdminOperationsView from './pages/AdminOperationsView';
 import ProductionBoardingView from './pages/ProductionBoardingView';
+import NotificationsView from './pages/NotificationsView';
+import TransferRequestsView from './pages/TransferRequestsView';
+import CompanyMembersView from './pages/CompanyMembersView';
 import { NotConnectedView } from './components/ProductionUi';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { OnboardingProvider } from './context/OnboardingContext';
@@ -74,8 +77,13 @@ export function AppRoutes() {
         <Route path="/corporate" element={<ByMode demo={<CorporateView />} production={<NotConnectedView />} />} />
         <Route path="/operations" element={<ByMode demo={<OperationsView />} production={<NotConnectedView />} />} />
         <Route path="/boarding" element={<ByMode demo={<BoardingView />} production={<ProductionBoardingView />} />} />
-        <Route path="/materials" element={<ByMode demo={<MaterialsView />} production={<NotConnectedView />} />} />
+        <Route path="/materials" element={<ByMode demo={<MaterialsView />} production={<TransferRequestsView kind="materials" />} />} />
+        <Route path="/charters" element={<TransferRequestsView kind="charter" />} />
+        <Route path="/admin/materials" element={<TransferRequestsView kind="materials" admin />} />
+        <Route path="/admin/charters" element={<TransferRequestsView kind="charter" admin />} />
         <Route path="/fleet" element={<ByMode demo={<FleetView />} production={<NotConnectedView />} />} />
+        <Route path="/notifications" element={<NotificationsView />} />
+        <Route path="/company/members" element={<CompanyMembersView />} />
         <Route path="/admin/companies" element={<AdminCompaniesView />} />
         <Route path="/admin/operations" element={<AdminOperationsView />} />
         <Route path="/admin/boarding" element={<ProductionBoardingView />} />

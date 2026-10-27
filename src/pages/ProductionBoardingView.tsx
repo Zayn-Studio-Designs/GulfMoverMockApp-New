@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCameraScanner } from '../hooks/useCameraScanner';
 import { useLanguage } from '../context/LanguageContext';
 import { usePlatformRoles } from '../context/OnboardingContext';
 import { ProdPageHeader, RequireRoles, SailingTime, dataErrorKey } from '../components/ProductionUi';
@@ -15,6 +16,8 @@ function Desk() {
   const [code, setCode] = useState(''); const [reason, setReason] = useState('');
   const [decision, setDecision] = useState<ReadinessStatus>('pending'); const [busy, setBusy] = useState(false);
   const [revision, setRevision] = useState(0); const inFlight = useRef(false);
+  const [camera,setCamera] = useState(false);
+  const scanner = useCameraScanner(camera,payload=>{ setCode(payload); setCamera(false); });
   useEffect(() => {
     let active = true;
     void listScheduleSailings().then(data => { if (active) setSailings(data); }).catch(e => { if (active) setError(dataErrorKey(e)); });
@@ -38,13 +41,13 @@ function Desk() {
   }
   return <>
     <ProdPageHeader titleKey="p4Boarding" subKey="p4InternalOnly" />
-    <div className="notice warn">{t('p4ManualOnly')}</div>
+    <div className="notice warn">{t('p5CameraNotice')}</div>
     {error && <p role="alert" className="notice danger">{t(error)}</p>}
     {message && <p role="status" className="notice">{t(message)}</p>}
     <section className="card card-pad" style={{ marginTop: 12 }}>
       <label htmlFor="p4-sailing">{t('selectSailing')}</label>
       <select id="p4-sailing" value={selected} disabled={busy} style={{ width: '100%', minWidth: 0 }} onChange={e => {
-        setSelected(e.target.value); setError(''); setMessage(''); setCode(''); setReason('');
+        setCamera(false); setSelected(e.target.value); setError(''); setMessage(''); setCode(''); setReason('');
       }}>
         <option value="">{t('p4ChooseSailing')}</option>
         {sailings?.map(s => <option key={s.id} value={s.id}>{s.route.origin} → {s.route.destination} · {s.departsAt} · {s.vessel.name}</option>)}
@@ -78,7 +81,10 @@ function Desk() {
       </section>}
       <section className="card card-pad" style={{ marginTop: 12 }}>
         <h2 className="card-title">{t('p4RecordBoarding')}</h2>
-        <form onSubmit={e => void action(e, async () => `p4Scan_${await boardTicket(code, selected)}`)}>
+        <button type="button" className="btn btn-outline" disabled={busy} onClick={()=>setCamera(v=>!v)}>{t(camera?'p5CameraStop':'p5CameraStart')}</button>
+        <p role="status">{t('p5Camera_'+scanner.state)}</p>
+        {camera&&<video ref={scanner.videoRef} muted playsInline aria-label={t('p5CameraStart')} style={{width:'100%',maxWidth:480}}/>}
+        <form onSubmit={e => void action(e, async () => { setCamera(false); return `p4Scan_${await boardTicket(code, selected)}`; })}>
           <label htmlFor="p4-code">{t('p4Lookup')}</label>
           <input id="p4-code" value={code} maxLength={100} autoComplete="off" disabled={busy} style={{ width: '100%', minWidth: 0 }} onChange={e => setCode(e.target.value)} />
           <button type="submit" className="btn btn-primary" disabled={busy || !code.trim()} style={{ marginTop: 10 }}>{t('p4RecordBoarding')}</button>

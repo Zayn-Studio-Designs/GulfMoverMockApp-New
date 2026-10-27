@@ -58,6 +58,9 @@ const CUSTOMER_NAV: ReadonlyArray<NavItem> = [
 
 /** Production navigation: only Supabase-backed destinations. */
 const PRODUCTION_CUSTOMER_NAV: ReadonlyArray<NavItem> = [
+  { to: '/materials', key: 'p5Materials', icon: 'box' },
+  { to: '/charters', key: 'p5Charter', icon: 'ship' },
+  { to: '/company/members', key: 'p5Members', icon: 'user' },
   { to: '/onboarding', key: 'navCompany', icon: 'navCorporate' },
   { to: '/book', key: 'navBook', icon: 'navBook' },
   { to: '/bookings', key: 'navBookings', icon: 'navBookings' },
@@ -65,6 +68,8 @@ const PRODUCTION_CUSTOMER_NAV: ReadonlyArray<NavItem> = [
 ];
 /** ATCO destinations, shown only when the SERVER-READ platform roles include one of `roles`. */
 const PRODUCTION_STAFF_NAV: ReadonlyArray<NavItem & { roles: readonly string[] }> = [
+  { to: '/admin/materials', key: 'p5Materials', icon: 'box', roles: ['super_admin','operations'] },
+  { to: '/admin/charters', key: 'p5Charter', icon: 'ship', roles: ['super_admin','operations'] },
   { to: '/admin/companies', key: 'navReview', icon: 'list', roles: ['super_admin', 'operations'] },
   { to: '/admin/operations', key: 'navAdminOps', icon: 'ship', roles: ['super_admin', 'operations'] },
   { to: '/admin/boarding', key: 'p4Boarding', icon: 'board', roles: ['super_admin', 'operations', 'boarding_staff'] },
@@ -278,7 +283,7 @@ export function Layout() {
             {/* Signed-out visitors can open only the public ATCO page; the tour needs an account. */}
             {user && isDemoAuth && <button type="button" className="tour-btn" data-tour="account" aria-label={t('tourStart')} title={t('tourStart')} onClick={startTour}>?</button>}
             {/* Opens the same Notifications settings page the profile menu used to link to. */}
-            {user && <Link className="bell-btn" to="/settings?tab=notifications" aria-label={t('notificationsTitle')} title={t('notificationsTitle')}><Icon name="bell" /></Link>}
+            {user && <Link className="bell-btn" to={isDemoAuth ? '/settings?tab=notifications' : '/notifications'} aria-label={t('notificationsTitle')} title={t('notificationsTitle')}><Icon name="bell" /></Link>}
             <AccountMenu />
           </div>
         </div>

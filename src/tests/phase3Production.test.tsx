@@ -119,7 +119,7 @@ describe('navigation reflects server-side roles, not a UI switch', () => {
   });
 
   it('demo-only modules are shown as not connected in production, never as working demo screens', async () => {
-    for (const path of ['/operations', '/materials', '/fleet', '/corporate']) {
+    for (const path of ['/operations', '/fleet', '/corporate']) {
       const view = renderApp(path);
       expect(await screen.findByRole('heading', { name: 'Not connected in this build' })).toBeTruthy();
       expect(screen.queryByText(/DEMO DATA/)).toBeNull();

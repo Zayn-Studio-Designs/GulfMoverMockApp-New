@@ -230,6 +230,58 @@ try {
   await admin.getByRole('heading', { name: 'Reservations on this departure' }).waitFor();
   check('admin: manifest lists the customer booking', await visible(admin.getByRole('cell', { name: reference })));
 
+  /* ---------------- Phase 5: invitations, requests and notifications ---------------- */
+  const inviteeEmail=`e2e-${RUN}-invitee@example.test`;
+  const invitee=await newPage({width:390,height:844});
+  await signUpAndConfirm(invitee,inviteeEmail); await signIn(invitee,inviteeEmail);
+  await customer.goto(`${APP}/company/members`);
+  await customer.getByLabel('Email',{exact:true}).fill(inviteeEmail);
+  await customer.getByRole('button',{name:'Create invitation',exact:true}).click();
+  check('members: invitation saved with honest no-email feedback',await visible(customer.getByText('Invitation saved in the database. No email sent.')));
+  await invitee.goto(`${APP}/company/members`);
+  await invitee.getByRole('button',{name:'Accept invitation',exact:true}).click();
+  await invitee.getByText('Change recorded.',{exact:true}).waitFor();
+  check('members: authenticated recipient accepts as company booker',sql(`select count(*) from public.organization_memberships m join auth.users u on u.id=m.user_id where u.email=${quote(inviteeEmail)} and m.organization_id=${quote(orgId)} and m.membership_role='company_booker' and m.status='active'`)==='1');
+  await customer.reload();
+  await customer.getByRole('button',{name:'Revoke membership',exact:true}).click();
+  await customer.getByText('Change recorded.',{exact:true}).waitFor();
+  await invitee.goto(`${APP}/materials`);
+  check('members: revoked recipient cannot submit requests',await invitee.getByRole('button',{name:'Submit request for review'}).count()===0);
+  for(const [path,title] of [['materials','Materials-transfer requests'],['charters','Charter requests']]){
+    await customer.goto(`${APP}/${path}`);
+    await customer.getByRole('heading',{name:title,exact:true}).waitFor();
+    await customer.getByLabel('Request description *').fill(`Fictional ${path} ${RUN}`);
+    await customer.getByLabel('Destination (requested)').fill('Demo destination pending ATCO');
+    await customer.getByRole('button',{name:'Submit request for review'}).click();
+    await customer.getByText('Change recorded.',{exact:true}).waitFor();
+    const ref=sql(`select reference from public.transfer_requests where organization_id=${quote(orgId)} and details->>'description'=${quote(`Fictional ${path} ${RUN}`)}`);
+    check(`${path}: request persists with server reference`,/^RQ-/.test(ref));
+    await customer.reload();await customer.getByRole('button').filter({hasText:ref}).click();
+    check(`${path}: saved details survive reload`,await visible(customer.getByText(`Fictional ${path} ${RUN}`,{exact:false})));
+    await admin.goto(`${APP}/admin/${path}`);
+    await admin.getByRole('button').filter({hasText:ref}).click();
+    await admin.getByLabel('Review decision').selectOption('reviewed_for_planning');
+    await admin.locator('#request-reason').fill('Fictional internal planning, not confirmation');
+    await admin.getByRole('button',{name:'Record review',exact:true}).click();
+    await admin.getByText('Change recorded.',{exact:true}).waitFor();
+    await customer.reload();
+    check(`${path}: customer sees planning-only decision`,await visible(customer.getByRole('button').filter({hasText:ref}).filter({hasText:'Reviewed for planning — not confirmed'})));
+  }
+  await customer.goto(`${APP}/notifications`);
+  await customer.getByRole('heading',{name:'Notifications',exact:true}).waitFor();
+  check('notifications: real booking/ticket events visible',await visible(customer.getByRole('link',{name:'Reservation created',exact:true}))&&await visible(customer.getByRole('link',{name:'Reservation tickets issued — not a payment confirmation',exact:true})));
+  await customer.getByRole('button',{name:'Mark read',exact:true}).first().click();
+  check('notifications: read state persists after reload',sql(`select count(*) from public.notifications n join auth.users u on u.id=n.user_id where u.email=${quote(customerEmail)} and n.read_at is not null`)!=='0');
+  await admin.goto(`${APP}/admin/boarding`);await admin.getByLabel('Selected sailing').selectOption(sailingId);
+  await admin.evaluate(()=>{Object.defineProperty(window,'BarcodeDetector',{value:undefined,configurable:true});});
+  await admin.getByRole('button',{name:'Start QR camera',exact:true}).click();
+  check('camera: unsupported browser provides manual fallback',await visible(admin.getByText('Camera QR decoding unavailable in this browser. Use manual entry.'))&&await admin.getByLabel('Ticket reference or QR payload').isEnabled());
+  // Browser-level permission failure test; no simulated success is counted as physical camera verification.
+  await admin.reload();await admin.getByLabel('Selected sailing').selectOption(sailingId);
+  await admin.evaluate(()=>{window.BarcodeDetector=class{async detect(){return [];}};Object.defineProperty(navigator,'mediaDevices',{value:{getUserMedia:async()=>{throw new DOMException('Denied','NotAllowedError');}},configurable:true});});
+  await admin.getByRole('button',{name:'Start QR camera',exact:true}).click();
+  check('camera: denied permission leaves manual validation available',await visible(admin.getByText('Camera permission denied. Use manual entry.'))&&await admin.getByLabel('Ticket reference or QR payload').isEnabled());
+
   /* ---------------- rejection journey ---------------- */
   const rejectedEmail = `e2e-${RUN}-rejected@example.test`;
   const rejected = await newPage({ width: 1366, height: 900 });
@@ -313,6 +365,12 @@ try {
   await adminMobile.keyboard.press('Escape');
   check('mobile Arabic: boarding/readiness actions and manifest fit without overflow', await visible(adminMobile.getByRole('heading', { name: 'الصعود والجاهزية' })) && await noOverflow(adminMobile));
 
+  for(const [path,title] of [['materials','طلبات نقل المواد'],['charters','طلبات الرحلات الخاصة'],['company/members','أعضاء الشركة'],['notifications','الإشعارات']]){
+    await mobile.goto(`${APP}/${path}`);
+    await mobile.getByRole('button',{name:'Account menu'}).click();await mobile.getByRole('button',{name:'العربية'}).click();await mobile.keyboard.press('Escape');
+    await mobile.getByRole('heading',{name:title,exact:true}).first().waitFor();
+    check(`mobile Arabic: ${path} RTL and no horizontal overflow`,(await mobile.evaluate(()=>document.documentElement.dir))==='rtl'&&await noOverflow(mobile));
+  }
   check('no uncaught page errors', pageErrors.length === 0, pageErrors.join(' | '));
 } catch (error) {
   check('journey completed without an unexpected failure', false, error instanceof Error ? error.message.split('\n')[0] : String(error));

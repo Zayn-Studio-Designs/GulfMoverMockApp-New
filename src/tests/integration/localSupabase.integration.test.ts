@@ -297,8 +297,9 @@ suite('local Supabase: operations data and bookings', () => {
       const r = await admin.client.rpc('review_company', { p_organization_id: id, p_decision: 'approve' });
       if (r.error) throw new Error(r.error.message);
     }
-    const addColleague = await bookerA.client.from('organization_memberships')
-      .insert({ organization_id: orgA, user_id: colleagueA.id, membership_role: 'company_booker', status: 'active', invited_by: bookerA.id });
+    const invitation = await bookerA.client.rpc('invite_company_member', { p_org: orgA, p_email: colleagueA.email });
+    if (invitation.error) throw new Error('Unable to create colleague invitation');
+    const addColleague = await colleagueA.client.rpc('accept_company_invitation', { p_id: invitation.data });
     if (addColleague.error) throw new Error(`add booker: ${addColleague.error.message}`);
 
     const v = await ops.client.from('vessels').insert({ name: `IT Vessel ${Math.random().toString(36).slice(2, 8)}`, passenger_capacity: 12 }).select('id').single();

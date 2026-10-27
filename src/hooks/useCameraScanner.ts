@@ -24,6 +24,8 @@ function makeDetector(): BarcodeDetectorLike | null {
 export function useCameraScanner(active: boolean, onDetect: (payload: string) => void) {
   const [state, setState] = useState<ScannerState>('idle');
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const callback = useRef(onDetect);
+  callback.current = onDetect;
 
   useEffect(() => {
     if (!active) { setState('idle'); return; }
@@ -37,6 +39,8 @@ export function useCameraScanner(active: boolean, onDetect: (payload: string) =>
 
     (async () => {
       if (!navigator.mediaDevices?.getUserMedia) { fail('unsupported'); return; }
+      const detector = makeDetector();
+      if (!detector) { fail('unsupported'); return; }
       setState('starting');
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -49,23 +53,27 @@ export function useCameraScanner(active: boolean, onDetect: (payload: string) =>
       if (!video) { stream.getTracks().forEach(t => t.stop()); fail('error'); return; }
       video.srcObject = stream;
       video.setAttribute('playsinline', 'true');
-      try { await video.play(); } catch { /* autoplay guards: ignore */ }
-      if (stopped) return; // turned off while the preview was starting; cleanup already released the stream
-      const detector = makeDetector();
-      if (!detector) {
-        // Frames still preview, but decoding is unavailable: tell the operator.
-        setState('unsupported');
-        return;
+      try { await video.play(); } catch {
+        stream.getTracks().forEach(t => t.stop()); fail('error'); return;
       }
+      if (stopped) return; // turned off while the preview was starting; cleanup already released the stream
       setState('active');
       const poll = async () => {
         if (stopped) return;
         try {
           const codes = await detector.detect(video);
-          if (codes.length > 0) onDetect(codes[0].rawValue);
+          if (!stopped && codes.length > 0) {
+            // One detection per explicit scan. Never board repeatedly on frame polling.
+            stopped = true;
+            stream?.getTracks().forEach(t => t.stop());
+            video.srcObject = null;
+            setState('idle');
+            callback.current(codes[0].rawValue);
+            return;
+          }
         } catch { // transient decode errors are ignored
         }
-        timer = window.setTimeout(poll, 400);
+        if (!stopped) timer = window.setTimeout(poll, 400);
       };
       void poll();
     })();
