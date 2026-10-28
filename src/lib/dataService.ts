@@ -30,7 +30,21 @@ export type DataErrorKind =
   | 'network'                   // no response — the request MAY have been processed
   | 'server'                    // 5xx — MAY have been processed
   | 'unexpected-response'
-  | 'unknown';
+  | 'unknown'
+  // Phase 8 business rules (stable message prefixes raised by the database)
+  | 'payment-in-progress'
+  | 'hold-expired'
+  | 'change-window-closed'
+  | 'credit-unavailable'
+  | 'credit-limit'
+  | 'four-eyes'
+  | 'policy-not-approved'
+  | 'terms-not-accepted'
+  | 'payments-disabled'
+  | 'safety-review-required'
+  | 'vessel-conflict'
+  | 'payload-exceeded'
+  | 'no-tariff';
 
 const UNCERTAIN: ReadonlySet<DataErrorKind> = new Set(['network', 'server', 'unexpected-response', 'unknown']);
 
@@ -60,6 +74,25 @@ const PREFIXES: ReadonlyArray<readonly [string, DataErrorKind]> = [
   ['profile_suspended', 'account-suspended'],
   ['invalid_transition', 'invalid-transition'],
   ['sailing_has_bookings', 'invalid-transition'],
+  ['payment_in_progress', 'payment-in-progress'],
+  ['hold_expired', 'hold-expired'],
+  ['change_window_closed', 'change-window-closed'],
+  ['credit_not_available', 'credit-unavailable'],
+  ['credit_on_hold', 'credit-unavailable'],
+  ['credit_limit_exceeded', 'credit-limit'],
+  ['four_eyes_required', 'four-eyes'],
+  ['refund_policy_not_approved', 'policy-not-approved'],
+  ['tariff_not_approved', 'policy-not-approved'],
+  ['terms_not_accepted', 'terms-not-accepted'],
+  ['payments_not_enabled', 'payments-disabled'],
+  ['sandbox_disabled', 'payments-disabled'],
+  ['safety_review_required', 'safety-review-required'],
+  ['permit_reference_required', 'safety-review-required'],
+  ['vessel_conflict', 'vessel-conflict'],
+  ['payload_exceeded', 'payload-exceeded'],
+  ['payload_capacity_unknown', 'payload-exceeded'],
+  ['no active tariff', 'no-tariff'],
+  ['no_matching_tariff', 'no-tariff'],
 ];
 
 export function classifyDataError(error: PostgrestLikeError | null | undefined, status: number | null | undefined): DataServiceError {

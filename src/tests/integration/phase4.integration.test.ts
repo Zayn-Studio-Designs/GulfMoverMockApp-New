@@ -32,6 +32,11 @@ suite('Phase 4: security and tickets against local PostgreSQL/PostgREST', () => 
     expect(tickets.error).toBeNull(); expect(tickets.data).toHaveLength(2);
     ticketId = tickets.data![0].id; reference = tickets.data![0].reference;
     const code = await owner.client.rpc('get_ticket_qr', { p_ticket_id: ticketId }); expect(code.error).toBeNull(); qr = code.data;
+    // Phase 8: boarding also requires a settled payment and the Master/port checkpoints (proven
+    // by src/tests/db). Recorded here as owner fixtures so this suite keeps testing readiness and
+    // single-use boarding exactly as before.
+    sql(`update public.bookings set payment_status = 'paid', status = 'paid' where id = ${quote(bookingId)};
+         update public.sailings set master_decision = 'go', port_clearance_status = 'not_required' where id = ${quote(sailingId)}`);
   }, 60000);
 
   it('suspended staff lose privileges with the same JWT and cannot self-reactivate', async () => {

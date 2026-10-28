@@ -216,8 +216,13 @@ describe('ATCO company review', () => {
 });
 
 describe('production booking', () => {
+  const TERMS = { version: 'v1-provisional', status: 'provisional', content: { title: { en: 'Gulf Mover booking terms (provisional)', ar: 'شروط حجز Gulf Mover (مؤقتة)' }, body: { en: 'Provisional terms.', ar: 'شروط مؤقتة.' } } };
+  const QUOTE = (qty: number) => ok([{ tariff_code: 'BASE-2026-ATCO-PENDING', tariff_status: 'provisional', unit_halala: 50000, quantity: qty, net_halala: 50000 * qty, vat_halala: 0, total_halala: 50000 * qty, vat_mode: 'not_configured', vat_rate_bp: 0, currency: 'SAR' }]);
   beforeEach(() => {
     fake.tables.sailings = ok([sailing('s-1', OUT, 30, 10, 2), sailing('s-full', OUT, 32, 3, 3), sailing('s-back', BACK, 40, 10, 0)]);
+    fake.tables.service_policies = ok([TERMS]);
+    fake.tables.organizations = ok([{ id: 'org-1', account_type: 'corporate', credit_status: 'none' }]);
+    fake.tables['rpc:quote_passenger_fare'] = QUOTE(1);
   });
 
   const chooseOutbound = async () => {
@@ -228,44 +233,60 @@ describe('production booking', () => {
   const fillContact = () => {
     fireEvent.change(screen.getByLabelText('Contact phone number *'), { target: { value: '+966 13 000 0000' } });
   };
+  const acceptTerms = () => fireEvent.click(screen.getByLabelText('I have read and accept these booking terms.'));
 
-  it('is refused (with a link to company status) for users without an approved company', async () => {
+  it('lets a person without any company book as an individual (no company registration forced)', async () => {
     fake.setMemberships([{ orgId: 'org-1', org: { legalName: 'Pending Co', status: 'pending' } }]);
+    fake.rpc.mockImplementationOnce(() => ok([{ booking_id: 'b-9', reference: 'GM-INDIV001', status: 'reserved', outcome: 'created' }]));
     renderApp('/book');
-    expect(await screen.findByRole('heading', { name: 'Booking needs an approved company' })).toBeTruthy();
-    expect(fake.rpc).not.toHaveBeenCalled();
+    expect(await screen.findByRole('option', { name: 'Individual (no company needed)' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Booking needs an approved company' })).toBeNull();
+    fireEvent.click((await chooseOutbound())[0]);
+    fillContact();
+    acceptTerms();
+    fireEvent.click(screen.getByRole('button', { name: 'Reserve seats' }));
+    expect(await screen.findByRole('heading', { name: 'Seats reserved' })).toBeTruthy();
+    const [fn, args] = fake.rpc.mock.calls[0];
+    expect(fn).toBe('create_individual_booking');
+    expect(args).toMatchObject({ p_outbound_sailing_id: 's-1', p_passenger_count: 1, p_terms_version: 'v1-provisional' });
+    expect(args).not.toHaveProperty('p_organization_id');
   });
 
-  it('books a selected sailing through create_booking only, and shows the server reference — no price, no payment success', async () => {
+  it('books for an approved company through create_organization_booking with a server quote and no client-side amount', async () => {
     approvedMember();
+    fake.tables['rpc:quote_passenger_fare'] = QUOTE(2);
     fake.rpc.mockImplementationOnce(() => ok([{ booking_id: 'b-1', reference: 'GM-1A2B3C4D', status: 'reserved', outcome: 'created' }]));
     renderApp('/book');
+    await screen.findByRole('option', { name: /Approved Co LLC/ });
+    fireEvent.change(screen.getByLabelText('Book as *'), { target: { value: 'org-1' } });
     const radios = await chooseOutbound();
     expect(radios).toHaveLength(2);
     expect(radios[1]).toBeDisabled(); // fully booked sailing cannot be chosen
     expect(screen.getByText('8 seat(s) left')).toBeTruthy();
-    expect(screen.getByText('2 of 4 minimum tickets')).toBeTruthy();
     fireEvent.click(radios[0]);
     expect((screen.getByLabelText('Lead passenger full name *') as HTMLInputElement).value).toBe('Sara Booker');
     fireEvent.change(screen.getByLabelText('Number of passengers *'), { target: { value: '2' } });
     fireEvent.change(screen.getByLabelText('Other passenger names (optional)'), { target: { value: 'Second Person\n\n' } });
+    expect((await screen.findAllByText('SAR 1,000.00')).length).toBe(2); // net = total: quoted by the server, VAT not configured
+    expect(screen.getByText(/Provisional tariff pending ATCO approval/)).toBeTruthy();
     fillContact();
+    acceptTerms();
     fireEvent.click(screen.getByRole('button', { name: 'Reserve seats' }));
     expect(await screen.findByRole('heading', { name: 'Seats reserved' })).toBeTruthy();
     expect(screen.getByText('GM-1A2B3C4D')).toBeTruthy();
-    expect(screen.getByText(/No payment is verified; boarding requires separate internal readiness/)).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/SAR\s?\d|Payment recorded|Paid/);
+    expect(screen.getByText(/not port-entry approval, operational clearance or boarding/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'View booking and pay' })).toBeTruthy();
 
     expect(fake.rpc).toHaveBeenCalledTimes(1);
     const [fn, args] = fake.rpc.mock.calls[0];
-    expect(fn).toBe('create_booking');
+    expect(fn).toBe('create_organization_booking');
     expect(args).toMatchObject({
       p_organization_id: 'org-1', p_outbound_sailing_id: 's-1', p_return_sailing_id: null, p_passenger_count: 2,
       p_contact_name: 'Sara Booker', p_contact_email: 'booker@example.test', p_contact_phone: '+966 13 000 0000',
-      p_passenger_names: ['Second Person'], p_po_reference: null,
+      p_passenger_names: ['Second Person'], p_po_reference: null, p_settlement_mode: 'pay_now', p_terms_version: 'v1-provisional',
     });
-    expect(Object.keys(args).some(k => /status|price|amount|paid|user/i.test(k))).toBe(false);
-    expect(sessionStorage.getItem(`gm-booking-attempt:${USER_ID}`)).toBeNull();
+    expect(Object.keys(args).some(k => /price|amount|halala|paid|user/i.test(k))).toBe(false);
+    expect(sessionStorage.getItem(`gm-booking-attempt-v2:${USER_ID}`)).toBeNull();
   });
 
   it('a double click reserves once; an uncertain failure retries with the SAME request key', async () => {
@@ -276,6 +297,7 @@ describe('production booking', () => {
     renderApp('/book');
     fireEvent.click((await chooseOutbound())[0]);
     fillContact();
+    acceptTerms();
     const button = screen.getByRole('button', { name: 'Reserve seats' });
     fireEvent.click(button);
     fireEvent.click(button);
@@ -293,6 +315,7 @@ describe('production booking', () => {
     renderApp('/book');
     fireEvent.click((await chooseOutbound())[0]);
     fillContact();
+    acceptTerms();
     const before = fake.queries.filter(q => q.table === 'sailings').length;
     fireEvent.click(screen.getByRole('button', { name: 'Reserve seats' }));
     expect(await screen.findByText(/Not enough seats are left on that sailing/)).toBeTruthy();
@@ -311,12 +334,13 @@ describe('production booking', () => {
     expect(options).toHaveLength(1);
     fireEvent.click(options[0]);
     fillContact();
+    acceptTerms();
     fireEvent.click(screen.getByRole('button', { name: 'Reserve seats' }));
     await screen.findByRole('heading', { name: 'Seats reserved' });
     expect(fake.rpc.mock.calls[0][1].p_return_sailing_id).toBe('s-back');
   });
 
-  it('validates locally before calling the server', async () => {
+  it('validates locally (incl. terms acceptance) before calling the server', async () => {
     approvedMember();
     renderApp('/book');
     fireEvent.click((await chooseOutbound())[0]);
@@ -325,7 +349,7 @@ describe('production booking', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reserve seats' }));
     expect(await screen.findByText('More passengers than seats left on the chosen sailing(s).')).toBeTruthy();
     expect(screen.getByText('Enter a valid email address.')).toBeTruthy();
-    expect(screen.getByText('This field is required.')).toBeTruthy(); // phone
+    expect(screen.getByText('Please read and accept the current booking terms.')).toBeTruthy();
     expect(fake.rpc).not.toHaveBeenCalled();
   });
 
@@ -337,32 +361,40 @@ describe('production booking', () => {
     expect(document.documentElement.dir).toBe('rtl');
     expect(screen.getByRole('heading', { name: 'حجز رحلة' })).toBeTruthy();
     expect(screen.getByLabelText('المسار (من ← إلى) *')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'حجز المقاعد' })).toBeTruthy();
+    expect(screen.getByRole('option', { name: 'فرد (لا يلزم تسجيل شركة)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'احجز المقاعد' })).toBeTruthy();
   });
 });
 
 describe('My bookings (server-backed)', () => {
   const booking = {
-    id: 'b-1', reference: 'GM-1A2B3C4D', status: 'reserved', passenger_count: 2, contact_name: 'Sara Booker',
+    id: 'b-1', reference: 'GM-1A2B3C4D', status: 'reserved', payment_status: 'unpaid', passenger_count: 2, contact_name: 'Sara Booker',
     contact_email: 'booker@example.test', contact_phone: '+966130000000', passenger_names: ['Sara Booker', 'Second Person'],
     po_reference: 'PO-9', organization_id: 'org-1', created_at: '2026-10-27T08:00:00Z',
+    settlement_mode: 'pay_now', account_type: 'corporate', net_halala: 100000, vat_halala: 0, total_halala: 100000, vat_mode: 'not_configured',
+    tariff_status: 'provisional', hold_expires_at: inHours(0.5), client_name: null, terms_version: 'v1-provisional', cancel_reason: null,
     booking_legs: [{ leg: 'outbound', passengers: 2, sailing: { id: 's-1', departs_at: inHours(30), status: 'open', route: { origin: 'Test Pier', destination: 'Test Anchorage' }, vessel: { name: 'Test Vessel One' } } }],
   };
 
   it('lists the caller\'s reservations and opens the saved record with separate status dimensions', async () => {
     approvedMember();
     fake.tables.bookings = ok([booking]);
+    fake.tables['rpc:sailing_commercial_status'] = ok([{ reserved_tickets: 2, qualifying_tickets: 0, qualifying_revenue_halala: 0, threshold_tickets: 4, threshold_revenue_halala: 200000, threshold_met: false, confirmation_deadline: inHours(6), commercial_state: 'awaiting_minimum' }]);
+    fake.tables['rpc:sailing_boarding_gate'] = ok('not_ready');
     renderApp('/bookings');
     expect(await screen.findByText('GM-1A2B3C4D')).toBeTruthy();
+    expect(screen.getByText('Reserved — awaiting payment')).toBeTruthy();
     fake.tables.bookings = ok(booking);
     fireEvent.click(screen.getByRole('link', { name: 'Open booking' }));
     expect(await screen.findByRole('heading', { name: /Booking reference/ })).toBeTruthy();
+    expect(await screen.findByText('Unpaid')).toBeTruthy();
     expect(screen.getByText('Seat reservation')).toBeTruthy();
-    expect(screen.getAllByText('Not connected yet')).toHaveLength(1); // payment only
-    expect(screen.getByText('Separate internal decision')).toBeTruthy();
-    expect(screen.getByText('See individual ticket status')).toBeTruthy();
+    expect(screen.getByText('Awaiting minimum')).toBeTruthy();
+    expect(screen.getByText('Awaiting operations readiness')).toBeTruthy();
+    expect(screen.getByText('0 of 4 qualifying tickets')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pay SAR 1,000.00' })).toBeTruthy();
     expect(screen.getByText('Second Person')).toBeTruthy();
-    const detailQuery = fake.queries.filter(q => q.table === 'bookings').slice(-1)[0]!;
+    const detailQuery = fake.queries.filter(q => q.table === 'bookings').find(q => q.filters.some(f => f[0] === 'eq' && f[1] === 'reference'))!;
     expect(detailQuery.filters).toContainEqual(['eq', 'reference', 'GM-1A2B3C4D']);
   });
 

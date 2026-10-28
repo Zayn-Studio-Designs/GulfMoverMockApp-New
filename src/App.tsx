@@ -26,6 +26,13 @@ import ProductionBoardingView from './pages/ProductionBoardingView';
 import NotificationsView from './pages/NotificationsView';
 import TransferRequestsView from './pages/TransferRequestsView';
 import CompanyMembersView from './pages/CompanyMembersView';
+import FinanceView from './pages/FinanceView';
+import ReportsView from './pages/ReportsView';
+import SailingControlView from './pages/SailingControlView';
+import SystemView from './pages/SystemView';
+import AccountPrivacyView from './pages/AccountPrivacyView';
+import CompanyReportsView from './pages/CompanyReportsView';
+import InvoiceView from './pages/InvoiceView';
 import { NotConnectedView } from './components/ProductionUi';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { OnboardingProvider } from './context/OnboardingContext';
@@ -87,6 +94,13 @@ export function AppRoutes() {
         <Route path="/admin/companies" element={<AdminCompaniesView />} />
         <Route path="/admin/operations" element={<AdminOperationsView />} />
         <Route path="/admin/boarding" element={<ProductionBoardingView />} />
+        <Route path="/admin/finance" element={<ByMode demo={<NotConnectedView />} production={<FinanceView />} />} />
+        <Route path="/admin/reports" element={<ByMode demo={<NotConnectedView />} production={<ReportsView />} />} />
+        <Route path="/admin/sailings" element={<ByMode demo={<NotConnectedView />} production={<SailingControlView />} />} />
+        <Route path="/admin/system" element={<ByMode demo={<NotConnectedView />} production={<SystemView />} />} />
+        <Route path="/account" element={<ByMode demo={<NotConnectedView />} production={<AccountPrivacyView />} />} />
+        <Route path="/company/account" element={<ByMode demo={<NotConnectedView />} production={<CompanyReportsView />} />} />
+        <Route path="/invoices/:id" element={<ByMode demo={<NotConnectedView />} production={<InvoiceView />} />} />
         <Route path="/settings" element={<SettingsView />} />
         <Route path="/onboarding" element={<OnboardingView />} />
         <Route path="*" element={<Navigate to="/" replace />} />

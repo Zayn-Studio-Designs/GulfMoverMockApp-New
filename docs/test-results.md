@@ -591,3 +591,38 @@ Findings fixed during this run:
 Still unverified: hosted Supabase, live payment provider + webhooks, ZATCA e-invoicing compliance,
 physical-device camera decoding, real SMTP/WhatsApp delivery, load/soak testing. Sandbox payments and
 provisional policies are foundations only and must not be treated as live billing or legal text.
+
+## Verification — Phase 8 release readiness (branch `feature/phase8-release-readiness`, base `39f018a`)
+
+Environment: Linux cloud container, Node 22.22.0, Docker 29 with `supabase/postgres:17.6.1.054`.
+The Supabase CLI could not start a local stack here (its pinned GHCR image blobs are blocked by
+the network policy; an older CLI's Realtime container needs IPv6, absent in this kernel), and
+Docker Hub rate-limited the GoTrue/PostgREST/Storage/Mailpit images. Therefore:
+**real-database tests run SQL directly as the application roles** (`authenticated`, `anon`,
+`service_role`, with Supabase-style JWT claims) on a disposable Postgres with every migration
+applied; the supabase-js integration suites (`src/tests/integration`) and the browser journey
+script (`scripts/e2e/local-journeys.mjs`) were updated but **not run** in this phase.
+
+| # | Check | Command | Result |
+|---|---|---|---|
+| 1 | Type check | `npm run typecheck` | exit 0 |
+| 2 | Unit/component suite | `npm test` | exit 0 — 24 files passed, 10 skipped; **850 passed**, 119 skipped |
+| 3 | Production build | `npm run build` | exit 0 |
+| 4 | Diff hygiene | `git diff --check` | exit 0 |
+| 5 | Clean install of all 27 migrations | `scripts/db/local-db.sh up` | exit 0 |
+| 6 | Real-DB security/finance/ops tests | `npm run test:db` (GM_DB_URL loopback) | exit 0 — **37 passed** (3 upgrade tests skipped here, run in #7) |
+| 7 | Phase 7 → Phase 8 upgrade with live data | `npm run test:db:upgrade` | exit 0 — **3 passed** (bookings, held seats, ticket QR secrets, payments, invoices, requests preserved) |
+| 8 | Backup/restore drill | `scripts/db/backup-restore-drill.sh` | exit 0 — 47 public tables identical (counts + content hashes), smoke + grants + hash chain OK |
+| 9 | Browser rendering (stubbed network) | `node scripts/e2e/ui-phase8-stubbed.mjs` against a production-mode build | exit 0 — **153/153** (10 pages × phone/tablet/desktop × EN/AR: no horizontal overflow, labelled controls, RTL + Arabic headings, no console errors) |
+
+Concurrency evidence (real DB): 6 simultaneous bookers on a 5-seat sailing → exactly 2 succeed;
+3 simultaneous scans of one ticket → exactly 1 `boarded`; duplicate provider events ignored.
+
+Defects found by these tests and fixed in Phase 8: PostgreSQL base64 line-wrapping inside ZATCA
+QR payloads; a webhook reusing another payment's provider id crashed the transaction (now
+`reference_conflict`); a long status pill overflowed phones by 16 px; plus the baseline defects
+listed in `docs/backend/phase8-release-readiness.md`.
+
+Not verified: hosted Supabase, deployed edge functions, provider sandboxes (no keys), real
+messaging, Storage upload API, MFA enrolment against live Auth, real devices/Safari/camera,
+screen readers, native-speaker Arabic review, CI run on GitHub.

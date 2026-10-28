@@ -108,7 +108,11 @@ try {
   await customer.getByRole('heading', { name: 'Awaiting ATCO approval' }).waitFor();
   check('customer: registration submitted and shown as pending (not approved)', await customer.getByText('Pending ATCO review', { exact: true }).isVisible());
   await customer.goto(`${APP}/book`);
-  check('customer: booking refused while pending', await visible(customer.getByRole('heading', { name: 'Booking needs an approved company' })));
+  await customer.getByLabel('Book as *').waitFor();
+  // Phase 8 (ATCO requirement): individuals may book without a company; the pending company is not offered.
+  check('customer: may book as an individual while the company is pending (no forced registration)',
+    await customer.getByLabel('Book as *').locator('option').count() === 1
+    && (await customer.getByLabel('Book as *').locator('option').first().textContent()) === 'Individual (no company needed)');
   await customer.goto(`${APP}/admin/companies`);
   check('customer: ATCO review screen refused', await visible(customer.getByRole('heading', { name: 'ATCO staff access required' })));
   await screenshot(customer, 'customer-pending-desktop.png');
@@ -169,6 +173,7 @@ try {
   await signIn(customer, customerEmail);
   check('customer: approved status after signing in again', await visible(customer.getByRole('heading', { name: 'Company approved by ATCO' })));
   await customer.getByRole('link', { name: 'Book a sailing' }).first().click();
+  await customer.getByLabel('Book as *').selectOption({ index: 1 }); // the approved company
   await customer.getByLabel('Route (from → to) *').selectOption({ label: `E2E Pier ${RUN} → E2E Anchorage ${RUN}` });
   await customer.getByRole('radiogroup', { name: 'Outbound sailing' }).locator('label').first().click();
   await customer.getByLabel('Add a return sailing on the reverse route').check();
@@ -176,11 +181,13 @@ try {
   await customer.getByLabel('Number of passengers *').fill('2');
   await customer.getByLabel('Lead passenger full name *').fill('E2E Lead Passenger');
   await customer.getByLabel('Contact phone number *').fill('+966 13 000 0000');
+  check('customer: server-quoted fare (2 passengers x 2 legs x SAR 500) shown before reserving', await visible(customer.getByText('SAR 2,000.00').first()));
+  await customer.getByLabel('I have read and accept these booking terms.').check();
   await customer.getByRole('button', { name: 'Reserve seats' }).click();
   await customer.getByRole('heading', { name: 'Seats reserved' }).waitFor();
   const reference = (await customer.locator('.mono').filter({ hasText: /^GM-[0-9A-F]{8}$/ }).first().textContent())?.trim();
   check('customer: server reference shown', /^GM-[0-9A-F]{8}$/.test(reference ?? ''), reference);
-  check('customer: no price or payment success shown', !(await customer.locator('body').textContent()).match(/SAR\s?\d|Payment recorded/));
+  check('customer: reservation is not presented as paid', !(await customer.locator('body').textContent()).match(/Payment recorded|Paid \(verified\)/));
   check('db: booking persisted with two legs and seats held',
     sql(`select b.passenger_count || ':' || count(l.*) from public.bookings b join public.booking_legs l on l.booking_id = b.id where b.reference = ${quote(reference)} group by b.passenger_count`) === '2:2');
   await customer.getByRole('link', { name: 'View booking details' }).click();
@@ -202,6 +209,10 @@ try {
   check('tickets: owner retrieves opaque QR and sees no-payment disclaimer', await customer.getByText(/No real payment made/).isVisible());
   const ticketRef = sql(`select t.reference from public.tickets t join public.bookings b on b.id=t.booking_id join public.booking_legs l on l.id=t.booking_leg_id where b.reference=${quote(reference)} and l.leg='outbound' order by t.passenger_index limit 1`);
   const sailingId = sql(`select l.sailing_id from public.booking_legs l join public.bookings b on b.id=l.booking_id where b.reference=${quote(reference)} and l.leg='outbound'`);
+  // Phase 8 gate: settled payment + Master/port checkpoints (DB-tested separately); fixture them
+  // so this journey keeps exercising the readiness UI and single-use boarding.
+  sql(`update public.bookings set payment_status='paid', status='paid' where reference=${quote(reference)}`);
+  sql(`update public.sailings set master_decision='go', port_clearance_status='not_required' where id=${quote(sailingId)}`);
   await admin.goto(`${APP}/admin/boarding`);
   await admin.getByRole('heading', { name: 'Boarding & readiness' }).waitFor();
   await admin.getByLabel('Selected sailing').selectOption(sailingId);

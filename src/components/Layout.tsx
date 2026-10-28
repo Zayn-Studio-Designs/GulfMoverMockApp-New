@@ -64,6 +64,8 @@ const PRODUCTION_CUSTOMER_NAV: ReadonlyArray<NavItem> = [
   { to: '/onboarding', key: 'navCompany', icon: 'navCorporate' },
   { to: '/book', key: 'navBook', icon: 'navBook' },
   { to: '/bookings', key: 'navBookings', icon: 'navBookings' },
+  { to: '/company/account', key: 'p8NavCompanyAccount', icon: 'list' },
+  { to: '/account', key: 'p8NavPrivacy', icon: 'user' },
   { to: '/settings', key: 'navAccount', icon: 'user' },
 ];
 /** ATCO destinations, shown only when the SERVER-READ platform roles include one of `roles`. */
@@ -73,6 +75,10 @@ const PRODUCTION_STAFF_NAV: ReadonlyArray<NavItem & { roles: readonly string[] }
   { to: '/admin/companies', key: 'navReview', icon: 'list', roles: ['super_admin', 'operations'] },
   { to: '/admin/operations', key: 'navAdminOps', icon: 'ship', roles: ['super_admin', 'operations'] },
   { to: '/admin/boarding', key: 'p4Boarding', icon: 'board', roles: ['super_admin', 'operations', 'boarding_staff'] },
+  { to: '/admin/sailings', key: 'p8NavSailings', icon: 'ship', roles: ['super_admin', 'operations', 'boarding_staff'] },
+  { to: '/admin/finance', key: 'p8NavFinance', icon: 'list', roles: ['super_admin', 'finance'] },
+  { to: '/admin/reports', key: 'p8NavReports', icon: 'grid', roles: ['super_admin', 'finance', 'operations'] },
+  { to: '/admin/system', key: 'p8NavSystem', icon: 'grid', roles: ['super_admin', 'it_support'] },
 ];
 
 /**

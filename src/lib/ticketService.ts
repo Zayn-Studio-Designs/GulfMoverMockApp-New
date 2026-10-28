@@ -3,7 +3,8 @@ import { DataServiceError, requireDataClient, requireSessionUser, run } from './
 
 export type TicketStatus = 'valid' | 'boarded' | 'cancelled';
 export type ReadinessStatus = 'pending' | 'ready' | 'blocked';
-export type BoardingOutcome = 'boarded' | 'already_boarded' | 'not_found' | 'wrong_sailing' | 'cancelled' | 'sailing_cancelled' | 'not_ready';
+export type BoardingOutcome = 'boarded' | 'already_boarded' | 'not_found' | 'wrong_sailing' | 'cancelled' | 'sailing_cancelled' | 'not_ready'
+  | 'payment_required' | 'master_not_go' | 'clearance_pending' | 'sailing_suspended' | 'revoked' | 'no_show';
 export interface Ticket {
   id: string; reference: string; bookingId: string; sailingId: string;
   passengerIndex: number; passengerName: string | null; status: TicketStatus; boardedAt: string | null;
@@ -66,7 +67,8 @@ export async function boardTicket(code: string, sailingId: string, env?: EnvSour
   uuid(sailingId); if (!validTicketLookup(code)) throw new DataServiceError('invalid-input');
   const c = await client(env);
   const { data } = await run(c.rpc('board_ticket', { p_code: code.trim(), p_sailing_id: sailingId }));
-  const outcomes: readonly unknown[] = ['boarded','already_boarded','not_found','wrong_sailing','cancelled','sailing_cancelled','not_ready'];
+  const outcomes: readonly unknown[] = ['boarded','already_boarded','not_found','wrong_sailing','cancelled','sailing_cancelled','not_ready',
+    'payment_required','master_not_go','clearance_pending','sailing_suspended','revoked','no_show'];
   if (!outcomes.includes(data)) throw new DataServiceError('unexpected-response');
   return data as BoardingOutcome;
 }

@@ -5,37 +5,18 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePlatformRoles } from '../context/OnboardingContext';
 import { getBooking, listBookings, type Booking } from '../lib/bookingService';
 import { ProdPageHeader, SailingTime, dataErrorKey } from '../components/ProductionUi';
+import { BookingCommerce } from '../components/BookingCommerce';
 
 /**
  * Production "My bookings" (`/bookings`) and booking detail (`/bookings/:reference`).
  * Records come from the `bookings` table under RLS: the creator, their company admin and ATCO
  * operations can see a booking — nobody else, whatever reference they type into the URL.
- * Reservation and ticket states come from the database. Payment is not connected;
- * internal readiness is separate from port/legal clearance.
+ * Reservation, payment, minimum-sailing and operational states come from the database and
+ * are shown separately; internal readiness is separate from port/legal clearance.
  */
 
 function legLabel(t: (k: string) => string, leg: 'outbound' | 'return') {
   return leg === 'return' ? t('pbReturn') : t('pbOutbound');
-}
-
-function StatusGrid() {
-  const { t } = useLanguage();
-  const rows: Array<[string, string, string]> = [
-    ['pbStatusReservation', 'pbStatusReserved', 'pill-green'],
-    ['pbStatusPayment', 'pbStatusNotConnected', 'pill-neutral'],
-    ['pbStatusOps', 'p4ReadinessSeparate', 'pill-neutral'],
-    ['pbStatusBoarding', 'p4BoardingTicketStatus', 'pill-neutral'],
-  ];
-  return (
-    <div className="status-grid" style={{ marginTop: 14 }}>
-      {rows.map(([label, value, tone]) => (
-        <div key={label} className="status-item">
-          <div className="status-label">{t(label)}</div>
-          <div className="status-text"><span className={`pill ${tone}`}>{t(value)}</span></div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function BookingDetail({ reference }: { reference: string }) {
@@ -62,8 +43,6 @@ function BookingDetail({ reference }: { reference: string }) {
             <h2 id="pb-detail-ref" className="card-title">{t('pbReference')}: <span className="mono">{booking.reference}</span></h2>
             <button type="button" className="btn btn-outline btn-small" onClick={() => void load()}>{t('pbRefresh')}</button>
           </div>
-          <StatusGrid />
-          <div className="notice warn" style={{ marginTop: 14 }}>{t('pbNotPaidNotice')}</div>
           <div style={{ marginTop: 14 }}>
             {booking.legs.map(leg => (
               <div key={leg.leg} className="request-row">
@@ -72,7 +51,7 @@ function BookingDetail({ reference }: { reference: string }) {
                   <div className="request-meta">{leg.sailing ? <SailingTime iso={leg.sailing.departsAt} /> : null} · {leg.sailing?.vesselName}</div>
                 </div>
                 <div className="row">
-                  {leg.sailing && leg.sailing.status !== 'open' && <span className="pill pill-red">{t(leg.sailing.status === 'cancelled' ? 'opsStatusCancelled' : 'opsStatusClosed')}</span>}
+                  {leg.sailing && leg.sailing.status !== 'open' && <span className="pill pill-red">{t(leg.sailing.status === 'cancelled' ? 'opsStatusCancelled' : leg.sailing.status === 'suspended' ? 'p8SailingSuspended' : 'opsStatusClosed')}</span>}
                   <span className="pill pill-neutral">{t('pbPassengersN').replace('{n}', String(leg.passengers))}</span>
                 </div>
               </div>
@@ -89,6 +68,7 @@ function BookingDetail({ reference }: { reference: string }) {
           </div>
         </section>
       )}
+      {booking && <BookingCommerce booking={booking} onChanged={() => void load()} />}
       {booking && <ProductionTickets booking={booking} />}
     </>
   );
@@ -132,7 +112,8 @@ function BookingList() {
                   </div>
                 </div>
                 <div className="row" style={{ flexWrap: 'wrap' }}>
-                  <span className="pill pill-green">{t('pbStatusReserved')}</span>
+                  <span className={`pill ${b.status === 'paid' ? 'pill-green' : ['cancelled', 'expired'].includes(b.status) ? 'pill-red' : 'pill-gold'}`}>{t(`p8Bk_${b.status}`)}</span>
+                  <span className="pill pill-neutral">{t(`p8Pay_${b.paymentStatus}`)}</span>
                   <Link className="btn btn-outline btn-small" to={`/bookings/${b.reference}`}>{t('pbOpen')}</Link>
                 </div>
               </div>

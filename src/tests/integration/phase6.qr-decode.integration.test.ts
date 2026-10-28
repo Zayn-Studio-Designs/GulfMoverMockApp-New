@@ -29,7 +29,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { chromium } from 'playwright';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { validTicketLookup } from '../../lib/ticketService';
-import { confirmedUser, futureIso, grantPlatformRole, localStackConfigured, type TestUser } from './helpers';
+import { confirmedUser, futureIso, grantPlatformRole, localStackConfigured, quote, sql, type TestUser } from './helpers';
 
 const decoderParts = (process.env.GM_QR_DECODER ?? '').trim().split(/\s+/).filter(Boolean);
 const suite = localStackConfigured ? describe : describe.skip;
@@ -93,6 +93,11 @@ suite('Phase 6: a rendered ticket QR image is decodable, and its payload boards'
     const tickets = await owner.client.from('tickets').select('id,reference,passenger_name').eq('booking_id', bookingId);
     expect(tickets.error).toBeNull(); expect(tickets.data).toHaveLength(1);
     ticketId = tickets.data![0].id;
+    // Phase 8: boarding also requires a settled payment and the Master/port checkpoints (proven
+    // by src/tests/db). Recorded here as owner fixtures so this suite keeps testing readiness and
+    // single-use boarding exactly as before.
+    sql(`update public.bookings set payment_status = 'paid', status = 'paid' where id = ${quote(bookingId)};
+         update public.sailings set master_decision = 'go', port_clearance_status = 'not_required' where id = ${quote(sailingId)}`);
     passengerName = tickets.data![0].passenger_name ?? '';
     const secret = await owner.client.rpc('get_ticket_qr', { p_ticket_id: ticketId });
     expect(secret.error).toBeNull(); qr = secret.data;

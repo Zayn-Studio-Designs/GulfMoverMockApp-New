@@ -51,6 +51,19 @@ const ERROR_KEYS: Record<DataErrorKind, string> = {
   server: 'dsErrNetwork',
   'unexpected-response': 'dsErrNetwork',
   unknown: 'dsErrNetwork',
+  'payment-in-progress': 'p8ErrPaymentInProgress',
+  'hold-expired': 'p8ErrHoldExpired',
+  'change-window-closed': 'p8ErrChangeWindow',
+  'credit-unavailable': 'p8ErrCreditUnavailable',
+  'credit-limit': 'p8ErrCreditLimit',
+  'four-eyes': 'p8ErrFourEyes',
+  'policy-not-approved': 'p8ErrPolicyNotApproved',
+  'terms-not-accepted': 'p8ErrTerms',
+  'payments-disabled': 'p8ErrPaymentsDisabled',
+  'safety-review-required': 'p8ErrSafetyReview',
+  'vessel-conflict': 'p8ErrVesselConflict',
+  'payload-exceeded': 'p8ErrPayload',
+  'no-tariff': 'p8ErrNoTariff',
 };
 
 /** Translation key for any thrown service error (never the raw database text). */

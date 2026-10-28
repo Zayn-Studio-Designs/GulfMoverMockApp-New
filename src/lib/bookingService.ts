@@ -17,7 +17,7 @@ import { DataServiceError, requireDataClient, requireSessionUser, run } from './
 
 /* --------------------------------- types --------------------------------- */
 
-export type SailingStatus = 'open' | 'closed' | 'cancelled';
+export type SailingStatus = 'open' | 'closed' | 'suspended' | 'cancelled';
 export type RecordStatus = 'active' | 'inactive';
 
 export interface Route { readonly id: string; readonly origin: string; readonly destination: string; readonly status: RecordStatus }
@@ -43,8 +43,9 @@ export interface BookingLeg {
 export interface Booking {
   readonly id: string;
   readonly reference: string;
-  /** Only 'reserved' exists: seats are held. It is NOT paid, ticketed, cleared or boarded. */
-  readonly status: 'reserved';
+  /** Reservation lifecycle only; payment, minimum, clearance and boarding are separate states. */
+  readonly status: 'reserved' | 'pending_payment' | 'paid' | 'cancelled' | 'refunded' | 'rescheduled' | 'expired';
+  readonly paymentStatus: string;
   readonly passengerCount: number;
   readonly contactName: string;
   readonly contactEmail: string;
@@ -85,7 +86,7 @@ function toVessel(row: Record<string, unknown>): Vessel {
 function toSailing(row: Record<string, unknown>): Sailing {
   const vessel = one(row.vessel);
   if (typeof row.id !== 'string' || !vessel) throw new DataServiceError('unexpected-response');
-  const status = row.status === 'closed' || row.status === 'cancelled' ? row.status : 'open';
+  const status = row.status === 'closed' || row.status === 'cancelled' || row.status === 'suspended' ? row.status : 'open';
   return {
     id: row.id, departsAt: s(row.departs_at), seatCapacity: n(row.seat_capacity), seatsBooked: n(row.seats_booked),
     readinessStatus: row.readiness_status === 'ready' || row.readiness_status === 'blocked' ? row.readiness_status : 'pending',
@@ -97,7 +98,9 @@ function toBooking(row: Record<string, unknown>): Booking {
   if (typeof row.id !== 'string' || typeof row.reference !== 'string') throw new DataServiceError('unexpected-response');
   const legs = Array.isArray(row.booking_legs) ? row.booking_legs as Record<string, unknown>[] : [];
   return {
-    id: row.id, reference: row.reference, status: 'reserved',
+    id: row.id, reference: row.reference,
+    status: (['pending_payment', 'paid', 'cancelled', 'refunded', 'rescheduled', 'expired'].includes(s(row.status)) ? s(row.status) : 'reserved') as Booking['status'],
+    paymentStatus: s(row.payment_status) || 'unpaid',
     passengerCount: n(row.passenger_count), contactName: s(row.contact_name), contactEmail: s(row.contact_email),
     contactPhone: s(row.contact_phone),
     passengerNames: Array.isArray(row.passenger_names) ? (row.passenger_names as unknown[]).map(s) : [],
@@ -112,7 +115,7 @@ function toBooking(row: Record<string, unknown>): Booking {
         passengers: n(leg.passengers),
         sailing: sailing ? {
           id: s(sailing.id), departsAt: s(sailing.departs_at),
-          status: sailing.status === 'closed' || sailing.status === 'cancelled' ? sailing.status : 'open',
+          status: sailing.status === 'closed' || sailing.status === 'cancelled' || sailing.status === 'suspended' ? sailing.status : 'open',
           origin: s(route?.origin), destination: s(route?.destination), vesselName: s(vessel?.name),
         } : null,
       } as BookingLeg;
@@ -121,7 +124,7 @@ function toBooking(row: Record<string, unknown>): Booking {
 }
 
 const SAILING_SELECT = 'id, departs_at, seat_capacity, seats_booked, status, readiness_status, route:routes(id, origin, destination, status), vessel:vessels(id, name)';
-const BOOKING_SELECT = 'id, reference, status, passenger_count, contact_name, contact_email, contact_phone, passenger_names, po_reference, organization_id, created_at, '
+const BOOKING_SELECT = 'id, reference, status, payment_status, passenger_count, contact_name, contact_email, contact_phone, passenger_names, po_reference, organization_id, created_at, '
   + 'booking_legs(leg, passengers, sailing:sailings(id, departs_at, status, route:routes(origin, destination), vessel:vessels(name)))';
 
 /* ------------------------------ customer side ----------------------------- */

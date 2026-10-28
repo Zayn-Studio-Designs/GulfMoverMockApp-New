@@ -282,7 +282,13 @@ export default function OnboardingView() {
     switch (state.kind) {
       case 'no-company':
         content = result ? null : (
-          <RegistrationForm key={user.id} userId={user.id} defaultName={user.fullName} onRegistered={onRegistered} />
+          <>
+            <StateCard title={t('p8IndividualTitle')}>
+              {t('p8IndividualBody')}
+              <div style={{ marginTop: 12 }}><Link className="btn btn-primary" to="/book">{t('p8BookAsIndividual')}</Link></div>
+            </StateCard>
+            <RegistrationForm key={user.id} userId={user.id} defaultName={user.fullName} onRegistered={onRegistered} />
+          </>
         );
         break;
       case 'pending':

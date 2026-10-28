@@ -83,7 +83,7 @@ function builder(table: string) {
   const filter = (op: string) => (column: string, value: unknown) => { recorded.filters.push([op, column, value]); return b; };
   const b = {
     select(columns: string) { recorded.select = columns; return b; },
-    eq: filter('eq'), is: filter('is'), gt: filter('gt'), gte: filter('gte'), ilike: filter('ilike'),
+    eq: filter('eq'), is: filter('is'), gt: filter('gt'), gte: filter('gte'), lte: filter('lte'), in: filter('in'), ilike: filter('ilike'),
     order: filter('order'), limit: (n: number) => { recorded.filters.push(['limit', '', n]); return b; },
     range: (from: number, to: number) => { recorded.filters.push(['range', String(from), to]); return b; },
     maybeSingle() { return respond(); },

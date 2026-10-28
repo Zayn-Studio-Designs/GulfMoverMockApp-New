@@ -84,3 +84,13 @@ The phone previews have their own simulated Wallet, drawn inside the device scre
 - `src/tests/` — unit and UI tests
 
 See `docs/test-results.md` for the latest verified results.
+
+## Phase 8 — release readiness (production mode)
+
+- Database tests (Docker required): `npm run db:up` then
+  `GM_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm run test:db`;
+  upgrade path `npm run test:db:upgrade`; backup drill `npm run db:backup-drill`; `npm run db:down`.
+- Release build: `npm run check:env -- production && npm run build:release`.
+- Reports: `docs/backend/phase8-release-readiness.md`, `docs/requirements-traceability.md`,
+  `docs/payments-and-einvoicing.md`, `docs/operations/*`, `docs/atco-pending-business-rules.md` (P25–P39).
+- Payments are **sandbox only**; no real money, no live provider, nothing submitted to ZATCA.

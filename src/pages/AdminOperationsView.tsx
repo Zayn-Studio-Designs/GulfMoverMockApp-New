@@ -34,7 +34,7 @@ function Notice({ message }: { message: Message }) {
   return <div className={`notice ${message.tone === 'ok' ? '' : 'danger'}`} role={message.tone === 'ok' ? 'status' : 'alert'} style={{ marginTop: 12 }}>{message.text}</div>;
 }
 
-const STATUS_KEY: Record<SailingStatus, string> = { open: 'opsStatusOpen', closed: 'opsStatusClosed', cancelled: 'opsStatusCancelled' };
+const STATUS_KEY: Record<SailingStatus, string> = { open: 'opsStatusOpen', closed: 'opsStatusClosed', suspended: 'p8SailingSuspended', cancelled: 'opsStatusCancelled' };
 
 /* --------------------------------- vessels -------------------------------- */
 

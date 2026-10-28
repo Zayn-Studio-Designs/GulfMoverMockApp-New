@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { reportError } from '../lib/monitoring';
 
 // Crash recovery for live demos: a screen that throws while rendering shows a calm recovery card
 // instead of a blank page. Two layers use it:
@@ -24,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('Gulf Mover demo: a screen failed to render.', error, info.componentStack);
+    reportError(error, `render: ${(info.componentStack ?? '').split('\n').slice(0, 4).join(' ')}`);
   }
 
   componentDidUpdate(prev: Props) {

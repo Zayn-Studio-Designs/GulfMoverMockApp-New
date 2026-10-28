@@ -1,6 +1,8 @@
 // Translation tables ported verbatim from the reference prototype
 // (reference/.../gulf_mover_ui_prototype_bilingual.html). Keys missing in Arabic fall back to English.
 
+import { PHASE8 } from './phase8';
+
 export type Lang = 'en' | 'ar';
 
 export const I18N: Record<Lang, Record<string, string>> = {
@@ -240,3 +242,6 @@ export const EXTRA_AR: ReadonlyArray<readonly [string, string]> = [
   ['1 case', 'حقيبة واحدة'],
   ['PO-DEMO-0001', 'PO-DEMO-0001'],
 ];
+
+// Phase 8 strings (kept in their own module for reviewability).
+for (const [key, [en, ar]] of Object.entries(PHASE8)) { I18N.en[key] = en; I18N.ar[key] = ar; }

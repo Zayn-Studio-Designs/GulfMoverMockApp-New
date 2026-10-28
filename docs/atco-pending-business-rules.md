@@ -174,3 +174,26 @@ Phase 4 local database and browser verification is recorded in
 [phase4-operational-platform.md](backend/phase4-operational-platform.md). No hosted
 configuration was changed. Safe internal tracking must not be presented as a legal
 permit, verified payment, ATCO sign-off or production readiness.
+
+## Phase 8 — decisions implemented as configurable, provisional defaults (2026-10-28)
+
+None of these is ATCO-approved. Each is a setting, policy or tariff version that an authorised
+ATCO role changes through the app (audited) — no code change needed.
+
+| # | Provisional default | Where | ATCO decision required |
+|---|---|---|---|
+| P25 | Fare SAR 500 / passenger / one-way leg, VAT `not_configured` (no VAT charged) | tariff `BASE-2026-ATCO-PENDING` | Approve tariff; VAT treatment and rate; route-specific fares |
+| P26 | Return departures 08:00 / 10:30 / 14:00 (outbound + 60 min) | `schedule_templates` | Real return times, vessels, capacities, anchorage destinations |
+| P27 | Minimum counts paid + on-account tickets only (reservations shown separately) | `sailing.minimum_counts` | Which tickets qualify |
+| P28 | Confirmation deadline 24 h before departure; below minimum → ATCO decides proceed or cancel | `booking.confirmation_deadline_hours` | Deadline and default outcome |
+| P29 | Unpaid pay-now hold 30 min | `booking.payment_hold_minutes` | Hold length |
+| P30 | Customer online change/cancel cut-off 24 h | `booking.customer_change_cutoff_hours` | Cut-off; fees |
+| P31 | Refunds never automatic; need an approved refund policy and two people | `decide_refund` | Refund policy text and amounts (cancellation, weather, minimum not met, no-show) |
+| P32 | Boarding requires paid/on-account booking + readiness + Master go + port clearance | `boarding.*` | Checkpoint list; who records the Master's decision |
+| P33 | No commission rate seeded; settlements pay 0 until a rule is approved | `agent_commission_rules` | Agent remuneration model |
+| P34 | Credit only when Finance sets limit + terms and activates; overdue blocks on-account | organizations credit fields | Credit policy |
+| P35 | Every material request needs a staff safety review; dangerous goods need a permit reference; delivery proof = signature or photo | `materials_safety` policy | Carriage rules, insurance, proof standard |
+| P36 | Material tariffs per kg SAR 5 and flat SAR 500 (provisional, not binding) | `material_tariffs` | Material pricing |
+| P37 | Privacy response target 30 days; retention periods unset | `privacy.response_days`, `data_retention_policies` | Legal retention periods and privacy notice |
+| P38 | Transactional e-mail on by default (opt-out); SMS/WhatsApp opt-in with consent version; all channels disabled | `notifications.channels` | Providers and consent wording |
+| P39 | Staff MFA enforcement off locally | `security.staff_mfa_required` | Turn on for staging/production |

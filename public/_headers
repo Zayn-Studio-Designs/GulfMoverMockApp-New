@@ -1,0 +1,21 @@
+# Security headers for static hosts that read a `_headers` file (Netlify, Cloudflare Pages).
+# Other hosts: apply the same values (see deploy/nginx.conf and docs/operations/deployment.md).
+# The script-src hash covers the inline theme script in index.html; tests fail if it drifts.
+# Replace YOUR-PROJECT-REF with the hosted Supabase project reference before go-live.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-4GvGAkuWvQGMLEYnOMTIcSRNeeMYPZKSVV3O+kBnbRo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://YOUR-PROJECT-REF.supabase.co; font-src 'self' data:; connect-src 'self' https://YOUR-PROJECT-REF.supabase.co wss://YOUR-PROJECT-REF.supabase.co; media-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=(self), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+  X-Frame-Options: DENY
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache

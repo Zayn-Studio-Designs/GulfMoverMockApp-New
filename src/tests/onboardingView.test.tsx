@@ -327,7 +327,7 @@ describe('authentication boundary', () => {
 describe('production vs demo', () => {
   it('production never falls back to demo: live badge, scope notice, no guest pass', async () => {
     renderApp('/bookings');
-    expect(await screen.findByText(/Live in this build: sign-in, company registration and ATCO review, sailings and seat reservations/)).toBeTruthy();
+    expect(await screen.findByText(/Connected: sign-in, individual\/corporate\/agent booking with server-quoted fares, sandbox checkout/)).toBeTruthy();
     expect(await screen.findByText('Next step: register your company with ATCO.')).toBeTruthy();
     expect(screen.getAllByRole('link', { name: /Company registration|Company/ }).length).toBeGreaterThan(0);
     expect(screen.queryByText('Explore as demo guest')).toBeNull();
@@ -387,7 +387,7 @@ describe('English and Arabic', () => {
     fake.rpc.mockImplementationOnce(() => { becomePending(); return created(); });
     fake.tables['rpc:my_company_memberships'] = { data: [], error: null, status: 200 };
     renderApp('/bookings');
-    await screen.findByText(/Live in this build/);
+    await screen.findByText(/Connected: sign-in/);
     act(() => switchLang('ar'));
     fireEvent.click(screen.getByRole('link', { name: 'عرض حالة الشركة' }));
     fireEvent.change(await screen.findByLabelText('الاسم القانوني للشركة *'), { target: { value: 'شركة الخليج للاختبار' } });
