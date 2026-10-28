@@ -89,6 +89,7 @@ export const PHASE8: Record<string, readonly [string, string]> = {
   p8DocTax: ['Tax invoice', 'فاتورة ضريبية'], p8DocSimplified: ['Simplified tax invoice', 'فاتورة ضريبية مبسطة'], p8DocCommercial: ['Commercial invoice (not a tax invoice)', 'فاتورة تجارية (ليست فاتورة ضريبية)'],
   p8IssueDate: ['Issued', 'تاريخ الإصدار'], p8DueDate: ['Due', 'تاريخ الاستحقاق'], p8ZatcaQr: ['Invoice QR code', 'رمز الاستجابة السريعة للفاتورة'],
   p8SandboxDoc: ['Sandbox document — no real payment was made. Not valid for accounting.', 'مستند تجريبي — لم يتم أي دفع حقيقي. غير صالح للأغراض المحاسبية.'],
+  p8SandboxPaidNotice: ['DEMO PAYMENT — simulated success, no real money collected.', 'دفعة تجريبية — نجاح مُحاكى، لم تُحصَّل أي أموال حقيقية.'],
   p8NotTaxInvoice: ['VAT treatment and the seller’s VAT registration are pending ATCO Finance, so this is not a ZATCA tax invoice.', 'معالجة الضريبة وتسجيل البائع في ضريبة القيمة المضافة بانتظار مالية ATCO، لذا فهذه ليست فاتورة ضريبية وفق هيئة الزكاة والضريبة والجمارك.'],
   p8Seller: ['Seller', 'البائع'], p8SellerPending: ['ATCO Ports Management & Marine Services (details pending)', 'ATCO لإدارة الموانئ والخدمات البحرية (التفاصيل قيد الاستكمال)'],
   p8VatNumberPending: ['VAT number not configured', 'رقم ضريبة القيمة المضافة غير مهيأ'], p8Buyer: ['Buyer', 'المشتري'],

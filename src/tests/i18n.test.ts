@@ -1,3 +1,6 @@
+// @vitest-environment node
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, test } from 'vitest';
 import { I18N } from '../i18n/translations';
 import { translateKey, translateText } from '../i18n/translate';
@@ -17,6 +20,17 @@ describe('translation tables', () => {
     expect(translateKey('ar', 'navBook')).toBe('حجز نقل بحري');
     expect(translateKey('en', 'navBook')).toBe('Book Transfer');
     expect(translateKey('ar', 'no-such-key')).toBe('no-such-key');
+  });
+
+  test('every navigation key and its phone short label resolve in both languages (no raw keys)', () => {
+    const layout = readFileSync(path.resolve(__dirname, '../components/Layout.tsx'), 'utf8');
+    const keys = [...new Set([...layout.matchAll(/key: '([A-Za-z0-9_]+)'/g)].map(m => m[1]))];
+    expect(keys.length).toBeGreaterThan(10);
+    for (const key of [...keys, ...keys.map(k => `${k}Short`)]) {
+      expect(translateKey('en', key), `missing English for nav key ${key}`).not.toBe(key);
+      expect(translateKey('ar', key), `missing Arabic for nav key ${key}`).not.toBe(key);
+      expect(I18N.ar[key]).toMatch(/[؀-ۿ]/);
+    }
   });
 });
 

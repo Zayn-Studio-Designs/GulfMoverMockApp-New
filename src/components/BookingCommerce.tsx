@@ -112,6 +112,9 @@ export function BookingCommerce({ booking, onChanged }: { booking: Booking; onCh
           ))}
         </div>
         <div className="notice blue" style={{ marginTop: 12 }}>{t('p8StatesSeparate')}</div>
+        {commercial.paymentStatus === 'paid' && payments.length > 0 && payments.every(p => p.mode === 'sandbox') && (
+          <div className="notice warn" role="note" style={{ marginTop: 10 }}><strong>{t('p8SandboxPaidNotice')}</strong></div>
+        )}
       </section>
 
       <section className="card card-pad" aria-labelledby="bc-price">

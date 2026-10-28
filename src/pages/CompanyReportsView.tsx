@@ -55,7 +55,7 @@ export default function CompanyReportsView() {
             {(invoices.data ?? []).length === 0 && <div className="no-data">{t('p8NoRows')}</div>}
             {(invoices.data ?? []).map(i => (
               <div key={i.id} className="request-row"><div><div className="request-title"><Link to={`/invoices/${i.id}`} className="mono">{i.invoiceNumber}</Link></div>
-                <div className="request-meta">{formatSar(i.totalHalala, lang)}{i.dueDate ? ` · ${t('p8DueDate')} ${i.dueDate}` : ''}</div></div><span className="pill pill-neutral">{t(`p8Inv_${i.status}`)}</span></div>
+                <div className="request-meta">{formatSar(i.totalHalala, lang)}{i.dueDate ? ` · ${t('p8DueDate')} ${i.dueDate}` : ''}{i.sandbox ? ` · ${t('p8Sandbox')}` : ''}</div></div><span className="pill pill-neutral">{t(`p8Inv_${i.status}`)}</span></div>
             ))}
           </section>
           {(settlements.data ?? []).length > 0 && (

@@ -46,7 +46,8 @@ export default function InvoiceView() {
               </div>
               {invoice.qrTlv && <div aria-label={t('p8ZatcaQr')}><QRCodeSVG value={invoice.qrTlv} size={120} /></div>}
             </div>
-            {invoice.sandbox && <div className="notice warn" style={{ marginTop: 12 }}><strong>{t('p8SandboxDoc')}</strong></div>}
+            {invoice.sandbox && invoice.status === 'paid' && <div className="notice warn" style={{ marginTop: 12 }}><strong>{t('p8SandboxPaidNotice')}</strong></div>}
+            {invoice.sandbox && invoice.status !== 'paid' && <div className="notice warn" style={{ marginTop: 12 }}><strong>{t('p8SandboxDoc')}</strong></div>}
             {invoice.documentType === 'commercial_invoice' && <div className="notice blue" style={{ marginTop: 12 }}>{t('p8NotTaxInvoice')}</div>}
             <div className="form-grid" style={{ marginTop: 14 }}>
               <div className="inset small">
