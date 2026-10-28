@@ -118,13 +118,24 @@ describe('navigation reflects server-side roles, not a UI switch', () => {
     expect(within(nav).getByRole('link', { name: /Vessels and sailings/ })).toBeTruthy();
   });
 
-  it('demo-only modules are shown as not connected in production, never as working demo screens', async () => {
-    for (const path of ['/operations', '/fleet', '/corporate']) {
-      const view = renderApp(path);
-      expect(await screen.findByRole('heading', { name: 'Not connected in this build' })).toBeTruthy();
-      expect(screen.queryByText(/DEMO DATA/)).toBeNull();
-      view.unmount();
-    }
+  it('the former dead-end routes render connected production screens, never demo screens', async () => {
+    // /corporate: company workspace for an approved member.
+    approvedMember();
+    const corp = renderApp('/corporate');
+    expect(await screen.findByRole('heading', { name: 'Corporate workspace' })).toBeTruthy();
+    expect(screen.queryByText(/DEMO DATA/)).toBeNull();
+    corp.unmount();
+    // /operations and /fleet: staff sailing management (Phase 10 connects them
+    // to the existing guarded components instead of NotConnectedView).
+    staff('super_admin');
+    const ops = renderApp('/operations');
+    expect(await screen.findByRole('heading', { name: 'Vessels and sailings' })).toBeTruthy();
+    expect(screen.queryByText(/DEMO DATA/)).toBeNull();
+    ops.unmount();
+    const fleet = renderApp('/fleet');
+    expect(await screen.findByRole('heading', { name: 'Sailing control' })).toBeTruthy();
+    expect(screen.queryByText(/DEMO DATA/)).toBeNull();
+    fleet.unmount();
   });
 });
 

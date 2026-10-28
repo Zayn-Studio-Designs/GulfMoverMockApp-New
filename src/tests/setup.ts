@@ -1,4 +1,19 @@
 import '@testing-library/jest-dom';
+import { vi } from 'vitest';
+
+// Pin the unit/component suite to demo mode. A developer's ignored production
+// `.env.local` would otherwise flip ~80 tests into production paths (missing
+// Supabase config, different auth flows) and fail. The direct `process.env`
+// assignment runs first so that `vi.unstubAllEnvs()` inside individual tests
+// restores *demo* (not the developer's production `.env.local`); the
+// `vi.stubEnv` calls additionally propagate the default into
+// `import.meta.env`. Tests that exercise production configuration inject
+// `EnvSource` explicitly or call `vi.stubEnv` themselves, and per-test stubs
+// take precedence over this file-level default.
+process.env.VITE_APP_MODE = 'demo';
+process.env.VITE_AUTH_RESET_REDIRECT_URL = '';
+vi.stubEnv('VITE_APP_MODE', 'demo');
+vi.stubEnv('VITE_AUTH_RESET_REDIRECT_URL', '');
 
 // Node-environment files (the local Supabase integration suite) have no DOM to patch.
 const hasDom = typeof window !== 'undefined';

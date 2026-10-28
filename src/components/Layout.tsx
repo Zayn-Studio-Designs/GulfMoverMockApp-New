@@ -64,6 +64,7 @@ const PRODUCTION_CUSTOMER_NAV: ReadonlyArray<NavItem> = [
   { to: '/onboarding', key: 'navCompany', icon: 'navCorporate' },
   { to: '/book', key: 'navBook', icon: 'navBook' },
   { to: '/bookings', key: 'navBookings', icon: 'navBookings' },
+  { to: '/corporate', key: 'navCorporate', icon: 'navCorporate' },
   { to: '/company/account', key: 'p8NavCompanyAccount', icon: 'list' },
   { to: '/account', key: 'p8NavPrivacy', icon: 'user' },
   { to: '/settings', key: 'navAccount', icon: 'user' },

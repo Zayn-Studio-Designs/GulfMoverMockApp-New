@@ -179,6 +179,11 @@ export const PHASE8: Record<string, readonly [string, string]> = {
   p8CompanyAccountTitle: ['Company account', 'حساب الشركة'], p8CompanyAccountSub: ['Your organization’s activity, balance, invoices and statements.', 'نشاط جهتك ورصيدها وفواتيرها وكشوفها.'],
   p8CompanyAdminOnly: ['Available to company administrators of approved organizations.', 'متاح لمسؤولي الشركات المعتمدة.'],
 
+  // Corporate workspace
+  p8CorpTitle: ['Corporate workspace', 'مساحة عمل الشركات'], p8CorpSub: ['Company status, your bookings and account activity in one place.', 'حالة الشركة وحجوزاتك ونشاط الحساب في مكان واحد.'],
+  p8CorpMyBookings: ['Your bookings', 'حجوزاتك'],
+  p8CorpNoCompany: ['No approved company yet.', 'لا توجد شركة معتمدة بعد.'], p8CorpNoCompanyBody: ['Seat reservations are open to active members of a company that ATCO has approved. Register your company to begin.', 'حجز المقاعد متاح للأعضاء النشطين في شركة اعتمدتها أتكو. سجّل شركتك للبدء.'],
+
   // Boarding outcomes
   p4Scan_payment_required: ['Not boarded: the booking is not paid or approved on account.', 'لم يتم الصعود: الحجز غير مدفوع وغير معتمد على الحساب.'],
   p4Scan_master_not_go: ['Not boarded: the Master’s go decision is not recorded.', 'لم يتم الصعود: لم يُسجَّل قرار الربان بالانطلاق.'],

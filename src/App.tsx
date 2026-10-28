@@ -32,6 +32,7 @@ import SailingControlView from './pages/SailingControlView';
 import SystemView from './pages/SystemView';
 import AccountPrivacyView from './pages/AccountPrivacyView';
 import CompanyReportsView from './pages/CompanyReportsView';
+import CorporateWorkspaceView from './pages/CorporateWorkspaceView';
 import InvoiceView from './pages/InvoiceView';
 import { NotConnectedView } from './components/ProductionUi';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -81,14 +82,14 @@ export function AppRoutes() {
         <Route path="/book" element={<ByMode demo={<BookingView />} production={<ProductionBookingView />} />} />
         <Route path="/bookings" element={<ByMode demo={<MyBookingsView />} production={<ProductionBookingsView />} />} />
         <Route path="/bookings/:reference" element={<ByMode demo={<MyBookingsView />} production={<ProductionBookingsView />} />} />
-        <Route path="/corporate" element={<ByMode demo={<CorporateView />} production={<NotConnectedView />} />} />
-        <Route path="/operations" element={<ByMode demo={<OperationsView />} production={<NotConnectedView />} />} />
+        <Route path="/corporate" element={<ByMode demo={<CorporateView />} production={<CorporateWorkspaceView />} />} />
+        <Route path="/operations" element={<ByMode demo={<OperationsView />} production={<AdminOperationsView />} />} />
         <Route path="/boarding" element={<ByMode demo={<BoardingView />} production={<ProductionBoardingView />} />} />
         <Route path="/materials" element={<ByMode demo={<MaterialsView />} production={<TransferRequestsView kind="materials" />} />} />
         <Route path="/charters" element={<TransferRequestsView kind="charter" />} />
         <Route path="/admin/materials" element={<TransferRequestsView kind="materials" admin />} />
         <Route path="/admin/charters" element={<TransferRequestsView kind="charter" admin />} />
-        <Route path="/fleet" element={<ByMode demo={<FleetView />} production={<NotConnectedView />} />} />
+        <Route path="/fleet" element={<ByMode demo={<FleetView />} production={<SailingControlView />} />} />
         <Route path="/notifications" element={<NotificationsView />} />
         <Route path="/company/members" element={<CompanyMembersView />} />
         <Route path="/admin/companies" element={<AdminCompaniesView />} />
