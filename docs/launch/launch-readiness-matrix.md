@@ -29,7 +29,13 @@ analysis: `security-rpc-matrix.md`.
 
 Weighted mean: (85·3 + 85·2 + 80·3 + 80·3 + 70 + 60·2 + 65 + 70 + 50 + 65·2 + 80·3 + 80 + 65) / 25 ≈ **74%**.
 
-Headline: **~74% engineering readiness for controlled launch.**
+Headline: **~76% engineering readiness for controlled launch** (Phase 10.1;
+was ~74%). +2pts: dead-end routes eliminated (verified by tests), grant
+regression guard now chronologically sound, corporate states fully handled.
+Implemented-vs-verified split: everything above counts implementation +
+source/browser-fake verification; only the auth/booking/ticket/boarding rows
+rest on prior local-stack evidence, and the two skipped catalog tests plus
+the unapplied migration keep the security row from scoring higher.
 What the number excludes: every D-item (tariff/VAT/refunds/commissions/
 credit/schedule/permits/staff-provisioning/hosting/payments-live/notifications-live)
 and any claim of production approval, compliance, or device verification.

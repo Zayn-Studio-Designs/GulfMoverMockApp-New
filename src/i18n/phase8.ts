@@ -182,6 +182,7 @@ export const PHASE8: Record<string, readonly [string, string]> = {
   // Corporate workspace
   p8CorpTitle: ['Corporate workspace', 'مساحة عمل الشركات'], p8CorpSub: ['Company status, your bookings and account activity in one place.', 'حالة الشركة وحجوزاتك ونشاط الحساب في مكان واحد.'],
   p8CorpMyBookings: ['Your bookings', 'حجوزاتك'],
+  p8CorpMultiOrg: ['You belong to more than one approved company. Bookings below are your own, across companies.', 'أنت عضو في أكثر من شركة معتمدة. الحجوزات أدناه هي حجوزاتك الخاصة عبر الشركات.'],
   p8CorpNoCompany: ['No approved company yet.', 'لا توجد شركة معتمدة بعد.'], p8CorpNoCompanyBody: ['Seat reservations are open to active members of a company that ATCO has approved. Register your company to begin.', 'حجز المقاعد متاح للأعضاء النشطين في شركة اعتمدتها أتكو. سجّل شركتك للبدء.'],
 
   // Boarding outcomes

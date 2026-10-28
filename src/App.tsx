@@ -83,13 +83,16 @@ export function AppRoutes() {
         <Route path="/bookings" element={<ByMode demo={<MyBookingsView />} production={<ProductionBookingsView />} />} />
         <Route path="/bookings/:reference" element={<ByMode demo={<MyBookingsView />} production={<ProductionBookingsView />} />} />
         <Route path="/corporate" element={<ByMode demo={<CorporateView />} production={<CorporateWorkspaceView />} />} />
-        <Route path="/operations" element={<ByMode demo={<OperationsView />} production={<AdminOperationsView />} />} />
+        {/* Staff aliases: the canonical staff pages live under /admin/* and are linked from the
+            production staff nav; these redirects keep deep links working without maintaining
+            two copies of each screen. */}
+        <Route path="/operations" element={<ByMode demo={<OperationsView />} production={<Navigate to="/admin/operations" replace />} />} />
         <Route path="/boarding" element={<ByMode demo={<BoardingView />} production={<ProductionBoardingView />} />} />
         <Route path="/materials" element={<ByMode demo={<MaterialsView />} production={<TransferRequestsView kind="materials" />} />} />
         <Route path="/charters" element={<TransferRequestsView kind="charter" />} />
         <Route path="/admin/materials" element={<TransferRequestsView kind="materials" admin />} />
         <Route path="/admin/charters" element={<TransferRequestsView kind="charter" admin />} />
-        <Route path="/fleet" element={<ByMode demo={<FleetView />} production={<SailingControlView />} />} />
+        <Route path="/fleet" element={<ByMode demo={<FleetView />} production={<Navigate to="/admin/sailings" replace />} />} />
         <Route path="/notifications" element={<NotificationsView />} />
         <Route path="/company/members" element={<CompanyMembersView />} />
         <Route path="/admin/companies" element={<AdminCompaniesView />} />
