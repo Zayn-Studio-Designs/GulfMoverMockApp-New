@@ -22,16 +22,18 @@ analysis: `security-rpc-matrix.md`.
 | Credit, settlements, invoices | Implemented, partially verified | 65 | 1 | Zero-by-default rules, four-eyes, audit trails; remaining: commercial approvals D3–D5 |
 | Reports & exports | Implemented, partially verified | 70 | 1 | DB-backed reports, CSV; remaining: stack re-run, PDF where required |
 | Notifications | Partially connected | 50 | 1 | In-app verified; outbox + adapters unit-tested; external delivery unconfigured D14 |
-| Corporate / operations / fleet routes | Implemented, newly connected | 65 | 2 | Reuse existing guarded components; unit + source tests new; remaining: production-mode browser pass |
+| Corporate / operations / fleet routes | Implemented, newly connected | 65 | 2 | Reuse existing guarded components; unit + source tests new; signed-out production-mode browser pass 82/82 (Phase 10.2, auth gate verified); remaining: signed-in staff/customer browser pass against isolated test backend |
 | Security hardening (RPC/RLS/grants/secrets) | Implemented, verified at source | 80 | 3 | Matrix + `_`-revoke migration + grant tests; remaining: hosted advisor re-check after migration lands |
 | i18n / RTL / UX / responsive | Implemented, verified | 80 | 1 | Full EN/AR, RTL browser-checked (Phase 9.3); remaining: devices, a11y audit |
 | Release & operability (env checks, docs, backup, CI) | Partially implemented | 65 | 1 | `check-env.mjs` + drill scripts; remaining: CI run, hosted backup/PITR proof D12/D16 |
 
-Weighted mean: (85·3 + 85·2 + 80·3 + 80·3 + 70 + 60·2 + 65 + 70 + 50 + 65·2 + 80·3 + 80 + 65) / 25 ≈ **74%**.
+Weighted mean: (85·3 + 85·2 + 80·3 + 80·3 + 70 + 60·2 + 65 + 70 + 50 + 65·2 + 80·3 + 80 + 65) = 1795 / 24 ≈ **74.8%**.
 
-Headline: **~76% engineering readiness for controlled launch** (Phase 10.1;
-was ~74%). +2pts: dead-end routes eliminated (verified by tests), grant
-regression guard now chronologically sound, corporate states fully handled.
+Headline: **~75% engineering readiness for controlled launch** (Phase 10.2;
+was ~75% on the same corrected denominator — the earlier “76% / 25” was an
+arithmetic error: weights sum to 24, not 25, and 1795/25 = 71.8%, not 74%).
+No category score was changed to hit a target; only the denominator and the
+rounded headline were corrected.
 Implemented-vs-verified split: everything above counts implementation +
 source/browser-fake verification; only the auth/booking/ticket/boarding rows
 rest on prior local-stack evidence, and the two skipped catalog tests plus
