@@ -22,17 +22,20 @@ import { randomUUID } from 'node:crypto';
 const SUPABASE_URL = process.env.GM_E2E_SUPABASE_URL ?? '';
 const ANON = process.env.GM_E2E_ANON_KEY ?? '';
 const SERVICE = process.env.GM_E2E_SERVICE_KEY ?? '';
-const INBUCKET = (process.env.GM_E2E_INBUCKET_URL ?? '').replace(/\/+$/, '');
+// Disposable mail catcher base URL (Inbucket or Mailpit — the stack decides;
+// the script probes which API answers). GM_E2E_INBUCKET_URL kept as fallback.
+const MAIL_URL = (process.env.GM_E2E_MAIL_URL ?? process.env.GM_E2E_INBUCKET_URL ?? '').replace(/\/+$/, '');
 
 const loopback = (u) => { try { const h = new globalThis.URL(u).hostname; return h === '127.0.0.1' || h === 'localhost'; } catch { return false; } };
 if (!loopback(SUPABASE_URL) || /supabase\.co$/i.test(SUPABASE_URL)) {
   console.error('REFUSAL: GM_E2E_SUPABASE_URL is not an isolated loopback stack; aborting.');
   process.exit(2);
 }
-if (!loopback(INBUCKET)) {
-  console.error('REFUSAL: GM_E2E_INBUCKET_URL is not a loopback Inbucket; aborting.');
+if (!loopback(MAIL_URL)) {
+  console.error('REFUSAL: GM_E2E_MAIL_URL is not a loopback mail catcher; aborting.');
   process.exit(2);
 }
+let MAIL_KIND = '';
 if (!ANON || !SERVICE) { console.error('Missing GM_E2E_ANON_KEY / GM_E2E_SERVICE_KEY'); process.exit(2); }
 
 let pass = 0, fail = 0;
@@ -54,58 +57,68 @@ async function mustSingle(promise, what) {
   return r.data;
 }
 
-// ---- Inbucket helpers (disposable mail catcher) ----
-async function mailboxList(mailbox) {
+// ---- Disposable mail-catcher helpers (Inbucket or Mailpit) ----
+async function detectMailKind() {
+  try { const r = await fetch(`${MAIL_URL}/api/v1/mailboxes`); if (r.ok) return 'inbucket'; } catch { /* not inbucket */ }
+  try { const r = await fetch(`${MAIL_URL}/api/v1/messages?limit=1`); if (r.ok) return 'mailpit'; } catch { /* not mailpit */ }
+  return '';
+}
+async function mailboxMessages(mailbox) {
+  if (MAIL_KIND === 'mailpit') {
+    try {
+      const r = await fetch(`${MAIL_URL}/api/v1/messages?limit=50`);
+      if (!r.ok) return [];
+      const j = await r.json();
+      const list = Array.isArray(j) ? j : (j.messages ?? []);
+      const want = mailbox.toLowerCase();
+      return list.filter(m => (m.To ?? []).some(t => (t.Address ?? '').toLowerCase() === want));
+    } catch { return []; }
+  }
   for (const name of [mailbox, mailbox.split('@')[0]]) {
     try {
-      const r = await fetch(`${INBUCKET}/api/v1/mailbox/${encodeURIComponent(name)}`);
+      const r = await fetch(`${MAIL_URL}/api/v1/mailbox/${encodeURIComponent(name)}`);
       if (!r.ok) continue;
       const j = await r.json();
       const list = Array.isArray(j) ? j : (j.messages ?? j.data ?? j.mail ?? []);
-      if (Array.isArray(list) && list.length) return { name, list };
+      if (Array.isArray(list) && list.length) return list.map(m => ({ _name: name, _id: m.id ?? m.ID ?? m.messageId }));
     } catch { /* try next form */ }
   }
-  return { name: mailbox, list: [] };
+  return [];
+}
+async function messageBody(entry) {
+  if (MAIL_KIND === 'mailpit') {
+    const r = await fetch(`${MAIL_URL}/api/v1/message/${entry.ID}`);
+    if (!r.ok) return '';
+    const m = await r.json();
+    return m.HTML ?? m.Text ?? '';
+  }
+  const r = await fetch(`${MAIL_URL}/api/v1/mailbox/${encodeURIComponent(entry._name)}/${entry._id}`);
+  if (!r.ok) return '';
+  const m = await r.json();
+  return m.body?.html ?? m.body?.text ?? '';
 }
 async function latestEmailBody(mailbox) {
   for (let i = 0; i < 25; i++) {
-    const { name, list } = await mailboxList(mailbox);
+    const list = await mailboxMessages(mailbox);
     if (list.length) {
-      const id = list[list.length - 1].id ?? list[list.length - 1].ID ?? list[list.length - 1].messageId;
-      try {
-        const r = await fetch(`${INBUCKET}/api/v1/mailbox/${encodeURIComponent(name)}/${id}`);
-        if (r.ok) {
-          const m = await r.json();
-          const body = m.body?.html ?? m.body?.text ?? '';
-          if (body) return body;
-        }
-      } catch { /* retry */ }
+      const body = await messageBody(list[list.length - 1]);
+      if (body) return body;
     }
     await new Promise(r => setTimeout(r, 1000));
   }
   throw new Error(`no email arrived for ${mailbox}`);
 }
-function extractVerifyToken(html) {
-  const m = html.match(/https?:\/\/[^\s"'<>]*\/auth\/v1\/verify\?[^\s"'<>]*/);
-  if (!m) return null;
-  try {
-    const u = new globalThis.URL(m[0].replace(/&amp;/g, '&'));
-    const token = u.searchParams.get('token');
-    const type = u.searchParams.get('type');
-    if (token && type) return { token, type };
-  } catch { /* fall through */ }
-  return null;
-}
 
 async function main() {
   const ping = await anonClient().rpc('health_ping');
   check('stack health_ping answers ok', !ping.error && ping.data?.status === 'ok', errText(ping.error));
-  const mailProbe = await fetch(`${INBUCKET}/api/v1/mailboxes`).then(r => r.ok).catch(() => false);
-  check('Inbucket API reachable on the loopback stack', mailProbe, 'is GM_E2E_INBUCKET_URL correct?');
-  if (!mailProbe) {
-    console.log(`\nPHASE15-EMAIL-INVITE: ${pass} passed, ${fail} failed (Inbucket unreachable, aborting)`);
+  MAIL_KIND = await detectMailKind();
+  check('disposable mail catcher API reachable (inbucket or mailpit)', MAIL_KIND === 'inbucket' || MAIL_KIND === 'mailpit', `is GM_E2E_MAIL_URL correct? got '${MAIL_KIND}'`);
+  if (!MAIL_KIND) {
+    console.log(`\nPHASE15-EMAIL-INVITE: ${pass} passed, ${fail} failed (mail catcher unreachable, aborting)`);
     process.exit(1);
   }
+  console.log(`mail catcher kind: ${MAIL_KIND}`);
 
   // ---- A. signup confirmation via captured email ----
   const fresh = anonClient();
