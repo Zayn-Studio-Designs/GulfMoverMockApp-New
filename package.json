@@ -21,7 +21,9 @@
     "check:env": "node scripts/release/check-env.mjs",
     "test:e2e:real-auth": "node scripts/e2e/phase13-real-auth.mjs",
     "test:e2e:real-browser": "node scripts/e2e/phase13-real-browser.mjs",
-    "test:e2e:real-gaps": "node scripts/e2e/phase14-real-auth-gaps.mjs && GM_E2E_APP_URL=http://127.0.0.1:4319 node scripts/e2e/phase14-real-browser-gaps.mjs"
+    "test:e2e:real-gaps": "node scripts/e2e/phase14-real-auth-gaps.mjs && GM_E2E_APP_URL=http://127.0.0.1:4319 node scripts/e2e/phase14-real-browser-gaps.mjs",
+    "test:e2e:email-invite": "node scripts/e2e/phase15-email-invite.mjs",
+    "test:e2e:lifecycle-roles": "node scripts/e2e/phase15-lifecycle-roles.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

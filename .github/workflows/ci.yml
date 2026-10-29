@@ -93,6 +93,8 @@ jobs:
           ANON_KEY="$(echo "$ENV_OUT" | grep -E 'ANON_KEY=' | head -1 | clean)"
           SERVICE_KEY="$(echo "$ENV_OUT" | grep -E 'SERVICE_ROLE_KEY=' | head -1 | clean)"
           case "$SUPABASE_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "REFUSAL: not loopback" >&2; exit 1;; esac
+          INBUCKET_URL="$(supabase status | grep -ioE 'inbucket[^:]*:[[:space:]]*http://[^[:space:]]+' | grep -oE 'http://[^[:space:]]+' | head -1)"
+          case "$INBUCKET_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "REFUSAL: Inbucket URL is not loopback ($INBUCKET_URL)" >&2; exit 1;; esac
           [ -n "$ANON_KEY" ] && [ -n "$SERVICE_KEY" ] || { echo "missing keys from supabase status" >&2; exit 1; }
           echo "::add-mask::$ANON_KEY"
           echo "::add-mask::$SERVICE_KEY"
@@ -100,6 +102,7 @@ jobs:
             echo "GM_E2E_SUPABASE_URL=$SUPABASE_URL"
             echo "GM_E2E_ANON_KEY=$ANON_KEY"
             echo "GM_E2E_SERVICE_KEY=$SERVICE_KEY"
+            echo "GM_E2E_INBUCKET_URL=$INBUCKET_URL"
           } >> "$GITHUB_ENV"
       - name: Build app against the disposable stack
         run: |
@@ -124,6 +127,10 @@ jobs:
         run: node scripts/e2e/phase14-real-browser-gaps.mjs
         env:
           GM_E2E_APP_URL: http://127.0.0.1:4319
+      - name: Phase 15 email confirmation, reset, invitations
+        run: node scripts/e2e/phase15-email-invite.mjs
+      - name: Phase 15 booking lifecycle and role matrix
+        run: node scripts/e2e/phase15-lifecycle-roles.mjs
       - name: Stop disposable stack
         if: always()
         run: supabase stop
