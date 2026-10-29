@@ -148,6 +148,8 @@ async function main() {
     page.on('pageerror', e => errors.push(String(e).slice(0, 200)));
     await signIn(page, 'ops');
     await page.goto(`${APP}/admin/operations`, { waitUntil: 'networkidle' });
+    await page.getByRole('tab').nth(1).click();
+    await page.waitForSelector('#ops-vessel-name', { timeout: 20000 });
     check('ops sees the vessel form', (await page.locator('#ops-vessel-name').count()) >= 1);
     const vesselName = `E2E Vessel ${tag}`;
     await page.locator('#ops-vessel-name').fill(vesselName);
