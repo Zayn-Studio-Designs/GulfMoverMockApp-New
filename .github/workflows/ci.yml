@@ -78,8 +78,8 @@ jobs:
           SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '(^|_)((SUPABASE|API)_URL)=' | head -1 | clean)"
           ANON_KEY="$(echo "$ENV_OUT" | grep -E 'ANON_KEY=' | head -1 | clean)"
           SERVICE_KEY="$(echo "$ENV_OUT" | grep -E 'SERVICE_ROLE_KEY=' | head -1 | clean)"
+          echo "url prefix: [$(echo "$SUPABASE_URL" | cut -c1-22)] len=${#SUPABASE_URL}"
           case "$SUPABASE_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "REFUSAL: not loopback" >&2; exit 1;; esac
-          echo "parsed lengths: url=${#SUPABASE_URL} anon=${#ANON_KEY} service=${#SERVICE_KEY}"
           [ -n "$ANON_KEY" ] && [ -n "$SERVICE_KEY" ] || { echo "missing keys from supabase status" >&2; exit 1; }
           echo "::add-mask::$ANON_KEY"
           echo "::add-mask::$SERVICE_KEY"
