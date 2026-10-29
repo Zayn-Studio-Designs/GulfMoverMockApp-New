@@ -69,7 +69,21 @@ jobs:
         uses: supabase/setup-cli@v1
         with: { version: 2.122.0 }
       - name: Start disposable Supabase stack
-        run: supabase start
+        run: |
+          # Keep disposable credentials out of logs: capture output, show only a
+          # redacted tail (JWT-shaped secrets replaced), fail loudly on error.
+          set +e
+          supabase start > /tmp/gm-supabase-start.log 2>&1
+          code=$?
+          set -e
+          redact() { sed -E 's/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/[JWT-REDACTED]/g'; }
+          if [ $code -ne 0 ]; then
+            echo "supabase start failed (exit $code); redacted tail:"
+            redact < /tmp/gm-supabase-start.log | tail -30
+            exit $code
+          fi
+          echo "supabase start ok; redacted tail:"
+          redact < /tmp/gm-supabase-start.log | tail -8
       - name: Export loopback-only test credentials
         run: |
           ENV_OUT="$(supabase status --env)"
@@ -102,6 +116,12 @@ jobs:
         run: node scripts/e2e/phase13-real-auth.mjs
       - name: Real-backend browser journeys
         run: node scripts/e2e/phase13-real-browser.mjs
+        env:
+          GM_E2E_APP_URL: http://127.0.0.1:4319
+      - name: Phase 14 auth gaps (expired tokens, pending guards, HTTP concurrency)
+        run: node scripts/e2e/phase14-real-auth-gaps.mjs
+      - name: Phase 14 browser gaps (pending member, second booker)
+        run: node scripts/e2e/phase14-real-browser-gaps.mjs
         env:
           GM_E2E_APP_URL: http://127.0.0.1:4319
       - name: Stop disposable stack

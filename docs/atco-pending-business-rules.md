@@ -4,9 +4,16 @@
 > Gulf Mover backend (backend/phase1). It is **not an ATCO approval record**.
 > Nothing in the "Provisional rules" section below has been confirmed by ATCO.
 > Every provisional rule is implemented in
-> `supabase/migrations/20261026180000_register_company_rpc.sql` (pending, unapplied)
+> `supabase/migrations/20261026180000_register_company_rpc.sql`
 > and is labelled in the migration file header as "pending ATCO confirmation".
 > The migration must not be treated as ATCO-reviewed until this list is closed.
+>
+> Update 2026-10-29 (Phase 12/13 evidence): this migration IS applied as
+> part of the current 28-migration chain — clean installs on a disposable
+> database (Phase 12) and the disposable Supabase stack (Phase 13, CI run
+> 40958267126) apply it. The earlier "unapplied" note below was a record
+> of the 2026-10-26 review session, not the current state. The rules stay
+> provisional until ATCO approves them.
 >
 > Scope: company registration flow only (`register_company`). Other areas of the
 > platform (fares, sailings, boarding, materials) have their own separate rule sets.
