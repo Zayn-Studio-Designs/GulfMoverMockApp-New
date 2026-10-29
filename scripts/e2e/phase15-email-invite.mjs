@@ -109,6 +109,18 @@ async function latestEmailBody(mailbox) {
   throw new Error(`no email arrived for ${mailbox}`);
 }
 
+function extractVerifyToken(html) {
+  const m = html.match(/https?:\/\/[^\s"'<>]*\/auth\/v1\/verify\?[^\s"'<>]*/);
+  if (!m) return null;
+  try {
+    const u = new globalThis.URL(m[0].replace(/&amp;/g, '&'));
+    const token = u.searchParams.get('token');
+    const type = u.searchParams.get('type');
+    if (token && type) return { token, type };
+  } catch { /* fall through */ }
+  return null;
+}
+
 async function main() {
   const ping = await anonClient().rpc('health_ping');
   check('stack health_ping answers ok', !ping.error && ping.data?.status === 'ok', errText(ping.error));
