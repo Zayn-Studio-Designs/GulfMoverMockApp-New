@@ -223,7 +223,7 @@ async function main() {
   // ---- D. payments/refunds (sandbox only) ----
   const payB = await indBook(cCust, s1.id, randomUUID(), 1);
   const payId = bookId(payB);
-  const payInit = await cCust.rpc('initiate_payment', { p_booking_id: payId, p_method: 'sandbox' });
+  const payInit = await cCust.rpc('initiate_payment', { p_booking_id: payId, p_method: 'mada' });
   check('payer initiates a sandbox payment', !payInit.error && !!payInit.data, errText(payInit.error));
   const paySim = await cCust.rpc('sandbox_simulate_payment', { p_payment_id: payInit.data, p_outcome: 'paid' });
   check('payer simulates a successful sandbox checkout', !paySim.error, errText(paySim.error));
@@ -240,9 +240,11 @@ async function main() {
   const refDecide = await cFin2.rpc('decide_refund', { p_refund_id: refReq.data, p_decision: 'approve', p_reason: 'Looks fine (fictional)' });
   check('refund decision blocked until ATCO approves a refund policy', !!refDecide.error && /refund_policy_not_approved/.test(errText(refDecide.error)), errText(refDecide.error));
 
-  // ---- E. boarding + QR secrecy ----
+  // ---- E. boarding + QR secrecy (fail-closed gate: every checkpoint proven) ----
   const bdB = await orgBook(cBookerA, orgA.id, s1.id, randomUUID(), 1);
   const bdId = bookId(bdB);
+  const bdPay = await cBookerA.rpc('initiate_payment', { p_booking_id: bdId, p_method: 'mada' });
+  check('boarding fixture booking paid via sandbox', !bdPay.error && !((await cBookerA.rpc('sandbox_simulate_payment', { p_payment_id: bdPay.data, p_outcome: 'paid' })).error), errText(bdPay.error));
   const bdTickets = (await admin.from('tickets').select('id,reference').eq('booking_id', bdId)).data ?? [];
   const readyOk = await cOps.rpc('set_sailing_readiness', { p_sailing_id: s1.id, p_status: 'ready', p_reason: 'Phase 15 boarding drill (fictional)' });
   check('operations marks sailing ready', !readyOk.error, errText(readyOk.error));
@@ -250,8 +252,16 @@ async function main() {
   check('customer cannot board tickets', !!custBoard.error && /not authorized|42501/.test(errText(custBoard.error)), errText(custBoard.error));
   const board1 = await cBoard.rpc('board_ticket', { p_code: 'TK-NOPE1234', p_sailing_id: s1.id });
   check('unknown ticket code returns not_found', !board1.error && board1.data === 'not_found', errText(board1.error));
+  const gateClosed = await cBoard.rpc('board_ticket', { p_code: bdTickets[0]?.reference, p_sailing_id: s1.id });
+  check('gate fails closed before master go + port clearance', !gateClosed.error && gateClosed.data !== 'boarded', errText(gateClosed.error));
+  const masterOk = await cOps.rpc('record_master_decision', { p_sailing_id: s1.id, p_decision: 'go', p_master_name: 'Master Fictional', p_reason: 'Drill go (fictional)' });
+  check('operations records master go', !masterOk.error && masterOk.data === 'recorded', errText(masterOk.error));
+  const gateStillClosed = await cBoard.rpc('board_ticket', { p_code: bdTickets[0]?.reference, p_sailing_id: s1.id });
+  check('gate still closed before port clearance', !gateStillClosed.error && gateStillClosed.data === 'clearance_pending', errText(gateStillClosed.error));
+  const clearOk = await cOps.rpc('record_port_clearance', { p_sailing_id: s1.id, p_status: 'cleared', p_reference: 'PORT-REF-15', p_reason: 'Drill clearance (fictional)' });
+  check('operations records port clearance', !clearOk.error && clearOk.data === 'recorded', errText(clearOk.error));
   const board2 = await cBoard.rpc('board_ticket', { p_code: bdTickets[0].reference, p_sailing_id: s1.id });
-  check('boarding staff boards a valid ticket', !board2.error && board2.data === 'boarded', errText(board2.error));
+  check('boarding staff boards a valid ticket once the gate is open', !board2.error && board2.data === 'boarded', errText(board2.error));
   const board3 = await cBoard.rpc('board_ticket', { p_code: bdTickets[0].reference, p_sailing_id: s1.id });
   check('repeat scan reports already_boarded', !board3.error && board3.data === 'already_boarded', errText(board3.error));
   const qrOwn = await cBookerA.rpc('get_ticket_qr', { p_ticket_id: bdTickets[0].id });
