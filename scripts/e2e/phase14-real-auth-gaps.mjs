@@ -67,7 +67,13 @@ async function main() {
   const me = await eve.auth.getUser();
   check('valid token passes getUser (control)', !me.error && me.data.user?.email === email('eve'), errText(me.error));
 
-  const tampered = goodAccess.slice(0, -1) + (goodAccess.slice(-1) === 'a' ? 'b' : 'a');
+  // Flip a character inside the CLAIM segment deterministically. Editing the
+  // base64 tail is flaky: the last character can encode unused padding bits, so
+  // 'a'->'b' may decode to the identical signature.
+  const [th, tp, ts] = goodAccess.split('.');
+  const flipped = tp.slice(0, 10) + (tp[10] === 'A' ? 'B' : 'A') + tp.slice(11);
+  const tampered = `${th}.${flipped}.${ts}`;
+  check('tampered token differs from the valid one', tampered !== goodAccess);
   const badClient = createClient(SUPABASE_URL, ANON, { global: { headers: { Authorization: `Bearer ${tampered}` } }, auth: { persistSession: false } });
   const badCall = await badClient.rpc('my_company_memberships');
   check('tampered access token is rejected', !!badCall.error, `unexpected success: ${JSON.stringify(badCall.data)?.slice(0, 120)}`);
