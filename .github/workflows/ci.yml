@@ -74,7 +74,7 @@ jobs:
         run: |
           ENV_OUT="$(supabase status --env)"
           echo "credential names seen: $(echo "$ENV_OUT" | cut -d= -f1 | tr '\n' ' ')"
-          clean() { sed "s/^export //" | tr -d "\r" | cut -d= -f2- | tr -d "\""'"; }
+          clean() { sed "s/^export //" | cut -d= -f2- | tr -d '\042\047\015'; }
           SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '(^|_)((SUPABASE|API)_URL)=' | head -1 | clean)"
           ANON_KEY="$(echo "$ENV_OUT" | grep -E 'ANON_KEY=' | head -1 | clean)"
           SERVICE_KEY="$(echo "$ENV_OUT" | grep -E 'SERVICE_ROLE_KEY=' | head -1 | clean)"
