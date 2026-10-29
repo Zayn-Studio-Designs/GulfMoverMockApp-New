@@ -38,6 +38,14 @@ const PASSWORD = `Fictional-${randomUUID().slice(0, 8)}-pw`;
 const anonClient = () => createClient(SUPABASE_URL, ANON);
 const admin = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 
+// Fixture inserts must fail loudly with the database error, never with a
+// bare TypeError on a null row.
+async function mustSingle(promise, what) {
+  const r = await promise;
+  if (r.error || !r.data) throw new Error(`fixture ${what}: ${errText(r.error) || 'no row returned'}`);
+  return r.data;
+}
+
 async function main() {
   const ping = await anonClient().rpc('health_ping');
   check('stack health_ping answers ok', !ping.error && ping.data?.status === 'ok', errText(ping.error));
@@ -93,11 +101,11 @@ async function main() {
   const pendUid = await mkUser('pending-u'), gapAdminUid = await mkUser('gap-admin');
   const routes = (await admin.from('routes').select('id, origin').limit(10)).data ?? [];
   const outRoute = routes.find(r => /Ras Tanura/i.test(r.origin)) ?? routes[0];
-  const vessel = (await admin.from('vessels').insert({ name: `Gap vessel ${tag}`, passenger_capacity: 12, status: 'active' }).select('id').single()).data.id;
+  const vessel = (await mustSingle(admin.from('vessels').insert({ name: `Gap vessel ${tag}`, passenger_capacity: 12, status: 'active' }).select('id').single(), 'vessel insert')).id;
   const t0 = Date.now() + 30 * 86400_000;
-  const mkSailing = async (cap) => (await admin.from('sailings').insert({
+  const mkSailing = async (cap, what = 'sailing insert') => (await mustSingle(admin.from('sailings').insert({
     route_id: outRoute.id, vessel_id: vessel, departs_at: new Date(t0).toISOString(), seat_capacity: cap, status: 'open',
-  }).select('id').single()).data.id;
+  }).select('id').single(), what)).id;
   const signIn = async (n) => {
     const c = anonClient();
     const r = await c.auth.signInWithPassword({ email: email(n), password: PASSWORD });
@@ -131,10 +139,10 @@ async function main() {
   check('booking against an unapproved org is denied', !!pendBook.error, 'pending-org booking unexpectedly succeeded');
 
   // ---- C. HTTP-level concurrency: capacity race ----
-  const mkOrgWithAdmin = async (label, ownerUid) => (await admin.from('organizations').insert({
+  const mkOrgWithAdmin = async (label, ownerUid) => (await mustSingle(admin.from('organizations').insert({
     legal_name: `Fictional ${label} ${tag} LLC`, display_name: label, status: 'approved',
     account_type: 'corporate', contact_email: `${label}-${tag}@example.test`, created_by: ownerUid,
-  }).select('id').single()).data.id;
+  }).select('id').single(), `organization insert (${label})`)).id;
   const orgC = await mkOrgWithAdmin('OrgC', gapAdminUid);
   await admin.from('organization_memberships').insert({ organization_id: orgC, user_id: gapAdminUid, membership_role: 'company_admin', status: 'active' });
   const raceSailing = await mkSailing(3);

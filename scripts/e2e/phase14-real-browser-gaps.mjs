@@ -40,6 +40,15 @@ const email = n => `${tag}-${n}@example.test`;
 const PASSWORD = `Fictional-${randomUUID().slice(0, 8)}-pw`;
 const admin = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 
+// Fixture inserts must fail loudly with the database error, never with a
+// bare TypeError on a null row.
+async function mustSingle(promise, what) {
+  const r = await promise;
+  const msg = `${r?.error?.message ?? r?.error ?? ''} ${r?.error?.code ?? ''}`.trim();
+  if (r.error || !r.data) throw new Error(`fixture ${what}: ${msg || 'no row returned'}`);
+  return r.data;
+}
+
 async function fixtureUser(n) {
   const r = await admin.auth.admin.createUser({ email: email(n), password: PASSWORD, email_confirm: true });
   if (r.error) throw new Error(`user ${n}: ${r.error.message}`);
@@ -50,10 +59,10 @@ async function fixtureUser(n) {
 async function setup() {
   const a1 = await fixtureUser('booker-a1'), a2 = await fixtureUser('booker-a2');
   const adminB = await fixtureUser('admin-b'), pendU = await fixtureUser('pending-u');
-  const mkOrg = async (label, by) => (await admin.from('organizations').insert({
+  const mkOrg = async (label, by) => (await mustSingle(admin.from('organizations').insert({
     legal_name: `Fictional ${label} ${tag} LLC`, display_name: label, status: 'approved',
     account_type: 'corporate', contact_email: `${label}-${tag}@example.test`, created_by: by,
-  }).select('id').single()).data.id;
+  }).select('id').single(), `organization insert (${label})`)).id;
   const orgA = await mkOrg('OrgA', a1), orgB = await mkOrg('OrgB', adminB);
   await admin.from('organization_memberships').insert([
     { organization_id: orgA, user_id: a1, membership_role: 'company_booker', status: 'active' },
@@ -62,8 +71,8 @@ async function setup() {
   ]);
   const routes = (await admin.from('routes').select('id, origin').limit(10)).data ?? [];
   const outRoute = routes.find(r => /Ras Tanura/i.test(r.origin)) ?? routes[0];
-  const vessel = (await admin.from('vessels').insert({ name: `Gap browser vessel ${tag}`, passenger_capacity: 12, status: 'active' }).select('id').single()).data.id;
-  const outS = (await admin.from('sailings').insert({ route_id: outRoute.id, vessel_id: vessel, departs_at: new Date(Date.now() + 30 * 86400_000).toISOString(), seat_capacity: 12, status: 'open' }).select('id').single()).data.id;
+  const vessel = (await mustSingle(admin.from('vessels').insert({ name: `Gap browser vessel ${tag}`, passenger_capacity: 12, status: 'active' }).select('id').single(), 'vessel insert')).id;
+  const outS = (await mustSingle(admin.from('sailings').insert({ route_id: outRoute.id, vessel_id: vessel, departs_at: new Date(Date.now() + 30 * 86400_000).toISOString(), seat_capacity: 12, status: 'open' }).select('id').single(), 'sailing insert')).id;
   const termsClient = createClient(SUPABASE_URL, ANON);
   await termsClient.auth.signInWithPassword({ email: email('booker-a1'), password: PASSWORD });
   // service_role is revoked on service_policies; the app reads terms as the user.
