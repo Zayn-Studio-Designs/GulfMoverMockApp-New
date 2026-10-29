@@ -11,12 +11,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 
-const URL = process.env.GM_E2E_SUPABASE_URL ?? '';
+const SUPABASE_URL = process.env.GM_E2E_SUPABASE_URL ?? '';
 const ANON = process.env.GM_E2E_ANON_KEY ?? '';
 const SERVICE = process.env.GM_E2E_SERVICE_KEY ?? '';
 
-const host = (() => { try { return new URL(URL).hostname; } catch { return ''; } })();
-if (!['127.0.0.1', 'localhost'].includes(host) || /supabase\.co$/i.test(URL)) {
+const host = (() => { try { return new globalThis.URL(SUPABASE_URL).hostname; } catch { return ''; } })();
+if (!['127.0.0.1', 'localhost'].includes(host) || /supabase\.co$/i.test(SUPABASE_URL)) {
   console.error('REFUSAL: GM_E2E_SUPABASE_URL is not an isolated loopback stack; aborting.');
   process.exit(2);
 }
@@ -32,8 +32,8 @@ const tag = `p13-${Date.now().toString(36)}`;
 const email = n => `${tag}-${n}@example.test`;
 const PASSWORD = `Fictional-${randomUUID().slice(0, 8)}-pw`;
 
-const anonClient = () => createClient(URL, ANON);
-const admin = createClient(URL, SERVICE, { auth: { persistSession: false } });
+const anonClient = () => createClient(SUPABASE_URL, ANON);
+const admin = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 
 async function main() {
   // ---- stack sanity (real services, not stubs) ----

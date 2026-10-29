@@ -11,12 +11,12 @@ import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 
 const APP = process.env.GM_E2E_APP_URL ?? 'http://127.0.0.1:4319';
-const URL = process.env.GM_E2E_SUPABASE_URL ?? '';
+const SUPABASE_URL = process.env.GM_E2E_SUPABASE_URL ?? '';
 const ANON = process.env.GM_E2E_ANON_KEY ?? '';
 const SERVICE = process.env.GM_E2E_SERVICE_KEY ?? '';
 
-const host = (() => { try { return new URL(URL).hostname; } catch { return ''; } })();
-if (!['127.0.0.1', 'localhost'].includes(host) || /supabase\.co$/i.test(URL)) {
+const host = (() => { try { return new globalThis.URL(SUPABASE_URL).hostname; } catch { return ''; } })();
+if (!['127.0.0.1', 'localhost'].includes(host) || /supabase\.co$/i.test(SUPABASE_URL)) {
   console.error('REFUSAL: not an isolated loopback stack; aborting.');
   process.exit(2);
 }
@@ -30,7 +30,7 @@ const check = (name, cond, extra = '') => {
 const tag = `p13b-${Date.now().toString(36)}`;
 const email = n => `${tag}-${n}@example.test`;
 const PASSWORD = `Fictional-${randomUUID().slice(0, 8)}-pw`;
-const admin = createClient(URL, SERVICE, { auth: { persistSession: false } });
+const admin = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
 
 async function fixtureUser(n) {
   const r = await admin.auth.admin.createUser({ email: email(n), password: PASSWORD, email_confirm: true });
@@ -58,7 +58,7 @@ async function setup() {
   const outS = (await admin.from('sailings').insert({ route_id: outRoute.id, vessel_id: vessel, departs_at: new Date(Date.now() + 30 * 86400_000).toISOString(), seat_capacity: 12, status: 'open' }).select('id').single()).data.id;
   const terms = (await admin.from('service_policies').select('version').eq('policy_type', 'booking_terms').order('status', { ascending: false }).limit(1)).data?.[0]?.version;
   const bookAs = async (n, org, ref) => {
-    const c = createClient(URL, ANON);
+    const c = createClient(SUPABASE_URL, ANON);
     await c.auth.signInWithPassword({ email: email(n), password: PASSWORD });
     const r = await c.rpc('create_organization_booking', {
       p_request_key: randomUUID(), p_organization_id: org, p_outbound_sailing_id: outS, p_passenger_count: 1,
