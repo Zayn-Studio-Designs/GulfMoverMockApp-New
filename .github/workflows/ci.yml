@@ -53,3 +53,63 @@ jobs:
         run: scripts/db/backup-restore-drill.sh
       - if: always()
         run: scripts/db/local-db.sh down
+
+  supabase-e2e:
+    name: Real Supabase Auth + end-to-end (disposable stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with: { version: 2.122.0 }
+      - name: Start disposable Supabase stack
+        run: supabase start
+      - name: Export loopback-only test credentials
+        run: |
+          ST_JSON="$(supabase status -o json)"
+          pick() { echo "$ST_JSON" | jq -r "$1 // empty"; }
+          SUPABASE_URL="$(pick '.SUPABASE_URL, .api_url, .API_URL')"
+          ANON_KEY="$(pick '.SUPABASE_ANON_KEY, .anon_key, .ANON_KEY')"
+          SERVICE_KEY="$(pick '.SUPABASE_SERVICE_ROLE_KEY, .service_role_key, .SERVICE_ROLE_KEY')"
+          case "$SUPABASE_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "REFUSAL: not loopback: ${SUPABASE_URL%%:*}" >&2; exit 1;; esac
+          [ -n "$ANON_KEY" ] && [ -n "$SERVICE_KEY" ] || { echo "missing keys from supabase status" >&2; exit 1; }
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_KEY"
+          {
+            echo "GM_E2E_SUPABASE_URL=$SUPABASE_URL"
+            echo "GM_E2E_ANON_KEY=$ANON_KEY"
+            echo "GM_E2E_SERVICE_KEY=$SERVICE_KEY"
+          } >> "$GITHUB_ENV"
+      - name: Build app against the disposable stack
+        run: npm run build
+        env:
+          VITE_APP_MODE: production
+          VITE_SUPABASE_URL: ${{ env.GM_E2E_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ env.GM_E2E_ANON_KEY }}
+      - name: Serve production preview
+        run: |
+          (npx vite preview --port 4319 --host 127.0.0.1 > /tmp/gm-preview.log 2>&1 &) 
+          for _ in $(seq 1 30); do curl -sf http://127.0.0.1:4319/ >/dev/null && break; sleep 2; done
+          curl -sf http://127.0.0.1:4319/ >/dev/null
+      - name: Real Auth + PostgREST integration tests
+        run: node scripts/e2e/phase13-real-auth.mjs
+        env:
+          GM_E2E_SUPABASE_URL: ${{ env.GM_E2E_SUPABASE_URL }}
+          GM_E2E_ANON_KEY: ${{ env.GM_E2E_ANON_KEY }}
+          GM_E2E_SERVICE_KEY: ${{ env.GM_E2E_SERVICE_KEY }}
+      - name: Real-backend browser journeys
+        run: node scripts/e2e/phase13-real-browser.mjs
+        env:
+          GM_E2E_APP_URL: http://127.0.0.1:4319
+          GM_E2E_SUPABASE_URL: ${{ env.GM_E2E_SUPABASE_URL }}
+          GM_E2E_ANON_KEY: ${{ env.GM_E2E_ANON_KEY }}
+          GM_E2E_SERVICE_KEY: ${{ env.GM_E2E_SERVICE_KEY }}
+      - name: Stop disposable stack
+        if: always()
+        run: supabase stop --no-backup
