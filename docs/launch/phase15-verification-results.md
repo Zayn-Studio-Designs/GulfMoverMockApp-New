@@ -96,7 +96,7 @@ Against real GoTrue + captured Mailpit mail + RLS:
 
 - Refund approval/decide is blocked on ATCO approving a refund policy
   (`refund_policy_not_approved`); live payments stay disabled (D13).
-- Email-link expiry beyond replay (OTP `otq_expiry` 3600s) is not exercised;
+- Email-link expiry beyond replay (OTP `otp_expiry` 3600s) is not exercised;
   invitation expiry is covered at the in-app level only.
 - The Google-Doc Full Completion Checklist could not be ticked from here
   (Drive export is read-only in this environment); §3/§4 items above have
