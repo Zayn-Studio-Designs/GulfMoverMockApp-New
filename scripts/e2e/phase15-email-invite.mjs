@@ -182,12 +182,16 @@ async function main() {
   // pattern is an explicit global sign-out, which must kill every session.
   const stillAlive = await anonClient().auth.refreshSession({ refresh_token: oldRefresh });
   console.log(`note: pre-change refresh after password change: ${stillAlive.error ? 'rejected' : 'still usable (GoTrue default)'}`);
+  // Refresh tokens are validated against the server store (unlike stateless
+  // access JWTs), so a refresh attempt deterministically proves revocation.
+  const curSess = await recClient.auth.getSession();
+  const curRefresh = curSess.data?.session?.refresh_token;
   const globalOut = await recClient.auth.signOut({ scope: 'global' });
   check('global sign-out succeeds after password change', !globalOut.error, errText(globalOut.error));
   const oldRef = await anonClient().auth.refreshSession({ refresh_token: oldRefresh });
   check('pre-change refresh token is dead after global sign-out', !!oldRef.error, 'old refresh token unexpectedly accepted');
-  const deadSession = await recClient.auth.getUser();
-  check('session is dead after global sign-out', !!deadSession.error, 'signed-out session unexpectedly alive');
+  const curRef = await anonClient().auth.refreshSession({ refresh_token: curRefresh });
+  check('current refresh token is dead after global sign-out', !!curRef.error, 'current refresh token unexpectedly accepted');
 
   // ---- C. GoTrue invitation via captured email ----
   const invEmail = email('invited-u');
