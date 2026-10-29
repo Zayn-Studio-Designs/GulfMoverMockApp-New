@@ -23,7 +23,7 @@ analysis: `security-rpc-matrix.md`.
 | Reports & exports | Implemented, partially verified | 70 | 1 | DB-backed reports, CSV; remaining: stack re-run, PDF where required |
 | Notifications | Partially connected | 50 | 1 | In-app verified; outbox + adapters unit-tested; external delivery unconfigured D14 |
 | Corporate / operations / fleet routes | Implemented, newly connected | 65 | 2 | Reuse existing guarded components; unit + source tests new; signed-out production-mode browser pass 82/82 (Phase 10.2, auth gate verified); remaining: signed-in staff/customer browser pass against isolated test backend |
-| Security hardening (RPC/RLS/grants/secrets) | Implemented, verified at source | 80 | 3 | Matrix + `_`-revoke migration + grant tests; remaining: hosted advisor re-check after migration lands |
+| Security hardening (RPC/RLS/grants/secrets) | Implemented, verified at source + disposable-DB catalog | 80 | 3 | Matrix + `_`-revoke migration + grant tests + Phase 10.3 real-PG proof (3 helpers f/f/f for anon/authenticated/public; server paths pass); remaining: CI clean-install, upgrade/drill, hosted advisor re-check |
 | i18n / RTL / UX / responsive | Implemented, verified | 80 | 1 | Full EN/AR, RTL browser-checked (Phase 9.3); remaining: devices, a11y audit |
 | Release & operability (env checks, docs, backup, CI) | Partially implemented | 65 | 1 | `check-env.mjs` + drill scripts; remaining: CI run, hosted backup/PITR proof D12/D16 |
 

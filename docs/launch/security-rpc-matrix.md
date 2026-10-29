@@ -47,6 +47,16 @@ Enforced by `src/tests/securityGrants.test.ts` (parses all migrations;
 fails if any `_*` helper is client-reachable). Internal SQL calls from
 `SECURITY DEFINER` functions run as owner and are unaffected.
 
+Phase 10.3 catalog note (disposable PostgreSQL 17, 2026-10-29): before
+applying `20261102000000`, `_riyadh_date` and `_zatca_initial_pih` carried
+the default PUBLIC-execute grant (genuinely exposed; the migration is the
+fix), while `_reserve_booking_terms` was already owner-only on a clean
+install — its `REVOKE` is correct defense-in-depth, not a live fix. After
+applying: all three deny `anon`/`authenticated`/`PUBLIC`, and the
+`phase10.helper-grants.db.test.ts` server-path checks (report, invoice
+chain, sandbox booking) pass. See
+`docs/launch/phase10.3-verification-results.md` §2.
+
 ## D. Authenticated client RPCs with in-function authorization
 
 All revoked from public/anon; granted to `authenticated` (plus `service_role`
