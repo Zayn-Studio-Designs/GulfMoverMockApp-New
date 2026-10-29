@@ -56,7 +56,11 @@ async function setup() {
   const outRoute = routes.find(r => /Ras Tanura/i.test(r.origin)) ?? routes[0];
   const vessel = (await admin.from('vessels').insert({ name: `Browser vessel ${tag}`, passenger_capacity: 12, status: 'active' }).select('id').single()).data.id;
   const outS = (await admin.from('sailings').insert({ route_id: outRoute.id, vessel_id: vessel, departs_at: new Date(Date.now() + 30 * 86400_000).toISOString(), seat_capacity: 12, status: 'open' }).select('id').single()).data.id;
-  const terms = (await admin.from('service_policies').select('version').eq('policy_type', 'booking_terms').order('status', { ascending: false }).limit(1)).data?.[0]?.version;
+  const termsClient = createClient(SUPABASE_URL, ANON);
+  await termsClient.auth.signInWithPassword({ email: email('booker-a'), password: PASSWORD });
+  // service_role is revoked on service_policies; the app reads terms as the user.
+  const terms = (await termsClient.from('service_policies').select('version').eq('policy_type', 'booking_terms').in('status', ['approved', 'provisional']).order('effective_from', { ascending: false }).limit(1)).data?.[0]?.version;
+  if (!terms) throw new Error('terms version unavailable, aborting fixtures');
   const bookAs = async (n, org, ref) => {
     const c = createClient(SUPABASE_URL, ANON);
     await c.auth.signInWithPassword({ email: email(n), password: PASSWORD });

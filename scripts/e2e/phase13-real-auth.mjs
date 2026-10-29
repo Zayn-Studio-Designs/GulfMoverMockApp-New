@@ -102,7 +102,9 @@ async function main() {
   const t0 = Date.now() + 30 * 86400_000;
   const outS = (await admin.from('sailings').insert({ route_id: outRoute.id, vessel_id: vessel, departs_at: new Date(t0).toISOString(), seat_capacity: 12, status: 'open' }).select('id').single()).data.id;
   const backS = (await admin.from('sailings').insert({ route_id: backRoute.id, vessel_id: vessel, departs_at: new Date(t0 + 6 * 3600_000).toISOString(), seat_capacity: 12, status: 'open' }).select('id').single()).data.id;
-  const terms = (await admin.from('service_policies').select('version, status').eq('policy_type', 'booking_terms').order('status', { ascending: false }).limit(1)).data?.[0]?.version;
+  // Terms are readable by authenticated users (mirrors phase8Service.ts), while
+  // service_role is revoked on service_policies — fetch as the signed-in user.
+  const terms = (await alice.from('service_policies').select('version').eq('policy_type', 'booking_terms').in('status', ['approved', 'provisional']).order('effective_from', { ascending: false }).limit(1)).data?.[0]?.version;
   check('fixtures created (orgs, memberships, staff, sailings, terms)', !!(orgA && orgB && outS && terms), '');
 
   const signIn = async (n) => {
@@ -138,6 +140,7 @@ async function main() {
   check('admin-A books for company A over HTTP', !bA.error && !!bA.data?.[0]?.booking_id, errText(bA.error));
   const bB = await orgBook(cBookerB, orgB, outS);
   check('admin-B books for company B over HTTP', !bB.error && !!bB.data?.[0]?.booking_id, errText(bB.error));
+  if (!bA.data?.[0]?.booking_id || !bB.data?.[0]?.booking_id) throw new Error('fixture bookings failed, aborting journey (see NOT OK lines above)');
   const idA = bA.data[0].booking_id, idB = bB.data[0].booking_id;
   const seen = async (c, id) => (await c.from('bookings').select('id').eq('id', id)).data?.length ?? -1;
   check('admin-A sees own booking via REST', (await seen(cAdminA, idA)) === 1);
