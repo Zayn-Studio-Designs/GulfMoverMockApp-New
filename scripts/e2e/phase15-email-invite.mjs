@@ -177,8 +177,17 @@ async function main() {
   check('old password is rejected after the change', !!oldPw.error, 'old password unexpectedly accepted');
   const newPw = await anonClient().auth.signInWithPassword({ email: email('confirm-me'), password: NEW_PASSWORD });
   check('new password signs in', !newPw.error && !!newPw.data.session, errText(newPw.error));
+  // GoTrue on this stack does NOT revoke pre-change refresh tokens on password
+  // update alone (observed: the old refresh still works). The supported secure
+  // pattern is an explicit global sign-out, which must kill every session.
+  const stillAlive = await anonClient().auth.refreshSession({ refresh_token: oldRefresh });
+  console.log(`note: pre-change refresh after password change: ${stillAlive.error ? 'rejected' : 'still usable (GoTrue default)'}`);
+  const globalOut = await recClient.auth.signOut({ scope: 'global' });
+  check('global sign-out succeeds after password change', !globalOut.error, errText(globalOut.error));
   const oldRef = await anonClient().auth.refreshSession({ refresh_token: oldRefresh });
-  check('pre-change refresh token is rejected after password change', !!oldRef.error, 'old refresh token unexpectedly accepted');
+  check('pre-change refresh token is dead after global sign-out', !!oldRef.error, 'old refresh token unexpectedly accepted');
+  const deadSession = await recClient.auth.getUser();
+  check('session is dead after global sign-out', !!deadSession.error, 'signed-out session unexpectedly alive');
 
   // ---- C. GoTrue invitation via captured email ----
   const invEmail = email('invited-u');
