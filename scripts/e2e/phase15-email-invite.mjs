@@ -71,7 +71,10 @@ async function mailboxMessages(mailbox) {
       const j = await r.json();
       const list = Array.isArray(j) ? j : (j.messages ?? []);
       const want = mailbox.toLowerCase();
-      return list.filter(m => (m.To ?? []).some(t => (t.Address ?? '').toLowerCase() === want));
+      return list
+        .filter(m => (m.To ?? []).some(t => (t.Address ?? '').toLowerCase() === want))
+        .sort((a, b) => String(b.Created ?? '').localeCompare(String(a.Created ?? '')))
+        .map(m => ({ ID: m.ID }));
     } catch { return []; }
   }
   for (const name of [mailbox, mailbox.split('@')[0]]) {
@@ -80,7 +83,9 @@ async function mailboxMessages(mailbox) {
       if (!r.ok) continue;
       const j = await r.json();
       const list = Array.isArray(j) ? j : (j.messages ?? j.data ?? j.mail ?? []);
-      if (Array.isArray(list) && list.length) return list.map(m => ({ _name: name, _id: m.id ?? m.ID ?? m.messageId }));
+      if (Array.isArray(list) && list.length) {
+        return list.slice().reverse().map(m => ({ _name: name, _id: m.id ?? m.ID ?? m.messageId }));
+      }
     } catch { /* try next form */ }
   }
   return [];
@@ -97,16 +102,18 @@ async function messageBody(entry) {
   const m = await r.json();
   return m.body?.html ?? m.body?.text ?? '';
 }
-async function latestEmailBody(mailbox) {
+// Returns the newest captured email that carries a /verify link of `type`
+// (newest first: signup confirmations and recovery mails share a mailbox).
+async function latestEmailBody(mailbox, type) {
   for (let i = 0; i < 25; i++) {
     const list = await mailboxMessages(mailbox);
-    if (list.length) {
-      const body = await messageBody(list[list.length - 1]);
-      if (body) return body;
+    for (const entry of list) {
+      const body = await messageBody(entry);
+      if (body && extractVerifyToken(body)?.type === type) return body;
     }
     await new Promise(r => setTimeout(r, 1000));
   }
-  throw new Error(`no email arrived for ${mailbox}`);
+  throw new Error(`no '${type}' email arrived for ${mailbox}`);
 }
 
 function extractVerifyToken(html) {
@@ -136,7 +143,7 @@ async function main() {
   const fresh = anonClient();
   const signupRes = await fresh.auth.signUp({ email: email('confirm-me'), password: PASSWORD });
   check('signup creates an unconfirmed user (no session yet)', !signupRes.error && !!signupRes.data.user && !signupRes.data.session, errText(signupRes.error));
-  const confirmBody = await latestEmailBody(email('confirm-me'));
+  const confirmBody = await latestEmailBody(email('confirm-me'), 'signup');
   const confirmLink = extractVerifyToken(confirmBody);
   check('confirmation email arrives with a signup verify link', !!confirmLink && confirmLink.type === 'signup', confirmLink ? confirmLink.type : 'no link found');
   const verifyRes = await fresh.auth.verifyOtp({ token_hash: confirmLink.token, type: 'signup' });
@@ -153,15 +160,16 @@ async function main() {
   // ---- B. password recovery via captured email ----
   const recReq = await anonClient().auth.resetPasswordForEmail(email('confirm-me'));
   check('password-recovery request accepted', !recReq.error, errText(recReq.error));
-  const recBody = await latestEmailBody(email('confirm-me'));
-  const recLinks = [...recBody.matchAll(/https?:\/\/[^\s"'<>]*\/auth\/v1\/verify\?[^\s"'<>]*/g)]
-    .map(m => { try { const u = new globalThis.URL(m[0].replace(/&amp;/g, '&')); return { token: u.searchParams.get('token'), type: u.searchParams.get('type') }; } catch { return null; } })
-    .filter(Boolean);
-  const recLink = recLinks.filter(l => l.type === 'recovery').pop() ?? recLinks.pop();
+  const recBody = await latestEmailBody(email('confirm-me'), 'recovery');
+  const recLink = extractVerifyToken(recBody);
   check('recovery email arrives with a recovery link', !!recLink && recLink.type === 'recovery', recLink ? recLink.type : 'no link found');
   const recClient = anonClient();
   const recVerify = await recClient.auth.verifyOtp({ token_hash: recLink.token, type: 'recovery' });
   check('recovery link yields a session', !recVerify.error && !!recVerify.data.session?.refresh_token, errText(recVerify.error));
+  if (!recVerify.data?.session?.refresh_token) {
+    console.log(`\nPHASE15-EMAIL-INVITE: ${pass} passed, ${fail} failed (recovery session missing, aborting)`);
+    process.exit(1);
+  }
   const oldRefresh = recVerify.data.session.refresh_token;
   const pwChange = await recClient.auth.updateUser({ password: NEW_PASSWORD });
   check('password change succeeds through the recovery session', !pwChange.error, errText(pwChange.error));
@@ -176,7 +184,7 @@ async function main() {
   const invEmail = email('invited-u');
   const gotrueInv = await admin.auth.admin.inviteUserByEmail(invEmail);
   check('GoTrue invitation accepted', !gotrueInv.error && !!gotrueInv.data.user, errText(gotrueInv.error));
-  const invBody = await latestEmailBody(invEmail);
+  const invBody = await latestEmailBody(invEmail, 'invite');
   const invLink = extractVerifyToken(invBody);
   check('invitation email arrives with an invite link', !!invLink && invLink.type === 'invite', invLink ? invLink.type : 'no link found');
   const invClient = anonClient();
