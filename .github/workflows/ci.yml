@@ -72,7 +72,7 @@ jobs:
         run: supabase start
       - name: Export loopback-only test credentials
         run: |
-          ENV_OUT="$(supabase status -o env)"
+          ENV_OUT="$(supabase status --env)"
           echo "credential names seen: $(echo "$ENV_OUT" | cut -d= -f1 | tr '\n' ' ')"
           SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '^(SUPABASE_URL|API_URL)=' | head -1 | cut -d= -f2- | tr -d '\'"')"
           ANON_KEY="$(echo "$ENV_OUT" | grep -E 'ANON_KEY=' | head -1 | cut -d= -f2- | tr -d '\'"')"
