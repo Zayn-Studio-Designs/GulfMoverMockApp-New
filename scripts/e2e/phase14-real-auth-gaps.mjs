@@ -103,8 +103,11 @@ async function main() {
   const outRoute = routes.find(r => /Ras Tanura/i.test(r.origin)) ?? routes[0];
   const vessel = (await mustSingle(admin.from('vessels').insert({ name: `Gap vessel ${tag}`, passenger_capacity: 12, status: 'active' }).select('id').single(), 'vessel insert')).id;
   const t0 = Date.now() + 30 * 86400_000;
+  // Each sailing needs a distinct (vessel, departs_at): sailings_vessel_departure_uniq.
+  let sailN = 0;
   const mkSailing = async (cap, what = 'sailing insert') => (await mustSingle(admin.from('sailings').insert({
-    route_id: outRoute.id, vessel_id: vessel, departs_at: new Date(t0).toISOString(), seat_capacity: cap, status: 'open',
+    route_id: outRoute.id, vessel_id: vessel,
+    departs_at: new Date(t0 + (sailN++) * 15 * 60000).toISOString(), seat_capacity: cap, status: 'open',
   }).select('id').single(), what)).id;
   const signIn = async (n) => {
     const c = anonClient();
