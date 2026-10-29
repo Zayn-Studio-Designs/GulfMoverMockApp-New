@@ -22,14 +22,14 @@ analysis: `security-rpc-matrix.md`.
 | Credit, settlements, invoices | Implemented, partially verified | 65 | 1 | Zero-by-default rules, four-eyes, audit trails; remaining: commercial approvals D3–D5 |
 | Reports & exports | Implemented, partially verified | 70 | 1 | DB-backed reports, CSV; remaining: stack re-run, PDF where required |
 | Notifications | Partially connected | 50 | 1 | In-app verified; outbox + adapters unit-tested; external delivery unconfigured D14 |
-| Corporate / operations / fleet routes | Implemented, newly connected | 65 | 2 | Reuse existing guarded components; unit + source tests new; signed-out production-mode browser pass 82/82 (Phase 10.2, auth gate verified); remaining: signed-in staff/customer browser pass against isolated test backend |
-| Security hardening (RPC/RLS/grants/secrets) | Implemented, verified at source + disposable-DB catalog | 80 | 3 | Matrix + `_`-revoke migration + grant tests + Phase 10.3 real-PG proof (3 helpers f/f/f for anon/authenticated/public; server paths pass); remaining: CI clean-install, upgrade/drill, hosted advisor re-check |
+| Corporate / operations / fleet routes | Implemented, signed-in UI verified (stubbed) | 70 | 2 | Guarded components; signed-out 82/82 (Phase 10.2); signed-in 60/60 isolated-UI journeys (Phase 11: booker/admin/customer/staff isolation, server-API write proof, EN/AR+RTL); remaining: signed-in pass against a real test backend |
+| Security hardening (RPC/RLS/grants/secrets) | Implemented, verified at source + disposable-DB catalog | 80 | 3 | Matrix + `_`-revoke migration + grant tests + Phase 10.3 real-PG proof (3 helpers f/f/f for anon/authenticated/public; server paths pass) + Phase 10.5 CI database job (clean install incl. hardening migration, 39 passed, upgrade 3 passed, drill smoke); remaining: hosted advisor re-check |
 | i18n / RTL / UX / responsive | Implemented, verified | 80 | 1 | Full EN/AR, RTL browser-checked (Phase 9.3); remaining: devices, a11y audit |
-| Release & operability (env checks, docs, backup, CI) | Partially implemented | 65 | 1 | `check-env.mjs` + drill scripts; remaining: CI run, hosted backup/PITR proof D12/D16 |
+| Release & operability (env checks, docs, backup, CI) | Partially implemented | 70 | 1 | `check-env.mjs` + drill scripts + Phase 10.5 CI green on the new repo (app 885 passed, database job passed, run 40876350515); remaining: hosted backup/PITR proof D12/D16 |
 
-Weighted mean: (85·3 + 85·2 + 80·3 + 80·3 + 70 + 60·2 + 65 + 70 + 50 + 65·2 + 80·3 + 80 + 65) = 1795 / 24 ≈ **74.8%**.
+Weighted mean: (85·3 + 85·2 + 80·3 + 80·3 + 70 + 60·2 + 65 + 70 + 50 + 70·2 + 80·3 + 80 + 70) = 1810 / 24 ≈ **75.4%**.
 
-Headline: **~75% engineering readiness for controlled launch** (Phase 10.2;
+Headline: **~75% engineering readiness for controlled launch** (Phase 11;
 was ~75% on the same corrected denominator — the earlier “76% / 25” was an
 arithmetic error: weights sum to 24, not 25, and 1795/25 = 71.8%, not 74%).
 No category score was changed to hit a target; only the denominator and the

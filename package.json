@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "test:integration": "vitest run src/tests/integration",
     "test:e2e:local": "node scripts/e2e/local-journeys.mjs",
+    "test:e2e:signed-in": "node scripts/e2e/phase11-signed-in-routes.mjs",
     "build:release": "vite build && node scripts/release/write-build-info.mjs",
     "test:db": "vitest run --no-file-parallelism src/tests/db",
     "test:db:upgrade": "GM_DB_UPGRADE=1 vitest run src/tests/db/phase8.upgrade.db.test.ts",
