@@ -72,12 +72,12 @@ jobs:
         run: supabase start
       - name: Export loopback-only test credentials
         run: |
-          ST_JSON="$(supabase status -o json)"
-          pick() { echo "$ST_JSON" | jq -r "$1 // empty"; }
-          SUPABASE_URL="$(pick '.SUPABASE_URL, .api_url, .API_URL')"
-          ANON_KEY="$(pick '.SUPABASE_ANON_KEY, .anon_key, .ANON_KEY')"
-          SERVICE_KEY="$(pick '.SUPABASE_SERVICE_ROLE_KEY, .service_role_key, .SERVICE_ROLE_KEY')"
-          case "$SUPABASE_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "REFUSAL: not loopback: ${SUPABASE_URL%%:*}" >&2; exit 1;; esac
+          ENV_OUT="$(supabase status -o env)"
+          echo "credential names seen: $(echo "$ENV_OUT" | cut -d= -f1 | tr '\n' ' ')"
+          SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '^(SUPABASE_URL|API_URL)=' | head -1 | cut -d= -f2- | tr -d '\'"')"
+          ANON_KEY="$(echo "$ENV_OUT" | grep -E 'ANON_KEY=' | head -1 | cut -d= -f2- | tr -d '\'"')"
+          SERVICE_KEY="$(echo "$ENV_OUT" | grep -E 'SERVICE_ROLE_KEY=' | head -1 | cut -d= -f2- | tr -d '\'"')"
+          case "$SUPABASE_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "REFUSAL: not loopback" >&2; exit 1;; esac
           [ -n "$ANON_KEY" ] && [ -n "$SERVICE_KEY" ] || { echo "missing keys from supabase status" >&2; exit 1; }
           echo "::add-mask::$ANON_KEY"
           echo "::add-mask::$SERVICE_KEY"
@@ -112,4 +112,4 @@ jobs:
           GM_E2E_SERVICE_KEY: ${{ env.GM_E2E_SERVICE_KEY }}
       - name: Stop disposable stack
         if: always()
-        run: supabase stop --no-backup
+        run: supabase stop
