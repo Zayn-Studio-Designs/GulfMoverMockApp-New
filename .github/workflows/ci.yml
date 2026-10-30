@@ -133,6 +133,12 @@ jobs:
         run: node scripts/e2e/phase15-email-invite.mjs
       - name: Phase 15 booking lifecycle and role matrix
         run: node scripts/e2e/phase15-lifecycle-roles.mjs
+      - name: Phase 16 booking verification (pricing, holds, gates)
+        run: node scripts/e2e/phase16-booking-verify.mjs
+      - name: Phase 16 roles, redirects and browser views
+        run: node scripts/e2e/phase16-roles-redirects.mjs
+        env:
+          GM_E2E_APP_URL: http://127.0.0.1:4319
       - name: Stop disposable stack
         if: always()
         run: supabase stop
