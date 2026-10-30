@@ -147,6 +147,15 @@ gap (independent QR image decode) is recorded, not counted as passed.
   port clearance, devices, legal) remain open and are not affected by these results.
 - Section 3 checkboxes were not edited; Phase 17 evidence stands.
 
+## Final commit
+
+The report above was committed as `bc100c6`. Final CI run
+[41123602806](https://github.com/Zayn-Studio-Designs/GulfMoverMockApp-New/actions/runs/41123602806)
+on `bc100c6`: all three jobs success (the database job's first attempt hit a
+runner-level port conflict in the restore drill — `address already in use` on
+`127.0.0.1:54324` — and passed on `rerun --failed` with no code change; Phase 18
+suite 29/29 and drill PASS confirmed in the final attempt).
+
 ## Completion standard
 
 The `register_company` behaviour checkbox is now supported by 29/29 real-stack checks
