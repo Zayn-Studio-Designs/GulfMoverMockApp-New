@@ -190,6 +190,8 @@ jobs:
             echo "no config backup (stack was never restarted); working-tree config untouched"
           fi
           grep -n '^otp_expiry' supabase/config.toml
+      - name: Phase 18 register_company behaviour (real stack, default config)
+        run: node scripts/e2e/phase18-register-company.mjs
       - name: Stop disposable stack
         if: always()
         run: supabase stop
