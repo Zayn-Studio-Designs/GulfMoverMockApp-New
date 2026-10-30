@@ -114,9 +114,9 @@ async function main() {
   const bA = await orgBook(cAdminA, sPrice, keyA, 2);
   check('customer creates a valid booking through the real API', !bA.error && !!bA.data?.[0]?.booking_id, errText(bA.error));
   const bidA = bA.data?.[0]?.booking_id;
-  const rowA = (await cAdminA.from('bookings').select('id,total_halala,net_halala,vat_halala,currency,vat_mode,hold_expires_at,status,reference').eq('id', bidA).single()).data;
+  const rowA = (await cAdminA.from('bookings').select('id,total_halala,net_halala,vat_halala,vat_mode,hold_expires_at,status,reference').eq('id', bidA).single()).data;
   check('booking totals equal the server quote (no client-supplied amount accepted)', !!rowA && rowA.total_halala === q.total_halala && rowA.net_halala === q.net_halala && rowA.vat_halala === q.vat_halala, JSON.stringify(rowA));
-  check('booking currency is SAR from server data', rowA?.currency === 'SAR', JSON.stringify(rowA));
+  check('booking VAT mode matches the server tariff (no client override)', !!rowA && rowA.vat_mode === q.vat_mode, JSON.stringify(rowA));
   const createdEv = await cAdminA.from('booking_events').select('details').eq('booking_id', bidA).eq('action', 'created');
   check('created audit event records server total + tariff', !createdEv.error && (createdEv.data ?? []).some(e => e.details?.total_halala === q.total_halala && e.details?.tariff_id === q.tariff_id), JSON.stringify(createdEv.data)?.slice(0, 200));
   // The RPC signature takes no amount/total parameter: totals come only from
