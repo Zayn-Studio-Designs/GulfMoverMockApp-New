@@ -129,9 +129,30 @@ async function main() {
   const goodSignup = await anonClient().auth.signUp({ email: email('redirect-ok'), password: PASSWORD, options: { emailRedirectTo: APPROVED_REDIRECT } });
   check('signup with an allow-listed redirect is accepted', !goodSignup.error && !!goodSignup.data.user, errText(goodSignup.error));
   const evilSignup = await anonClient().auth.signUp({ email: email('redirect-evil'), password: PASSWORD, options: { emailRedirectTo: EVIL } });
-  check('signup with an unapproved redirect is rejected', !!evilSignup.error, 'evil redirect unexpectedly accepted');
+  // Observed on this stack: GoTrue accepts the signup. The secure property is
+  // then that the emitted confirmation link must not point at the evil host
+  // (rejection would also pass). Honoring it would be an open-redirect finding.
+  let evilSignupOk = false, evilSignupNote = '';
+  if (evilSignup.error) { evilSignupOk = true; evilSignupNote = `rejected: ${errText(evilSignup.error)}`; }
+  else {
+    try {
+      const b = await latestEmailBody(email('redirect-evil'), 'signup');
+      evilSignupOk = !b.includes('evil.example.test');
+      evilSignupNote = evilSignupOk ? 'evil host absent from emitted confirmation link' : 'EMITTED LINK HONORS EVIL HOST';
+    } catch (e) { evilSignupNote = `no signup email emitted: ${String(e.message).slice(0, 120)}`; }
+  }
+  check('unapproved signup redirect is rejected or not honored', evilSignupOk, evilSignupNote);
   const evilRecovery = await anonClient().auth.resetPasswordForEmail(email('redirect-ok'), { redirectTo: EVIL });
-  check('password recovery to an unapproved redirect is rejected', !!evilRecovery.error, 'evil recovery redirect unexpectedly accepted');
+  let evilRecOk = false, evilRecNote = '';
+  if (evilRecovery.error) { evilRecOk = true; evilRecNote = `rejected: ${errText(evilRecovery.error)}`; }
+  else {
+    try {
+      const b = await latestEmailBody(email('redirect-ok'), 'recovery');
+      evilRecOk = !b.includes('evil.example.test');
+      evilRecNote = evilRecOk ? 'evil host absent from emitted recovery link' : 'EMITTED LINK HONORS EVIL HOST';
+    } catch (e) { evilRecNote = `no recovery email emitted: ${String(e.message).slice(0, 120)}`; }
+  }
+  check('unapproved recovery redirect is rejected or not honored', evilRecOk, evilRecNote);
 
   // ---- B. link-expiry handling beyond simple replay ----
   const garbage = await anonClient().auth.verifyOtp({ token_hash: 'not-a-real-token', type: 'signup' });
