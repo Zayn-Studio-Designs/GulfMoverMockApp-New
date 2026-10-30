@@ -158,7 +158,7 @@ async function main() {
   const terms = (await cOps.from('service_policies').select('version').eq('policy_type', 'booking_terms').in('status', ['approved', 'provisional']).order('effective_from', { ascending: false }).limit(1)).data?.[0]?.version;
   check('suspended-gate fixtures ready', !!terms, 'terms missing');
   const bookRes = await cBooker.rpc('create_organization_booking', {
-    p_request_key: `sus-${tag}`, p_organization_id: orgA, p_outbound_sailing_id: sailId, p_passenger_count: 1,
+    p_request_key: randomUUID(), p_organization_id: orgA, p_outbound_sailing_id: sailId, p_passenger_count: 1,
     p_contact_name: 'Fictional Crew', p_contact_email: 'crew@example.test', p_contact_phone: '+966500000003',
     p_terms_version: terms, p_settlement_mode: 'pay_now', p_passenger_names: null, p_return_sailing_id: null,
     p_po_reference: `PO-SUS-${tag.slice(0, 8)}`, p_client_name: null, p_client_reference: null,
@@ -171,13 +171,14 @@ async function main() {
   check('gate-test booking settled via sandbox (no real money)', !payInit.error && !paySim.error, `${errText(payInit.error)} ${errText(paySim.error)}`);
   const ticket = ((await admin.from('tickets').select('id,reference,status').eq('booking_id', bookId)).data ?? [])[0];
   check('gate-test ticket exists and is valid', !!ticket && ticket.status === 'valid', JSON.stringify(ticket));
+  if (!ticket) throw new Error('gate-test ticket fixture missing, aborting');
   const gateBefore = await cOps.rpc('sailing_boarding_gate', { p_sailing_id: sailId });
   check('gate answers on the open sailing (control, not suspended)', !gateBefore.error && typeof gateBefore.data === 'string' && gateBefore.data !== 'sailing_suspended', `${errText(gateBefore.error)} got=${gateBefore.data}`);
   const susp = await cOps.rpc('suspend_sailing', { p_sailing_id: sailId, p_reason: REASON });
   check('operations suspends the sailing (suspended, not unreachable)', !susp.error && susp.data === 'suspended', `${errText(susp.error)} got=${susp.data}`);
   const suspRow = (await admin.from('sailings').select('status').eq('id', sailId).single()).data;
   check('suspension persists in the database', suspRow?.status === 'suspended', JSON.stringify(suspRow));
-  const ckpt = await admin.from('sailing_checkpoint_events').select('checkpoint,status').eq('sailing_id', sailId).eq('checkpoint', 'suspension');
+  const ckpt = await cOps.from('sailing_checkpoint_events').select('checkpoint,status').eq('sailing_id', sailId).eq('checkpoint', 'suspension');
   check('suspension writes a checkpoint event', !ckpt.error && (ckpt.data ?? []).some(e => e.status === 'suspended'), errText(ckpt.error));
   const gateSusp = await cOps.rpc('sailing_boarding_gate', { p_sailing_id: sailId });
   check('gate returns sailing_suspended on a suspended sailing', !gateSusp.error && gateSusp.data === 'sailing_suspended', `${errText(gateSusp.error)} got=${gateSusp.data}`);
@@ -185,7 +186,7 @@ async function main() {
   check('boarding fails closed on a suspended sailing', !boardSusp.error && boardSusp.data === 'sailing_suspended', `${errText(boardSusp.error)} got=${boardSusp.data}`);
   const ticketAfter = (await admin.from('tickets').select('status').eq('id', ticket.id).single()).data;
   check('denied boarding boards nothing (ticket still valid)', ticketAfter?.status === 'valid', JSON.stringify(ticketAfter));
-  const boardEv = await admin.from('boarding_events').select('id').eq('ticket_id', ticket.id);
+  const boardEv = await cOps.from('boarding_events').select('id').eq('ticket_id', ticket.id);
   check('denied boarding writes no boarding event', !boardEv.error && (boardEv.data ?? []).length === 0, errText(boardEv.error));
   const custSusp = await cBooker.rpc('suspend_sailing', { p_sailing_id: sailId, p_reason: REASON });
   check('customer cannot suspend a sailing', !!custSusp.error && /not authorized|42501/.test(errText(custSusp.error)), errText(custSusp.error));

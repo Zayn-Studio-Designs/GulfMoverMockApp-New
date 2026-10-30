@@ -183,7 +183,13 @@ jobs:
           GM_E2E_EXPIRY_WAIT_SEC: 150
       - name: Restore default Auth config after expiry test
         if: always()
-        run: cp /tmp/gm-config-toml.backup supabase/config.toml && grep -n '^otp_expiry' supabase/config.toml
+        run: |
+          if [ -f /tmp/gm-config-toml.backup ]; then
+            cp /tmp/gm-config-toml.backup supabase/config.toml
+          else
+            echo "no config backup (stack was never restarted); working-tree config untouched"
+          fi
+          grep -n '^otp_expiry' supabase/config.toml
       - name: Stop disposable stack
         if: always()
         run: supabase stop
