@@ -139,6 +139,51 @@ jobs:
         run: node scripts/e2e/phase16-roles-redirects.mjs
         env:
           GM_E2E_APP_URL: http://127.0.0.1:4319
+      - name: Phase 17a suspended gate and retry edges (default config)
+        run: node scripts/e2e/phase17-suspended-retry.mjs
+      - name: Restart stack with accelerated OTP expiry (disposable only)
+        run: |
+          supabase stop
+          cp supabase/config.toml /tmp/gm-config-toml.backup
+          sed -i 's/^otp_expiry = 3600/otp_expiry = 60/' supabase/config.toml
+          grep -n '^otp_expiry' supabase/config.toml
+          set +e
+          supabase start > /tmp/gm-supabase-restart.log 2>&1
+          code=$?
+          set -e
+          redact() { sed -E 's/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/[JWT-REDACTED]/g'; }
+          if [ $code -ne 0 ]; then
+            echo "supabase restart failed (exit $code); redacted tail:"
+            redact < /tmp/gm-supabase-restart.log | tail -30
+            exit $code
+          fi
+          echo "supabase restart ok; redacted tail:"
+          redact < /tmp/gm-supabase-restart.log | tail -5
+          ENV_OUT="$(supabase status --env)"
+          clean() { sed "s/^export //" | cut -d= -f2- | tr -d '\042\047\015'; }
+          SUPABASE_URL="$(echo "$ENV_OUT" | grep -E '(^|_)((SUPABASE|API)_URL)=' | head -1 | clean)"
+          ANON_KEY="$(echo "$ENV_OUT" | grep -E 'ANON_KEY=' | head -1 | clean)"
+          SERVICE_KEY="$(echo "$ENV_OUT" | grep -E 'SERVICE_ROLE_KEY=' | head -1 | clean)"
+          case "$SUPABASE_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "REFUSAL: not loopback" >&2; exit 1;; esac
+          INBUCKET_URL="$(echo "$ENV_OUT" | grep -E '(^|_)INBUCKET_URL=' | head -1 | clean)"
+          MAILPIT_URL="$(echo "$ENV_OUT" | grep -E '(^|_)MAILPIT_URL=' | head -1 | clean)"
+          MAIL_URL="${INBUCKET_URL:-$MAILPIT_URL}"
+          case "$MAIL_URL" in http://127.0.0.1:*|http://localhost:*) ;; *) echo "REFUSAL: mail catcher URL is not loopback" >&2; exit 1;; esac
+          echo "::add-mask::$ANON_KEY"
+          echo "::add-mask::$SERVICE_KEY"
+          {
+            echo "GM_E2E_SUPABASE_URL=$SUPABASE_URL"
+            echo "GM_E2E_ANON_KEY=$ANON_KEY"
+            echo "GM_E2E_SERVICE_KEY=$SERVICE_KEY"
+            echo "GM_E2E_MAIL_URL=$MAIL_URL"
+          } >> "$GITHUB_ENV"
+      - name: Phase 17b real email-link expiry (accelerated otp_expiry=60s)
+        run: node scripts/e2e/phase17-expiry.mjs
+        env:
+          GM_E2E_EXPIRY_WAIT_SEC: 150
+      - name: Restore default Auth config after expiry test
+        if: always()
+        run: cp /tmp/gm-config-toml.backup supabase/config.toml && grep -n '^otp_expiry' supabase/config.toml
       - name: Stop disposable stack
         if: always()
         run: supabase stop
