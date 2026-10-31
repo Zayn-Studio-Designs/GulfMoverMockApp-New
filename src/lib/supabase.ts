@@ -37,7 +37,10 @@ export type SupabaseConfigIssue =
   | 'invalid-url'
   | 'url-credentials'
   | 'url-insecure-http'
-  | 'secret-key-detected';
+  | 'secret-key-detected'
+  // Environment separation: the Vite dev server (MODE=development) must not reach production data.
+  | 'production-database-in-development'
+  | 'remote-database-in-development';
 
 /** Vite environment variable that selects production mode. */
 export const APP_MODE_VARIABLE = 'VITE_APP_MODE';
@@ -62,6 +65,8 @@ const ISSUE_DESCRIPTIONS: Record<SupabaseConfigIssue, string> = {
   'url-credentials': `${SUPABASE_URL_VARIABLE} contains an embedded username or password, which is not allowed`,
   'url-insecure-http': `${SUPABASE_URL_VARIABLE} uses plain HTTP to a non-local host (HTTP is only allowed for ${LOCAL_HOSTS_RULE_TEXT})`,
   'secret-key-detected': `${SUPABASE_ANON_KEY_VARIABLE} looks like a secret/service key, not the publishable anon key (best-effort safeguard, not a guarantee)`,
+  'production-database-in-development': `${SUPABASE_URL_VARIABLE} points at the PRODUCTION project (VITE_PRODUCTION_PROJECT_REF) from a development server — use a local stack or a development/staging project`,
+  'remote-database-in-development': `${SUPABASE_URL_VARIABLE} points at a hosted project from a development server — use a local stack, or set VITE_ALLOW_REMOTE_DATABASE=true for a NON-production development/staging project`,
 };
 
 export class SupabaseConfigError extends Error {
@@ -193,6 +198,17 @@ export function validateSupabaseConfig(env: EnvSource = import.meta.env): Supaba
       issues.push('url-credentials');
     } else if (parsed.protocol === 'http:' && !isLocalhostHost(parsed.hostname)) {
       issues.push('url-insecure-http');
+    }
+  }
+
+  // Development server only (`vite` sets MODE=development; tests run as MODE=test and builds as production).
+  if (env.MODE === 'development' && url !== undefined && issues.length === 0) {
+    const host = new URL(url).hostname.toLowerCase();
+    const productionRef = (env.VITE_PRODUCTION_PROJECT_REF ?? '').trim().toLowerCase();
+    if (productionRef && (host === `${productionRef}.supabase.co` || host.startsWith(`${productionRef}.`))) {
+      issues.push('production-database-in-development'); // never allowed, even with the override below
+    } else if (!isLocalhostHost(host) && env.VITE_ALLOW_REMOTE_DATABASE !== 'true') {
+      issues.push('remote-database-in-development');
     }
   }
 

@@ -40,6 +40,15 @@ for (const [name, value] of Object.entries(process.env)) {
   if (/SERVICE|SECRET|PRIVATE|WEBHOOK|TOKEN/i.test(name)) errors.push(`${name}: secret-looking variable must not be a VITE_* (browser) variable`);
   if (/^(sk_live_|sk_test_|sb_secret_)/.test(value ?? '')) errors.push(`${name}: contains a secret key`);
 }
+// Environment separation: development and staging must never use the production project.
+const prodRef = v('GM_PRODUCTION_PROJECT_REF') || v('VITE_PRODUCTION_PROJECT_REF');
+if (env !== 'production' && prodRef && url.toLowerCase().includes(`//${prodRef.toLowerCase()}.`)) {
+  errors.push(`${env} build points at the PRODUCTION Supabase project`);
+}
+if (env === 'production' && prodRef && url && !url.toLowerCase().includes(`//${prodRef.toLowerCase()}.`)) {
+  errors.push('production build does not point at the production Supabase project (GM_PRODUCTION_PROJECT_REF)');
+}
+if (env !== 'development' && !prodRef) warnings.push('GM_PRODUCTION_PROJECT_REF unset: cannot verify which project this build targets');
 const fn = v('VITE_PAYMENTS_FUNCTION_URL');
 if (fn && env !== 'development' && !/^https:\/\//.test(fn)) errors.push('VITE_PAYMENTS_FUNCTION_URL must use https');
 if (!fn && env === 'production') warnings.push('VITE_PAYMENTS_FUNCTION_URL unset: only the sandbox simulator is available');

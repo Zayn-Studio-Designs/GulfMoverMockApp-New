@@ -94,3 +94,13 @@ See `docs/test-results.md` for the latest verified results.
 - Reports: `docs/backend/phase8-release-readiness.md`, `docs/requirements-traceability.md`,
   `docs/payments-and-einvoicing.md`, `docs/operations/*`, `docs/atco-pending-business-rules.md` (P25–P39).
 - Payments are **sandbox only**; no real money, no live provider, nothing submitted to ZATCA.
+
+### Production-readiness checks (see `docs/production-readiness-audit.md`)
+
+```bash
+npm run db:up                 # disposable local Postgres with every migration (Docker)
+GM_DB_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npm run test:db
+npm run db:backup-drill       # backup -> restore into a separate container -> verify
+npm run test:load             # 100 / 500 / 1,000-user load test on its own disposable database
+npm run check:env -- production && npm run build:release   # release: env checks + real CSP origins
+```

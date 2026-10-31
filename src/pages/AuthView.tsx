@@ -6,6 +6,7 @@ import { useUi } from '../context/UiContext';
 import { Brand } from '../components/Brand';
 import { ContactAtcoLink } from '../components/ContactCard';
 import { ProviderButton, ProviderSimOverlay } from '../components/ProviderAuth';
+import { checkDateOfBirth, latestEligibleDateOfBirth } from '../domain/age';
 
 type Mode = 'signin' | 'signup' | 'reset';
 
@@ -39,8 +40,10 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
   const [mode, setMode] = useState<Mode>(requestedMode === 'reset' ? 'reset' : initialMode);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ login: '', email: '', username: '', company: '', password: '', confirm: '', code: '' });
+  const [form, setForm] = useState({ login: '', email: '', username: '', company: '', password: '', confirm: '', code: '', dob: '' });
   const [remember, setRemember] = useState(true);
+  // Age of consent: users must confirm they are 18 or older before signing in (sign-up checks the date of birth).
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
   // Reset step 2 starts once a (demo) code has been issued; the code is shown on screen instead of emailed.
   // Production reset is single-step: the emailed link does the reset, so only a "sent" acknowledgement shows.
   const [sentCode, setSentCode] = useState('');
@@ -80,8 +83,8 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
       return;
     }
     setBusy(true);
-    const err = mode === 'signin' ? await signIn(form.login, form.password, remember)
-      : mode === 'signup' ? await signUp({ email: form.email, username: form.username, company: form.company, password: form.password, confirm: form.confirm })
+    const err = mode === 'signin' ? await signIn(form.login, form.password, remember, ageConfirmed)
+      : mode === 'signup' ? await signUp({ email: form.email, username: form.username, company: form.company, password: form.password, confirm: form.confirm, dateOfBirth: form.dob })
         : await resetPassword(form.email, form.code, form.password, form.confirm);
     setBusy(false);
     if (err) { setError(err); return; }
@@ -98,7 +101,25 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
     navigate(from, { replace: true });
   };
 
-  const guest = async () => { await signInAsGuest(); navigate(from, { replace: true }); };
+  /* Demo shortcuts (guest / simulated provider) bypass the form, so they must meet the same 18+ rule:
+     the age checkbox on sign-in, or an eligible date of birth on sign-up. */
+  const shortcutAgeError = (): string | null => {
+    if (mode !== 'signup') return ageConfirmed ? null : 'errAgeConfirm';
+    const check = checkDateOfBirth(form.dob);
+    return check === 'ok' ? null : check === 'under-age' ? 'errUnderAge' : 'errDob';
+  };
+  const guest = async () => {
+    const ageError = shortcutAgeError();
+    if (ageError) { setError(ageError); return; }
+    const err = await signInAsGuest(true);
+    if (err) { setError(err); return; }
+    navigate(from, { replace: true });
+  };
+  const startProvider = (provider: DemoProvider) => {
+    const ageError = shortcutAgeError();
+    if (ageError) { setError(ageError); return; }
+    setProviderFlow(provider);
+  };
 
   /* Simulated provider sign-in (frontend-only): a short in-app animation, then the same demo
      session mechanism the guest flow uses. No provider page, popup or credentials involved. */
@@ -108,8 +129,9 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
   ).current;
   const providerBusy = busy || providerFlow !== null;
   const completeProvider = async (provider: DemoProvider) => {
-    await signInWithProvider(provider);
+    const err = await signInWithProvider(provider, true);
     setProviderFlow(null);
+    if (err) { setError(err); return; }
     navigate(from, { replace: true });
   };
 
@@ -229,12 +251,27 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
                 <small>{t('displayNameHint')}</small>
               </div>
             )}
+            {mode === 'signup' && (
+              <div className="field">
+                <label htmlFor="auth-dob">{t('dobLabel')}</label>
+                <input id="auth-dob" type="date" dir="ltr" autoComplete="bday" max={latestEligibleDateOfBirth()} value={form.dob}
+                  aria-describedby="auth-dob-hint" onChange={e => set('dob')(e.target.value)} />
+                <small id="auth-dob-hint">{t('dobHint')}</small>
+              </div>
+            )}
             {(mode !== 'reset' || (isDemo && sentCode)) && (
               <PasswordField id="auth-password" label={mode === 'reset' ? t('newPassword') : t('password')} value={form.password} onChange={set('password')}
                 autoComplete={mode === 'signin' ? 'current-password' : 'new-password'} hint={mode === 'signin' ? undefined : t('passwordHint')} />
             )}
             {(mode === 'signup' || (isDemo && mode === 'reset' && !!sentCode)) && (
               <PasswordField id="auth-confirm" label={t('confirmPassword')} value={form.confirm} onChange={set('confirm')} autoComplete="new-password" />
+            )}
+            {mode === 'signin' && (
+              <label className="checkrow" htmlFor="auth-age">
+                <input id="auth-age" type="checkbox" checked={ageConfirmed} aria-required="true"
+                  onChange={e => { setAgeConfirmed(e.target.checked); if (e.target.checked && error === 'errAgeConfirm') setError(''); }} />
+                <span>{t('ageConfirmLabel')}</span>
+              </label>
             )}
             {mode === 'signin' && (
               <div className="between auth-row">
@@ -259,8 +296,8 @@ export default function AuthView({ initialMode = 'signin' }: { initialMode?: Mod
               <div className="auth-or"><span>{t('orDivider')}</span></div>
               {/* Simulated provider options — frontend demo only, labelled as such on the overlay. */}
               <div className="provider-row">
-                <ProviderButton provider="google" mode={mode} disabled={providerBusy} onClick={() => setProviderFlow('google')} />
-                <ProviderButton provider="apple" mode={mode} disabled={providerBusy} onClick={() => setProviderFlow('apple')} />
+                <ProviderButton provider="google" mode={mode} disabled={providerBusy} onClick={() => startProvider('google')} />
+                <ProviderButton provider="apple" mode={mode} disabled={providerBusy} onClick={() => startProvider('apple')} />
               </div>
               <button type="button" className="btn btn-outline btn-block" onClick={guest} disabled={providerBusy}>{t('guest')}</button>
               {providerFlow && (

@@ -1,3 +1,4 @@
+import { confirmAge } from './ageGate';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -349,6 +350,7 @@ describe('app inside the device (bridge)', () => {
 
   async function openFirstBookingTickets(device: 'iphone' | 'android' | 'mac') {
     render(<AppProviders><MemoryRouter initialEntries={['/bookings']}><AppRoutes /></MemoryRouter></AppProviders>);
+    confirmAge();
     fireEvent.click(screen.getByRole('button', { name: 'Explore as demo guest' }));
     await screen.findAllByRole('navigation', { name: 'Main navigation' });
     fromShell({ type: 'gm-host:device', device });
@@ -426,6 +428,7 @@ describe('presentation Home button', () => {
 
     test('"home" from the presentation returns the app to Home through its own router', async () => {
       render(<AppProviders><MemoryRouter initialEntries={['/bookings']}><AppRoutes /></MemoryRouter></AppProviders>);
+      confirmAge();
       fireEvent.click(screen.getByRole('button', { name: 'Explore as demo guest' }));
       expect(await screen.findByRole('heading', { level: 1, name: 'My bookings' })).toBeInTheDocument();
       send({ type: 'gm-host:home' }, window); // not the presentation window: ignored

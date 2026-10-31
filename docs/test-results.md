@@ -626,3 +626,20 @@ listed in `docs/backend/phase8-release-readiness.md`.
 Not verified: hosted Supabase, deployed edge functions, provider sandboxes (no keys), real
 messaging, Storage upload API, MFA enrolment against live Auth, real devices/Safari/camera,
 screen readers, native-speaker Arabic review, CI run on GitHub.
+
+## Production-readiness audit (31 Oct 2026, branch `feature/age-gate-and-query-efficiency`)
+
+Full findings: `docs/production-readiness-audit.md`. Everything below was run in this session, against disposable local databases only.
+
+| # | Check | Command | Result |
+|---|---|---|---|
+| 1 | Type check | `npm run typecheck` | exit 0 |
+| 2 | Unit/component suite | `npm test` | exit 0 — **937 passed**, 152 skipped (database / full-stack suites) |
+| 3 | Production build | `npm run build` | exit 0 |
+| 4 | Clean install of all 35 migrations | `scripts/db/local-db.sh up` | exit 0 |
+| 5 | Real-DB suite (incl. new race, rate-limit, job, spend-cap, reconcile, batch-status tests) | `npm run test:db` | exit 0 — **70 passed**, 3 skipped (upgrade, run in #6) |
+| 6 | Upgrade with live data | `npm run test:db:upgrade` | exit 0 — 3 passed |
+| 7 | Backup/restore drill (+ scheduled jobs re-created) | `scripts/db/backup-restore-drill.sh` | PASS — 47 tables identical |
+| 8 | Rollback drill | down-script → pre-audit DB suites → roll forward → `npm run test:db` | 39 passed → 69 passed |
+| 9 | Load test 100/500/1,000 users | `npm run test:load` | 0 failed requests. At 1,000 users p95 latency fell from 526 to 9.2 ms and the ceiling rose from 326 to 1,926 req/s after the index migration. Invariants held. |
+| 10 | Test-env isolation | hostile temporary `.env.local` | tests stayed in demo mode; file removed |

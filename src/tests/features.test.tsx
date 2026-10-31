@@ -1,3 +1,4 @@
+import { confirmAge } from './ageGate';
 import { beforeEach, describe, expect, test } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -26,6 +27,7 @@ function renderSignedOut(path = '/') {
 /** Opens the app at `path` signed in as the built-in demo guest. */
 async function renderApp(path = '/') {
   const view = renderSignedOut(path);
+  confirmAge();
   fireEvent.click(screen.getByRole('button', { name: 'Explore as demo guest' }));
   await screen.findAllByRole('navigation', { name: 'Main navigation' });
   return view;

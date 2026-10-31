@@ -1,3 +1,4 @@
+import { confirmAge, enterAdultDob } from './ageGate';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -18,6 +19,7 @@ function renderSignedOut(path = '/') {
 /** Opens the app at `path` signed in as the built-in demo guest. */
 async function renderApp(path = '/') {
   const view = renderSignedOut(path);
+  confirmAge();
   fireEvent.click(screen.getByRole('button', { name: 'Explore as demo guest' }));
   await screen.findAllByRole('navigation', { name: 'Main navigation' });
   return view;
@@ -315,6 +317,7 @@ describe('accounts', () => {
     renderSignedOut('/');
     click(/^Create an account$/);
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'not-an-email' } });
+    enterAdultDob();
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Enter a valid email address.');
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ops@example.test' } });
@@ -322,10 +325,12 @@ describe('accounts', () => {
     fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Example Marine Co.' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'short' } });
+    enterAdultDob();
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('at least 8 characters');
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'harbour2026' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'harbour2026' } });
+    enterAdultDob();
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
     expect(localStorage.getItem('gm-demo-accounts')).not.toContain('harbour2026');
@@ -339,6 +344,7 @@ describe('accounts', () => {
     fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Agent Demo Co.' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'firstpass1' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'firstpass1' } });
+    enterAdultDob();
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     await screen.findByRole('heading', { level: 1, name: 'Home' });
 
@@ -374,9 +380,11 @@ describe('accounts', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Email or username'), { target: { value: 'agent2' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'firstpass1' } });
+    confirmAge();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('incorrect');
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secondpass2' } });
+    confirmAge();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
   });
@@ -389,6 +397,7 @@ describe('accounts', () => {
     fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Example Marine Co.' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: password } });
+    enterAdultDob();
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     await screen.findByRole('heading', { level: 1, name: 'Home' });
     // The demo view switch lives in the side panel, not in the account menu.
@@ -430,6 +439,7 @@ describe('accounts', () => {
     await waitFor(() => expect(screen.queryByLabelText('6-digit code')).not.toBeInTheDocument());
     fireEvent.change(screen.getByLabelText('Email or username'), { target: { value: 'resetter' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'newpass2027' } });
+    confirmAge();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
   });

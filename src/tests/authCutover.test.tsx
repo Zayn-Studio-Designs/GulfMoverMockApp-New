@@ -134,13 +134,13 @@ describe('demo mode (default): behaviour preserved', () => {
 
   it('demo sign-up validates inputs like before', async () => {
     renderAuth();
-    await expect(api.signUp({ email: 'bad-email', username: 'sam', company: 'Co', password: 'pw-demo-1', confirm: 'pw-demo-1' })).resolves.toBe('errEmail');
+    await expect(api.signUp({ email: 'bad-email', username: 'sam', company: 'Co', password: 'pw-demo-1', confirm: 'pw-demo-1', dateOfBirth: '1990-05-01' })).resolves.toBe('errEmail');
     expect(api.user).toBeNull();
   });
 
   it('demo sign-up + sign out round-trip keeps the local session mechanics', async () => {
     renderAuth();
-    await expect(api.signUp({ email: 'demo@example.test', username: 'sami', company: 'Demo Co', password: 'pw-demo-1', confirm: 'pw-demo-1' })).resolves.toBeNull();
+    await expect(api.signUp({ email: 'demo@example.test', username: 'sami', company: 'Demo Co', password: 'pw-demo-1', confirm: 'pw-demo-1', dateOfBirth: '1990-05-01' })).resolves.toBeNull();
     await waitFor(() => expect(api.user?.email).toBe('demo@example.test'));
     api.signOut();
     await waitFor(() => expect(api.user).toBeNull());
@@ -149,7 +149,7 @@ describe('demo mode (default): behaviour preserved', () => {
 
   it('demo guest sign-in works exactly as before', async () => {
     renderAuth();
-    await act(async () => { await api.signInAsGuest(); });
+    await act(async () => { await api.signInAsGuest(true); });
     await waitFor(() => expect(api.user?.email).toBe('guest@demo.test'));
   });
 
@@ -170,7 +170,7 @@ describe('production mode: real auth service behind the same interface', () => {
     svc.signIn.mockResolvedValueOnce({ userId: 'auth-user-1', session: sessionOf('sami@example.test', 'Sami Al-Sayegh') });
     renderAuth();
     await waitFor(() => expect(api.authMode).toBe('production'));
-    await expect(api.signIn('sami@example.test', 'pw-real-1')).resolves.toBeNull();
+    await expect(api.signIn('sami@example.test', 'pw-real-1', true, true)).resolves.toBeNull();
     await waitFor(() => expect(api.user?.email).toBe('sami@example.test'));
     expect(api.user?.fullName).toBe('Sami Al-Sayegh');
     expect(svc.signIn.mock.calls[0].slice(0, 2)).toEqual(['sami@example.test', 'pw-real-1']);
@@ -181,7 +181,7 @@ describe('production mode: real auth service behind the same interface', () => {
     renderAuth();
     await waitFor(() => expect(api.authMode).toBe('production'));
     // Phase 2: production accepts e-mail only, so the message no longer mentions usernames.
-    await expect(api.signIn('sami@example.test', 'pw-wrong-1')).resolves.toBe('errSignInEmail');
+    await expect(api.signIn('sami@example.test', 'pw-wrong-1', true, true)).resolves.toBe('errSignInEmail');
     expect(api.user).toBeNull();
   });
 
@@ -189,7 +189,7 @@ describe('production mode: real auth service behind the same interface', () => {
     svc.signUp.mockResolvedValueOnce({ userId: 'auth-user-1', email: 'new@example.test', session: sessionOf('new@example.test', 'New User'), emailConfirmationRequired: false });
     renderAuth();
     await waitFor(() => expect(api.authMode).toBe('production'));
-    await expect(api.signUp({ email: 'new@example.test', username: 'newuser', company: 'ignored here', password: 'pw-real-1', confirm: 'pw-real-1' })).resolves.toBeNull();
+    await expect(api.signUp({ email: 'new@example.test', username: 'newuser', company: 'ignored here', password: 'pw-real-1', confirm: 'pw-real-1', dateOfBirth: '1990-05-01' })).resolves.toBeNull();
     await waitFor(() => expect(api.user?.email).toBe('new@example.test'));
   });
 
@@ -197,7 +197,7 @@ describe('production mode: real auth service behind the same interface', () => {
     svc.signUp.mockResolvedValueOnce({ userId: 'auth-user-1', email: 'pending@example.test', session: null, emailConfirmationRequired: true });
     renderAuth();
     await waitFor(() => expect(api.authMode).toBe('production'));
-    await expect(api.signUp({ email: 'pending@example.test', username: 'pending', company: 'Co', password: 'pw-real-1', confirm: 'pw-real-1' })).resolves.toBeNull();
+    await expect(api.signUp({ email: 'pending@example.test', username: 'pending', company: 'Co', password: 'pw-real-1', confirm: 'pw-real-1', dateOfBirth: '1990-05-01' })).resolves.toBeNull();
     await waitFor(() => expect(api.confirmationPending).toBe('pending@example.test'));
     expect(api.user).toBeNull();
   });
@@ -206,7 +206,7 @@ describe('production mode: real auth service behind the same interface', () => {
     svc.signUp.mockRejectedValueOnce(new AuthOperationError('User already registered', 'user_already_exists', 422));
     renderAuth();
     await waitFor(() => expect(api.authMode).toBe('production'));
-    await expect(api.signUp({ email: 'taken@example.test', username: 'taken', company: 'Co', password: 'pw-real-1', confirm: 'pw-real-1' })).resolves.toBe('errEmailTaken');
+    await expect(api.signUp({ email: 'taken@example.test', username: 'taken', company: 'Co', password: 'pw-real-1', confirm: 'pw-real-1', dateOfBirth: '1990-05-01' })).resolves.toBe('errEmailTaken');
     expect(api.user).toBeNull();
     expect(api.confirmationPending).toBeNull();
   });
@@ -216,7 +216,7 @@ describe('production mode: real auth service behind the same interface', () => {
     svc.signOut.mockResolvedValueOnce(undefined);
     renderAuth();
     await waitFor(() => expect(api.authMode).toBe('production'));
-    await expect(api.signIn('signed-in@example.test', 'pw-real-1')).resolves.toBeNull();
+    await expect(api.signIn('signed-in@example.test', 'pw-real-1', true, true)).resolves.toBeNull();
     await waitFor(() => expect(api.user).not.toBeNull());
     api.signOut();
     await waitFor(() => expect(api.user).toBeNull());
@@ -259,7 +259,7 @@ describe('production mode: real auth service behind the same interface', () => {
     expect(api.authMode).toBe('production');
     // The interface refuses to use the demo provider behind the user's back, and (Phase 2)
     // reports the refusal as an error instead of a null "success".
-    await expect(api.signIn('sami@example.test', 'pw-real-1')).resolves.toBe('errAuthUnavailable');
+    await expect(api.signIn('sami@example.test', 'pw-real-1', true, true)).resolves.toBe('errAuthUnavailable');
     expect(svc.signIn).not.toHaveBeenCalled();
     expect(api.user).toBeNull();
   });
@@ -285,7 +285,7 @@ describe('production mode: real auth service behind the same interface', () => {
     svc.updatePassword.mockResolvedValueOnce('auth-user-1');
     renderAuth();
     await waitFor(() => expect(api.authMode).toBe('production'));
-    await expect(api.signIn('pwchange@example.test', 'pw-real-1')).resolves.toBeNull();
+    await expect(api.signIn('pwchange@example.test', 'pw-real-1', true, true)).resolves.toBeNull();
     await waitFor(() => expect(api.user).not.toBeNull());
     await expect(api.changePassword('', 'pw-newer-99', 'pw-newer-99')).resolves.toBeNull();
     expect(svc.updatePassword.mock.calls[0][0]).toBe('pw-newer-99');
@@ -294,8 +294,8 @@ describe('production mode: real auth service behind the same interface', () => {
   it('OAuth-affecting flows are inert: guest and provider sign-ins never touch the service', async () => {
     renderAuth();
     await waitFor(() => expect(api.authMode).toBe('production'));
-    await act(async () => { await api.signInAsGuest(); });
-    await act(async () => { await api.signInWithProvider('google'); });
+    await act(async () => { await api.signInAsGuest(true); });
+    await act(async () => { await api.signInWithProvider('google', true); });
     expect(api.user).toBeNull();
     expect(svc.signIn).not.toHaveBeenCalled();
     expect(svc.signUp).not.toHaveBeenCalled();

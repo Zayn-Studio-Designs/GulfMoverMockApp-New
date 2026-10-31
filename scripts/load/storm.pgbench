@@ -1,0 +1,8 @@
+-- Booking storm: every user tries to book one of only 5 sailings at the same moment.
+\set u random(1, 1000)
+\set s random(1, 5)
+BEGIN;
+SELECT set_config('request.jwt.claims', claims, true) FROM loadtest.users WHERE n = :u;
+SET LOCAL ROLE authenticated;
+SELECT loadtest.try_book(id) FROM loadtest.sailings WHERE n = :s;
+END;

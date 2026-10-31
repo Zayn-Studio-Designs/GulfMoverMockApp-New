@@ -3,8 +3,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePlatformRoles } from '../context/OnboardingContext';
 import {
   cancelSailing, decideSailingMinimum, expireStaleHolds, generateSailings, listSailingControl, listScheduleTemplates,
-  recordMasterDecision, recordNoShows, recordPortClearance, resumeSailing, sailingCommercialStatus, sailingGate,
-  setSailingReadiness, suspendSailing, type CommercialStatus, type SailingControl,
+  recordMasterDecision, recordNoShows, recordPortClearance, resumeSailing, sailingControlStatus,
+  setSailingReadiness, suspendSailing, type CommercialStatus, type SailingControl, type SailingStatus,
 } from '../lib/phase8Service';
 import { formatSar } from '../domain/money';
 import { ProdPageHeader, SailingTime } from '../components/ProductionUi';
@@ -17,15 +17,15 @@ import { FlashNotice, ReasonField, RequireRoles, todayRiyadh, useAction, useLoad
  * opens refund reviews for Finance — it never refunds automatically.
  */
 
-function SailingCard({ sailing, reason, onDone }: { sailing: SailingControl; reason: string; onDone: () => Promise<void> }) {
+function SailingCard({ sailing, status, reason, onDone }: { sailing: SailingControl; status: SailingStatus | undefined; reason: string; onDone: () => Promise<void> }) {
   const { t, lang } = useLanguage();
   const roles = usePlatformRoles() ?? [];
   const isOps = roles.includes('super_admin') || roles.includes('operations');
-  const detail = useLoad(async () => ({ commercial: await sailingCommercialStatus(sailing.id), gate: await sailingGate(sailing.id) }), [sailing.id, sailing.status, sailing.masterDecision, sailing.portClearanceStatus, sailing.readinessStatus]);
-  const { busy, flash, run } = useAction(async () => { await detail.reload(); await onDone(); });
+  // Status arrives from the page's single batch request; after an action the page reloads the list and statuses together.
+  const { busy, flash, run } = useAction(onDone);
   const [master, setMaster] = useState('');
   const [permit, setPermit] = useState('');
-  const c: CommercialStatus | undefined = detail.data?.commercial;
+  const c: CommercialStatus | undefined = status?.commercial;
   const departed = Date.parse(sailing.departsAt) <= Date.now();
   const need = !reason.trim();
   return (
@@ -38,7 +38,7 @@ function SailingCard({ sailing, reason, onDone }: { sailing: SailingControl; rea
         <div className="row" style={{ flexWrap: 'wrap' }}>
           <span className="pill pill-neutral">{t(`p8Sail_${sailing.status}`)}</span>
           {c && <span className={`pill pill-wrap ${c.thresholdMet ? 'pill-green' : 'pill-gold'}`}>{t(`p8Min_${c.state}`)}</span>}
-          {detail.data && <span className="pill pill-wrap pill-neutral">{t(`p8Gate_${detail.data.gate}`)}</span>}
+          {status && <span className="pill pill-wrap pill-neutral">{t(`p8Gate_${status.gate}`)}</span>}
         </div>
       </div>
       {c && <p className="muted small" style={{ marginTop: 6 }}>{t('p8MinDetail').replace('{q}', String(c.qualifyingTickets)).replace('{min}', String(c.thresholdTickets)).replace('{r}', String(c.reservedTickets))
@@ -79,7 +79,12 @@ export default function SailingControlView() {
   const [from, setFrom] = useState(todayRiyadh(-1));
   const [to, setTo] = useState(todayRiyadh(7));
   const [reason, setReason] = useState('');
-  const sailings = useLoad(() => listSailingControl(`${from}T00:00:00+03:00`, `${to}T23:59:59+03:00`), [from, to]);
+  // Two requests for the whole page: the sailing list, then every sailing's minimum status and gate in one batch
+  // (previously two extra requests per sailing card — an N+1 that grew with the date range).
+  const sailings = useLoad(async () => {
+    const list = await listSailingControl(`${from}T00:00:00+03:00`, `${to}T23:59:59+03:00`);
+    return { list, statuses: await sailingControlStatus(list.map(x => x.id)) };
+  }, [from, to]);
   const templates = useLoad(listScheduleTemplates, []);
   const [gen, setGen] = useState({ from: todayRiyadh(1), to: todayRiyadh(14) });
   const tools = useAction(sailings.reload);
@@ -114,8 +119,8 @@ export default function SailingControlView() {
         </section>
         {sailings.error && <div className="notice danger" role="alert">{t(sailings.error)}</div>}
         {!sailings.data && !sailings.error && <div className="card card-pad" role="status">{t('p4Loading')}</div>}
-        {sailings.data?.length === 0 && <div className="card card-pad"><div className="no-data">{t('p8NoRows')}</div></div>}
-        {sailings.data?.map(s => <SailingCard key={s.id} sailing={s} reason={reason} onDone={sailings.reload} />)}
+        {sailings.data?.list.length === 0 && <div className="card card-pad"><div className="no-data">{t('p8NoRows')}</div></div>}
+        {sailings.data?.list.map(s => <SailingCard key={s.id} sailing={s} status={sailings.data?.statuses.get(s.id)} reason={reason} onDone={sailings.reload} />)}
       </RequireRoles>
     </>
   );

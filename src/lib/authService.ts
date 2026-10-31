@@ -59,6 +59,9 @@ export interface SignUpInput {
    *  backend `profiles.display_name` naming in migration 0001_identity.sql;
    *  its human meaning is still provisional per docs/atco-pending-business-rules.md). */
   readonly displayName?: string;
+  /** True when the person confirmed they are 18 or older (the app's age of consent).
+   *  Recorded as user metadata `age_confirmed_18_plus` with a timestamp; the date of birth itself is never sent. */
+  readonly ageConfirmed?: boolean;
 }
 
 export interface SignUpOutput {
@@ -181,10 +184,11 @@ export async function signUp(input: SignUpInput, env?: EnvSource): Promise<SignU
   const client = requireAuthClient(env);
   const email = requireEmail(input.email);
   const password = requirePassword(input.password);
-  const options =
-    input.displayName === undefined || input.displayName.trim() === ''
-      ? undefined // no display name supplied (or explicitly empty): send NO metadata
-      : { data: { display_name: input.displayName.trim() } };
+  const metadata: Record<string, unknown> = {};
+  if (input.displayName !== undefined && input.displayName.trim() !== '') metadata.display_name = input.displayName.trim();
+  if (input.ageConfirmed) { metadata.age_confirmed_18_plus = true; metadata.age_confirmed_at = new Date().toISOString(); }
+  // Nothing to record (no display name, no age confirmation): send NO metadata at all.
+  const options = Object.keys(metadata).length > 0 ? { data: metadata } : undefined;
   const { data, error } = await client.auth.signUp({
     email,
     password,

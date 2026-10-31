@@ -156,6 +156,15 @@ describe('signUp', () => {
     }
   });
 
+  it('records the 18+ age confirmation (never a date of birth) as user metadata', async () => {
+    mocks.auth.signUp.mockResolvedValueOnce(ok({ user: { id: 'auth-user-id' }, session }));
+    await signUp({ email: 'person@example.test', password: 'pw-example-1', displayName: 'Sami', ageConfirmed: true }, prodEnv());
+    const sent = mocks.auth.signUp.mock.calls[0][0];
+    expect(sent.options.data).toMatchObject({ display_name: 'Sami', age_confirmed_18_plus: true });
+    expect(Number.isNaN(Date.parse(sent.options.data.age_confirmed_at))).toBe(false);
+    expect(Object.keys(sent.options.data).sort()).toEqual(['age_confirmed_18_plus', 'age_confirmed_at', 'display_name']);
+  });
+
   it('flags emailConfirmationRequired when signup returns a user but no session', async () => {
     mocks.auth.signUp.mockResolvedValueOnce(ok({ user: { id: 'auth-user-id' }, session: null }));
     const result = await signUp({ email: 'person@example.test', password: 'pw-example-1' }, prodEnv());

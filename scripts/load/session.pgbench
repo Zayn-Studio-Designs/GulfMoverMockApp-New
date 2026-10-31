@@ -1,0 +1,32 @@
+-- One user request, as the hosted API runs it: role `authenticated` + the user's JWT claims + RLS.
+\set u random(1, 1000)
+\set s random(1, 180)
+\set r random(1, 100)
+BEGIN;
+SELECT set_config('request.jwt.claims', claims, true) FROM loadtest.users WHERE n = :u;
+SET LOCAL ROLE authenticated;
+\if :r <= 55
+-- Book a sailing: open future sailings with route and vessel (the booking form)
+SELECT count(*) FROM (SELECT s.id, s.departs_at, s.seat_capacity, s.seats_booked, r.origin, r.destination, v.name
+  FROM public.sailings s JOIN public.routes r ON r.id = s.route_id JOIN public.vessels v ON v.id = s.vessel_id
+  WHERE s.status = 'open' AND s.departs_at > now() ORDER BY s.departs_at LIMIT 200) x;
+\elif :r <= 75
+-- My bookings with legs and sailings
+SELECT count(*) FROM (SELECT b.id, b.reference, b.status, l.leg, s.departs_at FROM public.bookings b
+  LEFT JOIN public.booking_legs l ON l.booking_id = b.id LEFT JOIN public.sailings s ON s.id = l.sailing_id
+  WHERE b.created_by = (SELECT auth.uid()) ORDER BY b.created_at DESC LIMIT 100) x;
+\elif :r <= 90
+-- Booking detail page: status, payments, invoices, credit notes, refunds, history, tickets, batch sailing status
+SELECT count(*) FROM public.bookings b WHERE b.created_by = (SELECT auth.uid());
+SELECT count(*) FROM public.payments p JOIN public.bookings b ON b.id = p.booking_id WHERE b.created_by = (SELECT auth.uid());
+SELECT count(*) FROM public.invoices i JOIN public.bookings b ON b.id = i.booking_id WHERE b.created_by = (SELECT auth.uid());
+SELECT count(*) FROM public.credit_notes c JOIN public.bookings b ON b.id = c.booking_id WHERE b.created_by = (SELECT auth.uid());
+SELECT count(*) FROM public.refunds f JOIN public.bookings b ON b.id = f.booking_id WHERE b.created_by = (SELECT auth.uid());
+SELECT count(*) FROM public.booking_events e JOIN public.bookings b ON b.id = e.booking_id WHERE b.created_by = (SELECT auth.uid());
+SELECT count(*) FROM public.tickets t WHERE t.booking_id IN (SELECT id FROM public.bookings WHERE created_by = (SELECT auth.uid()));
+SELECT count(*) FROM public.sailing_control_status(ARRAY(SELECT id FROM loadtest.sailings WHERE n IN (:s, 181 - :s)));
+\else
+-- New booking (server-priced, capacity-locked, abuse-limited)
+SELECT loadtest.try_book(id) FROM loadtest.sailings WHERE n = :s;
+\endif
+END;

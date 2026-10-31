@@ -1,5 +1,6 @@
 // Regression tests for the 0-2 stability batch: crash recovery, damaged saved data, the tour
 // bounce-back, the signed-out help button, the camera off/on race and spreadsheet formula injection.
+import { confirmAge, enterAdultDob } from './ageGate';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -23,6 +24,7 @@ function renderSignedOut(path = '/') {
 
 async function renderApp(path = '/') {
   const view = renderSignedOut(path);
+  confirmAge();
   fireEvent.click(screen.getByRole('button', { name: 'Explore as demo guest' }));
   await screen.findAllByRole('navigation', { name: 'Main navigation' });
   return view;
@@ -78,6 +80,7 @@ describe('damaged saved data', () => {
     fireEvent.change(screen.getByLabelText('Company name'), { target: { value: 'Keep Co.' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'harbour2026' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'harbour2026' } });
+    enterAdultDob();
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     await screen.findByRole('heading', { level: 1, name: 'Home' });
     first.unmount();
@@ -91,6 +94,7 @@ describe('damaged saved data', () => {
     renderSignedOut('/signin');
     fireEvent.change(await screen.findByLabelText('Email or username'), { target: { value: 'keep.me' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'harbour2026' } });
+    confirmAge();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
     // Loading never rewrites the saved list, and a copy of the damaged original is kept.
@@ -109,6 +113,7 @@ describe('damaged saved data', () => {
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'harbour2026' } });
     const restore = silenceErrors();
     try {
+      enterAdultDob();
       fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
       expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
     } finally { restore(); }
@@ -216,7 +221,9 @@ describe('crash recovery', () => {
           </MemoryRouter>
         </AppProviders>,
       );
-      fireEvent.click(await screen.findByRole('button', { name: 'Explore as demo guest' }));
+      await screen.findByRole('button', { name: 'Explore as demo guest' });
+      confirmAge();
+      fireEvent.click(screen.getByRole('button', { name: 'Explore as demo guest' }));
       expect(await screen.findByRole('alert')).toHaveTextContent('This screen could not be shown');
       expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
       const nav = screen.getAllByRole('navigation', { name: 'Main navigation' })[0];

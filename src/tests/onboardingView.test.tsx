@@ -1,3 +1,4 @@
+import { confirmAge, enterAdultDob } from './ageGate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -305,6 +306,7 @@ describe('authentication boundary', () => {
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.test' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw-real-1' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'pw-real-1' } });
+    enterAdultDob();
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
     expect(await screen.findByText('Check your email')).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Company details' })).toBeNull();
@@ -319,6 +321,7 @@ describe('authentication boundary', () => {
     await screen.findByRole('heading', { name: 'Sign in' });
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'admin@example.test' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw-real-1' } });
+    confirmAge();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByRole('heading', { name: 'Company registration' })).toBeTruthy();
   });
@@ -339,7 +342,9 @@ describe('production vs demo', () => {
   it('demo mode keeps its offline behaviour: no Supabase client, explanatory card, no production nav entry', async () => {
     vi.unstubAllEnvs();
     renderApp('/signin');
-    fireEvent.click(await screen.findByText('Explore as demo guest'));
+    await screen.findByText('Explore as demo guest');
+    confirmAge();
+    fireEvent.click(screen.getByText('Explore as demo guest'));
     await screen.findByRole('heading', { name: 'Home' });
     expect(screen.queryByText(/Live in this build/)).toBeNull();
     expect(screen.queryByRole('link', { name: /Company registration/ })).toBeNull();
@@ -350,7 +355,9 @@ describe('production vs demo', () => {
   it('the demo /onboarding route explains the production-only feature without any network call', async () => {
     vi.unstubAllEnvs();
     const signIn = renderApp('/signin');
-    fireEvent.click(await screen.findByText('Explore as demo guest'));
+    await screen.findByText('Explore as demo guest');
+    confirmAge();
+    fireEvent.click(screen.getByText('Explore as demo guest'));
     await screen.findByRole('heading', { name: 'Home' });
     signIn.unmount(); // the demo session stays in localStorage, as for a returning visitor
     renderApp('/onboarding');

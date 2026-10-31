@@ -1,3 +1,4 @@
+import { confirmAge } from './ageGate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -390,8 +391,8 @@ describe('My bookings (server-backed)', () => {
   it('lists the caller\'s reservations and opens the saved record with separate status dimensions', async () => {
     approvedMember();
     fake.tables.bookings = ok([booking]);
-    fake.tables['rpc:sailing_commercial_status'] = ok([{ reserved_tickets: 2, qualifying_tickets: 0, qualifying_revenue_halala: 0, threshold_tickets: 4, threshold_revenue_halala: 200000, threshold_met: false, confirmation_deadline: inHours(6), commercial_state: 'awaiting_minimum' }]);
-    fake.tables['rpc:sailing_boarding_gate'] = ok('not_ready');
+    // One batch request for every leg's minimum status and boarding gate (no per-leg requests).
+    fake.tables['rpc:sailing_control_status'] = ok([{ sailing_id: 's-1', reserved_tickets: 2, qualifying_tickets: 0, qualifying_revenue_halala: 0, threshold_tickets: 4, threshold_revenue_halala: 200000, threshold_met: false, confirmation_deadline: inHours(6), commercial_state: 'awaiting_minimum', boarding_gate: 'not_ready' }]);
     renderApp('/bookings');
     expect(await screen.findByText('GM-1A2B3C4D')).toBeTruthy();
     expect(screen.getByText('Reserved — awaiting payment')).toBeTruthy();
@@ -458,7 +459,9 @@ describe('demo mode is unchanged', () => {
     vi.unstubAllEnvs();
     localStorage.setItem('gm-demo-tour-seen', JSON.stringify(['U-guest']));
     const signIn = renderApp('/signin');
-    fireEvent.click(await screen.findByText('Explore as demo guest'));
+    await screen.findByText('Explore as demo guest');
+    confirmAge();
+    fireEvent.click(screen.getByText('Explore as demo guest'));
     await screen.findByRole('heading', { name: 'Home' });
     signIn.unmount();
     const book = renderApp('/book');
