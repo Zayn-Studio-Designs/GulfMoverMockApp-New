@@ -44,6 +44,14 @@ Templates: `deploy/env/{development,staging,production}.env.example` (placeholde
    `expire_stale_holds()` every 5 minutes; `notifications-dispatch` every minute once a channel
    is enabled; `apply_retention(false)` daily once ATCO approves retention periods.
 
+## 3b. Environment separation (enforced)
+
+- **Development server:** `npm run dev` refuses a hosted Supabase project unless `VITE_ALLOW_REMOTE_DATABASE=true` is set. It always refuses the production project named in `VITE_PRODUCTION_PROJECT_REF`, even with that override.
+- **Tests:** they never read `.env`/`.env.local` (`vitest.config.ts` forces demo mode). Database tests only accept `127.0.0.1`/`localhost`.
+- **Release check:** set `GM_PRODUCTION_PROJECT_REF` (not a secret) in CI and on the build host. `npm run check:env -- staging` then fails if staging points at production; `-- production` fails if production points anywhere else.
+- **Release build:** `npm run build:release` writes the real Supabase, payments-function and error-collector origins into the shipped Content-Security-Policy (`scripts/release/write-csp.mjs`), and fails if one would be blocked.
+- **nginx:** copy `deploy/nginx-security-headers.conf` (after `write-csp.mjs --nginx-headers <out>`) to `/etc/nginx/gulf-mover-security-headers.conf`. Every location includes it, because nginx drops server-level headers in any location that sets its own.
+
 ## 4. Migration sequencing and rollback
 
 - Migrations are **additive and forward-only**; Phase 8 never edits an earlier migration file.
@@ -53,6 +61,18 @@ Templates: `deploy/env/{development,staging,production}.env.example` (placeholde
   If a migration fails mid-way it rolls back as a single transaction.
 - Disaster rollback = restore the pre-release backup (see backup runbook) — data written after
   the backup is lost, so prefer corrective migrations.
+
+### Rollback procedure (what to actually do)
+
+1. **App only (almost always enough):** redeploy the previous `dist/`. On Cloudflare Pages or Netlify use "Rollback to this deploy". On nginx, keep the last few release folders and switch the symlink back. Then check `/build-info.json` shows the old commit. This takes about a minute and loses no data.
+2. **Check database compatibility:**
+   - Migrations are additive, and the previous release keeps working on the newer schema. The audit verified this: the pre-audit database suites pass on the post-audit schema.
+   - Do **not** roll the database back just because the app was rolled back.
+3. **Only if a database change itself must be withdrawn:**
+   - Run its tested down-script inside a transaction (for the audit: `supabase/rollback/20261103_production_readiness_down.sql`).
+   - Delete its ledger rows as that file says.
+   - Rehearsed locally: down-script → 39 pre-audit DB tests pass → roll forward → 69 pass.
+4. **Never** `DROP` business data in production. Never restore a backup over the live project as a rollback.
 
 ## 5. Health and monitoring
 

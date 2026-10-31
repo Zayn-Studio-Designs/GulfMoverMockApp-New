@@ -1,3 +1,4 @@
+import { enterAdultDob } from './ageGate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -146,7 +147,7 @@ describe('B. session restoration races (deterministic)', () => {
     svc.signIn.mockResolvedValueOnce({ userId: 'auth-user-2', session: sessionOf('typed@example.test', 'auth-user-2') });
     renderProbe();
 
-    await act(async () => { await expect(api.signIn('typed@example.test', 'pw-real-1')).resolves.toBeNull(); });
+    await act(async () => { await expect(api.signIn('typed@example.test', 'pw-real-1', true, true)).resolves.toBeNull(); });
     await act(async () => { restore.resolve(null); await restore.promise; });
 
     expect(api.user?.email).toBe('typed@example.test');
@@ -190,8 +191,8 @@ describe('C. unavailable authentication is never reported as success', () => {
     renderProbe();
     await waitFor(() => expect(api.authUnavailable?.reason).toBe('config-error'));
 
-    await expect(api.signIn('sami@example.test', 'pw-real-1')).resolves.toBe('errAuthUnavailable');
-    await expect(api.signUp({ email: 'sami@example.test', username: '', company: '', password: 'pw-real-1', confirm: 'pw-real-1' })).resolves.toBe('errAuthUnavailable');
+    await expect(api.signIn('sami@example.test', 'pw-real-1', true, true)).resolves.toBe('errAuthUnavailable');
+    await expect(api.signUp({ email: 'sami@example.test', username: '', company: '', password: 'pw-real-1', confirm: 'pw-real-1', dateOfBirth: '1990-05-01' })).resolves.toBe('errAuthUnavailable');
     await expect(api.requestResetEmail('sami@example.test')).resolves.toBe('errAuthUnavailable');
     await expect(api.signOut()).resolves.toBe('errAuthUnavailable');
     expect(api.user).toBeNull();
@@ -207,10 +208,10 @@ describe('C. unavailable authentication is never reported as success', () => {
     await waitFor(() => expect(api.sessionLoading).toBe(false));
 
     let signInResult: unknown;
-    await act(async () => { signInResult = await api.signIn('sami@example.test', 'pw-real-1'); });
+    await act(async () => { signInResult = await api.signIn('sami@example.test', 'pw-real-1', true, true); });
     expect(signInResult).toBe('errAuthUnavailable');
     let signUpResult: unknown;
-    await act(async () => { signUpResult = await api.signUp({ email: 'new@example.test', username: '', company: '', password: 'pw-real-1', confirm: 'pw-real-1' }); });
+    await act(async () => { signUpResult = await api.signUp({ email: 'new@example.test', username: '', company: '', password: 'pw-real-1', confirm: 'pw-real-1', dateOfBirth: '1990-05-01' }); });
     expect(signUpResult).toBe('errAuthUnavailable');
     expect(api.user).toBeNull();
     expect(api.confirmationPending).toBeNull();
@@ -223,8 +224,8 @@ describe('C. unavailable authentication is never reported as success', () => {
     svc.signUp.mockRejectedValueOnce(new TypeError('boom'));
     renderProbe();
     await waitFor(() => expect(api.sessionLoading).toBe(false));
-    await expect(api.signIn('sami@example.test', 'pw-real-1')).resolves.toBe('errAuthNetwork');
-    await expect(api.signUp({ email: 'new@example.test', username: '', company: '', password: 'pw-real-1', confirm: 'pw-real-1' })).resolves.toBe('errAuthGeneric');
+    await expect(api.signIn('sami@example.test', 'pw-real-1', true, true)).resolves.toBe('errAuthNetwork');
+    await expect(api.signUp({ email: 'new@example.test', username: '', company: '', password: 'pw-real-1', confirm: 'pw-real-1', dateOfBirth: '1990-05-01' })).resolves.toBe('errAuthGeneric');
     expect(api.user).toBeNull();
   });
 
@@ -232,7 +233,7 @@ describe('C. unavailable authentication is never reported as success', () => {
     stubProductionEnv();
     renderProbe();
     await waitFor(() => expect(api.sessionLoading).toBe(false));
-    await expect(api.signIn('sami', 'pw-real-1')).resolves.toBe('errEmail');
+    await expect(api.signIn('sami', 'pw-real-1', true, true)).resolves.toBe('errEmail');
     expect(svc.signIn).not.toHaveBeenCalled();
   });
 
@@ -294,6 +295,7 @@ describe('D. sign-out, confirmation notice, labels and configuration screen', ()
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'confirm@example.test' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw-real-1' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'pw-real-1' } });
+    enterAdultDob();
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
 
     expect(await screen.findByText('Check your email')).toBeTruthy();
@@ -313,7 +315,7 @@ describe('D. sign-out, confirmation notice, labels and configuration screen', ()
     svc.signUp.mockResolvedValueOnce({ userId: 'auth-user-1', email: 'confirm@example.test', session: null, emailConfirmationRequired: true });
     renderProbe();
     await waitFor(() => expect(api.sessionLoading).toBe(false));
-    await act(async () => { await api.signUp({ email: 'confirm@example.test', username: '', company: '', password: 'pw-real-1', confirm: 'pw-real-1' }); });
+    await act(async () => { await api.signUp({ email: 'confirm@example.test', username: '', company: '', password: 'pw-real-1', confirm: 'pw-real-1', dateOfBirth: '1990-05-01' }); });
     expect(api.confirmationPending).toBe('confirm@example.test');
     act(() => handler()('SIGNED_OUT', null));
     expect(api.confirmationPending).toBeNull();
@@ -345,8 +347,8 @@ describe('D. sign-out, confirmation notice, labels and configuration screen', ()
     svc.signUp.mockRejectedValueOnce(new service.AuthOperationError('Password is known to be weak', 'weak_password', 422));
     renderProbe();
     await waitFor(() => expect(api.user).not.toBeNull());
-    await act(async () => { await api.signIn('tok@example.test', 'pw-Secret-777'); });
-    await act(async () => { await api.signUp({ email: 'tok@example.test', username: '', company: '', password: 'pw-Secret-888', confirm: 'pw-Secret-888' }); });
+    await act(async () => { await api.signIn('tok@example.test', 'pw-Secret-777', true, true); });
+    await act(async () => { await api.signUp({ email: 'tok@example.test', username: '', company: '', password: 'pw-Secret-888', confirm: 'pw-Secret-888', dateOfBirth: '1990-05-01' }); });
     const logged = spies.flatMap(spy => spy.mock.calls.flat()).map(arg => (arg instanceof Error ? arg.message : String(arg))).join('\n');
     for (const secret of ['pw-Secret-777', 'pw-Secret-888', 'secret-access-token-xyz', 'secret-refresh-xyz']) {
       expect(logged).not.toContain(secret);
@@ -488,7 +490,7 @@ describe('demo-mode regression', () => {
 
   it('demo sign-out resolves null after clearing the local session', async () => {
     renderProbe();
-    await act(async () => { await api.signInAsGuest(); });
+    await act(async () => { await api.signInAsGuest(true); });
     await waitFor(() => expect(api.user).not.toBeNull());
     let result: unknown = 'unset';
     await act(async () => { result = await api.signOut(); });

@@ -14,13 +14,26 @@ describe('security headers', () => {
     const html = read('index.html');
     const script = /<script>([\s\S]*?)<\/script>/.exec(html)![1];
     const hash = createHash('sha256').update(script).digest('base64');
-    for (const file of ['public/_headers', 'deploy/nginx.conf']) {
+    for (const file of ['public/_headers', 'deploy/nginx-security-headers.conf']) {
       const text = read(file);
       expect(text).toContain(`'sha256-${hash}'`);
       expect(text).not.toMatch(/script-src[^;]*'unsafe-inline'/);
       expect(text).toContain("frame-ancestors 'none'");
       expect(text).toContain('Strict-Transport-Security');
     }
+  });
+});
+
+describe('nginx security headers reach every response (audit fix)', () => {
+  it('every location that sets a header also includes the security-header snippet', () => {
+    // nginx: a location with ANY add_header inherits NONE from the server level.
+    const conf = read('deploy/nginx.conf');
+    const locations = conf.match(/location[^{]*\{[^}]*\}/g) ?? [];
+    expect(locations.length).toBeGreaterThanOrEqual(4);
+    for (const block of locations) {
+      if (/add_header/.test(block)) expect(block).toContain('include /etc/nginx/gulf-mover-security-headers.conf;');
+    }
+    expect(conf).not.toMatch(/^\s*add_header (Content-Security-Policy|Strict-Transport-Security)/m); // not at server level only
   });
 });
 

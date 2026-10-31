@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAppConfig, type EnvSource } from './supabase';
+import { reportRequestFailure } from './monitoring';
 
 /**
  * Shared plumbing for the Phase 3 production data services (company review, operations,
@@ -44,9 +45,14 @@ export type DataErrorKind =
   | 'safety-review-required'
   | 'vessel-conflict'
   | 'payload-exceeded'
-  | 'no-tariff';
+  | 'no-tariff'
+  // Abuse limits (SQLSTATE 54000): expected outcomes, not errors
+  | 'rate-limited'
+  | 'too-many-holds';
 
 const UNCERTAIN: ReadonlySet<DataErrorKind> = new Set(['network', 'server', 'unexpected-response', 'unknown']);
+/** Failures that indicate a bug or outage (reported to error tracking), not a user mistake. */
+const REPORTED_KINDS: ReadonlySet<DataErrorKind> = new Set(['server', 'unexpected-response', 'not-deployed', 'unknown']);
 
 export class DataServiceError extends Error {
   readonly kind: DataErrorKind;
@@ -93,6 +99,8 @@ const PREFIXES: ReadonlyArray<readonly [string, DataErrorKind]> = [
   ['payload_capacity_unknown', 'payload-exceeded'],
   ['no active tariff', 'no-tariff'],
   ['no_matching_tariff', 'no-tariff'],
+  ['rate_limited', 'rate-limited'],
+  ['too_many_unpaid_holds', 'too-many-holds'],
 ];
 
 export function classifyDataError(error: PostgrestLikeError | null | undefined, status: number | null | undefined): DataServiceError {
@@ -147,7 +155,14 @@ export async function run<T>(request: PromiseLike<{ data: T | null; error: Postg
   } catch {
     throw new DataServiceError('network');
   }
-  if (response.error) throw classifyDataError(response.error, response.status);
+  if (response.error) {
+    const failure = classifyDataError(response.error, response.status);
+    // Server-side failures are tracked; expected outcomes (validation, permission, sold out) are not.
+    if (REPORTED_KINDS.has(failure.kind)) {
+      reportRequestFailure(failure.kind, response.status, typeof response.error.code === 'string' ? response.error.code : '');
+    }
+    throw failure;
+  }
   return { data: response.data, count: response.count ?? null };
 }
 

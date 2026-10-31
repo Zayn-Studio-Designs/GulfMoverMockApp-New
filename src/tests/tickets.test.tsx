@@ -1,3 +1,4 @@
+import { confirmAge } from './ageGate';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, test } from 'vitest';
@@ -32,7 +33,7 @@ async function renderApp(path = '/') {
   const view = renderSignedOut(path);
   // A previous render in the same test may already have signed the demo guest in.
   const guest = screen.queryByRole('button', { name: 'Explore as demo guest' });
-  if (guest) fireEvent.click(guest);
+  if (guest) { confirmAge(); fireEvent.click(guest); }
   await screen.findAllByRole('navigation', { name: 'Main navigation' });
   return view;
 }

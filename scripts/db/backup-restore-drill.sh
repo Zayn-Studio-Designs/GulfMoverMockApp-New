@@ -78,5 +78,14 @@ BROKEN=$(dst -c "select count(*) from (select icv, previous_hash, lag(h) over (o
   union all select icv, previous_hash, document_hash from public.credit_notes where icv is not null) d) x where prev is not null and previous_hash <> prev")
 log "smoke: document hash-chain breaks -> $BROKEN"
 [ "$BROKEN" = "0" ] || { log "verify: hash chain broken"; exit 1; }
+# Scheduled jobs live in the `cron` schema, which is NOT part of the application dump: a restored
+# database must have them re-created (same SQL as migration 20261103000002), or holds never expire.
+if [ "$(dst -c "select count(*) from pg_available_extensions where name = 'pg_cron'")" = "1" ]; then
+  dst -c "create extension if not exists pg_cron" >/dev/null
+  dst -c "select cron.schedule('gm-expire-stale-holds', '* * * * *', 'select public.expire_stale_holds()')" >/dev/null
+  JOBS=$(dst -c "select count(*) from cron.job where jobname = 'gm-expire-stale-holds' and active")
+  log "smoke: scheduled jobs re-created after restore -> $JOBS"
+  [ "$JOBS" = "1" ] || { log "verify: scheduled job missing after restore"; exit 1; }
+fi
 log "RESULT: PASS (report: $REPORT)"
 [ "${GM_DRILL_KEEP:-0}" = "1" ] || docker rm -f "$DST_NAME" >/dev/null 2>&1 || true

@@ -12,9 +12,10 @@
 //   MOYASAR_TEST_SECRET_KEY / MOYASAR_TEST_WEBHOOK_TOKEN (and *_LIVE_* when authorised),
 //   TAP_TEST_SECRET_KEY (and TAP_LIVE_SECRET_KEY when authorised).
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
-import { handleCheckout, handleStatusPoll, handleWebhook, type PaymentsDb } from '../_shared/payments/handler.ts';
+import { handleCheckout, handleReconcile, handleStatusPoll, handleWebhook, type PaymentsDb } from '../_shared/payments/handler.ts';
 import { selectProvider } from '../_shared/payments/registry.ts';
 import type { ProviderId, ProviderPayment } from '../_shared/payments/types.ts';
+import { buildServerEvent, logServerEvent, timingSafeEqual } from '../_shared/observability.ts';
 
 declare const Deno: { env: { get(k: string): string | undefined; toObject(): Record<string, string> }; serve(h: (r: Request) => Promise<Response>): void };
 
@@ -59,6 +60,9 @@ function dbFor(authHeader: string | null): PaymentsDb {
         p_fee_halala: a.feeHalala, p_verified_via: a.verifiedVia, p_payload_sha256: a.payloadSha256, p_failure_reason: a.failureReason,
       })) as string;
     },
+    async listPaymentsToReconcile(olderThanMinutes, limit) {
+      return unwrap(await admin.rpc('list_payments_to_reconcile', { p_older_than_minutes: olderThanMinutes, p_limit: limit })) as never;
+    },
   };
 }
 
@@ -98,17 +102,30 @@ Deno.serve(async (req: Request) => {
       const r = await handleStatusPoll(body, { db: dbFor(req.headers.get('Authorization')), providerFor });
       return new Response(JSON.stringify(r.body), { status: r.status, headers: { ...cors, 'Content-Type': 'application/json' } });
     }
+    if (path === '/reconcile') {
+      // Scheduled job only: the service role key is required (compared in constant time).
+      if (!env.SUPABASE_SERVICE_ROLE_KEY || !timingSafeEqual(req.headers.get('Authorization') ?? '', `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`)) return json(401, { error: 'unauthorized' });
+      const mode = (env.GM_PAYMENTS_LIVE_ENABLED === 'true' ? 'live' : 'sandbox') as 'sandbox' | 'live';
+      const r = await handleReconcile({ db: dbFor(null), providerFor: (id, m) => providerFor(id, m ?? mode) });
+      if (r.status !== 200) await logServerEvent(buildServerEvent('payments', '/reconcile', 'reconciliation had errors', 'warning', r.body as never, env.GM_RELEASE), env);
+      return json(r.status, r.body);
+    }
     const hook = /^\/webhook\/([a-z-]+)$/.exec(path);
     if (hook) {
       const raw = await req.text();
       const mode = (env.GM_PAYMENTS_LIVE_ENABLED === 'true' ? 'live' : 'sandbox') as 'sandbox' | 'live';
       const r = await handleWebhook(hook[1], raw, req.headers, { db: dbFor(null), providerFor: id => providerFor(id, mode) });
+      // Rejected (unverified) notifications are a security signal: log them so repeated attempts alert.
+      if (r.status === 401 || r.status >= 500) {
+        await logServerEvent(buildServerEvent('payments', `webhook:${hook[1]}`, `webhook responded ${r.status}`, r.status === 401 ? 'warning' : 'error',
+          { status: r.status }, env.GM_RELEASE), env);
+      }
       return json(r.status, r.body);
     }
     return json(404, { error: 'not_found' });
   } catch (e) {
-    // Never echo provider responses or secrets; log a short reason only.
-    console.error('payments function error', e instanceof Error ? e.message.slice(0, 200) : 'unknown');
+    // Never echo provider responses or secrets: a scrubbed, fingerprinted event only.
+    await logServerEvent(buildServerEvent('payments', new URL(req.url).pathname.replace(/^.*\/payments/, '') || '/', e, 'error', undefined, env.GM_RELEASE), env);
     return json(500, { error: 'internal_error' });
   }
 });

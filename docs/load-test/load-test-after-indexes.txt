@@ -1,0 +1,22 @@
+Gulf Mover load test (after-indexes) — 2026-10-31T12:54:30Z
+host: 4 CPU, 15 GB RAM (shared laptop/container — NOT production hardware); pool 20 connections
+schema: 20261103000006
+100 active users (target 33 req/s): 2036 requests, 33.953852 req/s achieved, failed 0, latency p50 2.4 ms, p95 10.7 ms, p99 18.4 ms, max 31.8 ms
+500 active users (target 166 req/s): 9736 requests, 162.313421 req/s achieved, failed 0, latency p50 2.0 ms, p95 8.9 ms, p99 12.4 ms, max 96.7 ms
+1000 active users (target 333 req/s): 20052 requests, 334.340401 req/s achieved, failed 0, latency p50 2.0 ms, p95 9.2 ms, p99 13.0 ms, max 113.4 ms
+  slowest statements at 1,000 users (mean ms | calls | statement):
+    5.26 | 1 | select public.expire_stale_holds()
+    3.40 | 1989 | SELECT loadtest.try_book(id) FROM loadtest.sailings WHERE n = $1
+    1.88 | 3015 | SELECT count(*) FROM public.sailing_control_status(ARRAY(SELECT id FROM loadtest.sailings WHERE n IN ($1, $2 -
+    0.22 | 11088 | SELECT count(*) FROM (SELECT s.id, s.departs_at, s.seat_capacity, s.seats_booked, r.origin, r.destination, v.n
+    0.08 | 3960 | SELECT count(*) FROM (SELECT b.id, b.reference, b.status, l.leg, s.departs_at FROM public.bookings b LEFT JOIN
+    0.07 | 3015 | SELECT count(*) FROM public.tickets t WHERE t.booking_id IN (SELECT id FROM public.bookings WHERE created_by =
+saturation (unthrottled, 20 connections): 1925.963711 req/s, latency p50 6.5 ms, p95 37.3 ms, p99 49.2 ms, max 119.7 ms
+booking storm (1,000 attempts on 5 sailings, 50 at once): latency p50 16.9 ms, p95 67.3 ms, p99 172.0 ms, max 200.0 ms, failed 0
+invariants:
+  oversold sailings: 0
+  seat counter drift: 0
+  storm sailings booked: 12/12 12/12 12/12 12/12 12/12
+  users above the unpaid-hold limit: 0
+  bookings created: 2160
+report: /home/user/gulfmovermockapp/docs/load-test/load-test-after-indexes.txt

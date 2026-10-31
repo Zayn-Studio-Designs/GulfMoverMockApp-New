@@ -48,6 +48,8 @@ export interface PaymentsDb {
   /** Service role. */
   attachCheckout(paymentId: string, providerPaymentId: string, checkoutUrl: string): Promise<void>;
   applyResult(args: ApplyArgs): Promise<string>;
+  /** Service role: payments still pending after `olderThanMinutes` (for reconciliation). */
+  listPaymentsToReconcile?(olderThanMinutes: number, limit: number): Promise<PaymentRecord[]>;
 }
 
 export type HandlerResult = { readonly status: number; readonly body: Record<string, unknown> };
@@ -127,4 +129,38 @@ export async function handleStatusPoll(
     verifiedVia: 'server_fetch', payloadSha256: null, failureReason: payment.failureReason,
   });
   return { status: 200, body: { status: payment.status, outcome } };
+}
+
+/**
+ * Scheduled reconciliation (service role): for every payment still pending after 10 minutes,
+ * ask the provider for its real status and apply it through the same idempotent path as the
+ * status poll. Covers a lost webhook when the customer never returned to the site. One
+ * provider failure never stops the batch; it is counted and retried on the next run.
+ */
+export async function handleReconcile(
+  deps: { db: PaymentsDb; providerFor: (id: ProviderId, mode: 'sandbox' | 'live') => PaymentProvider | null },
+  options: { olderThanMinutes?: number; limit?: number } = {},
+): Promise<HandlerResult> {
+  if (!deps.db.listPaymentsToReconcile) return { status: 501, body: { error: 'reconcile_not_supported' } };
+  const rows = await deps.db.listPaymentsToReconcile(options.olderThanMinutes ?? 10, options.limit ?? 50);
+  const counts = { checked: rows.length, applied: 0, still_pending: 0, provider_unavailable: 0, errors: 0 };
+  for (const record of rows) {
+    if (!record.provider_payment_id) continue;
+    const provider = deps.providerFor(record.provider, record.mode);
+    if (!provider) { counts.provider_unavailable += 1; continue; }
+    try {
+      const payment = await provider.fetchPayment(record.provider_payment_id);
+      if (payment.status === 'pending') { counts.still_pending += 1; continue; }
+      await deps.db.applyResult({
+        provider: provider.id, eventId: `fetch:${payment.providerPaymentId}:${payment.status}`, eventType: 'reconcile_fetch',
+        merchantReference: payment.merchantReference, providerPaymentId: payment.providerPaymentId, status: payment.status,
+        amountHalala: payment.amountHalala, currency: payment.currency, feeHalala: payment.feeHalala,
+        verifiedVia: 'server_fetch', payloadSha256: null, failureReason: payment.failureReason,
+      });
+      counts.applied += 1;
+    } catch {
+      counts.errors += 1;
+    }
+  }
+  return { status: counts.errors > 0 ? 207 : 200, body: counts };
 }

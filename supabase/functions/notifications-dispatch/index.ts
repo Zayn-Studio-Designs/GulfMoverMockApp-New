@@ -6,6 +6,7 @@
 //   WHATSAPP_ACCESS_TOKEN + WHATSAPP_PHONE_NUMBER_ID + WHATSAPP_API_VERSION + WHATSAPP_TEMPLATE_PREFIX
 // A channel only receives queued rows once enabled in platform_settings('notifications.channels').
 import { createClient } from 'npm:@supabase/supabase-js@2.118.0';
+import { buildServerEvent, logServerEvent, timingSafeEqual } from '../_shared/observability.ts';
 import { createResendEmail, createUnifonicSms, createWhatsAppCloud, dispatchOutbox, type Channel, type MessageProvider, type OutboxDb } from '../_shared/messaging/providers.ts';
 
 declare const Deno: { env: { toObject(): Record<string, string> }; serve(h: (r: Request) => Promise<Response>): void };
@@ -13,7 +14,10 @@ const env = Deno.env.toObject();
 
 Deno.serve(async (req: Request) => {
   // Only the service role may trigger a dispatch run.
-  if (req.headers.get('Authorization') !== `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`) return new Response('unauthorized', { status: 401 });
+  if (!env.SUPABASE_SERVICE_ROLE_KEY || !timingSafeEqual(req.headers.get('Authorization') ?? '', `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`)) {
+    return new Response('unauthorized', { status: 401 });
+  }
+  try {
   const admin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   const db: OutboxDb = {
     async claim(limit) {
@@ -36,5 +40,14 @@ Deno.serve(async (req: Request) => {
       apiVersion: env.WHATSAPP_API_VERSION ?? 'v21.0', templatePrefix: env.WHATSAPP_TEMPLATE_PREFIX ?? 'gm_' });
   }
   const counts = await dispatchOutbox(db, providers, 50);
+  if (counts.unrecorded > 0) {
+    // Sent but not recorded: left under lease, so it may be re-sent once — surface it for alerting.
+    await logServerEvent(buildServerEvent('notifications-dispatch', 'record', 'sent messages could not be recorded', 'error', { unrecorded: counts.unrecorded }, env.GM_RELEASE), env);
+  }
   return new Response(JSON.stringify(counts), { headers: { 'Content-Type': 'application/json' } });
+  } catch (e) {
+    // A failed run leaves claimed rows to be retried by the next run (the outbox lease expires).
+    await logServerEvent(buildServerEvent('notifications-dispatch', 'run', e, 'error', undefined, env.GM_RELEASE), env);
+    return new Response(JSON.stringify({ error: 'dispatch_failed' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
 });

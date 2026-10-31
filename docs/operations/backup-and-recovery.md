@@ -15,13 +15,40 @@
 Result on 28 Oct 2026: **PASS — 47 public tables identical**, smoke checks passed, 0 hash-chain
 breaks. Dump size ≈ 676 KB for the test dataset; restore < 1 s locally.
 
+Re-run on 31 Oct 2026 (production-readiness audit), with all 35 migrations applied:
+- **PASS:** 47 tables identical, smoke checks clean, 0 hash-chain breaks.
+- **New step:** scheduled jobs re-created and verified after the restore.
+- **Timing:** about 1 s to dump and 1 s to restore for this dataset.
+
+**Important:** `pg_cron` jobs live in the `cron` schema, which is not in the application dump. After any restore, re-create them:
+- re-run the `DO` block of migration `20261103000002`
+- re-run the two `cron.schedule` calls in `docs/operations/background-jobs.md`
+
+Until then, `system_diagnostics()` reports `no_scheduled_jobs_configured`.
+
 ## Not yet verified (requires ATCO's hosted project)
 
 - Supabase managed backups / point-in-time recovery (plan-dependent) — enable and **test a
   restore into a separate project** before go-live; record RPO/RTO achieved.
 - Storage bucket (`material-attachments`) backup: Supabase does not include Storage objects in
-  database backups. Schedule an object copy (e.g. rclone/S3-compatible export) and test restore.
+  database backups. Schedule a daily object copy outside the project and test a restore.
+  - **Tool:** the CLI (`supabase storage cp -r ss:///material-attachments ./backup/<date> --experimental`) or rclone/S3 against the S3-compatible endpoint.
+  - **Credentials:** the copy needs the service role or S3 access keys; keep them in the backup system's secret store.
+  - **Status:** not run here (there's no hosted project).
 - Auth configuration (providers, redirect URLs, SMTP, MFA settings) — export and document.
+
+## How much data could be lost, and how long recovery takes (hosted Supabase)
+
+| Setup | Data loss (RPO) | Recovery time (RTO) |
+|---|---|---|
+| Free plan | No managed backups: **everything since your last own dump** | Hours (manual) |
+| Pro plan, daily backups (7 days kept) | **Up to 24 hours** of bookings and payments | Roughly 15–60 minutes plus verification; grows with database size |
+| Pro + Point-in-Time Recovery add-on | **About 2 minutes** | Similar; restore to any second within the retention window |
+| Storage objects (attachments) | Since the last object copy (daily → up to 24 hours) | Depends on volume |
+
+Payments in the gap must be reconciled against the provider dashboard (`report_payment_reconciliation`).
+
+**Recommendation:** for a booking and payment system, use PITR.
 
 ## Recommended targets (for ATCO approval)
 

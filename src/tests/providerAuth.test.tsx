@@ -1,3 +1,4 @@
+import { confirmAge, enterAdultDob } from './ageGate';
 import { beforeEach, describe, expect, test } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -50,6 +51,7 @@ describe('simulated provider flow (frontend only — no real OAuth)', () => {
   test('Google: disabled while running, connecting → success → signed in to the demo', async () => {
     renderAuth();
     const google = screen.getByRole('button', { name: 'Sign in with Google' });
+    confirmAge();
     fireEvent.click(google);
 
     // Duplicate clicks are blocked: the provider buttons are disabled during the sequence.
@@ -72,6 +74,7 @@ describe('simulated provider flow (frontend only — no real OAuth)', () => {
 
   test('Apple on sign-up shows "Account created with Apple" and completes', async () => {
     renderAuth('/signup');
+    enterAdultDob();
     fireEvent.click(screen.getByRole('button', { name: 'Sign up with Apple' }));
     const appleButton = screen.getByRole('button', { name: 'Sign up with Apple' });
     expect(appleButton).toBeDisabled();
@@ -83,6 +86,7 @@ describe('simulated provider flow (frontend only — no real OAuth)', () => {
 
   test('cancelling during the connecting state keeps the user signed out', async () => {
     renderAuth();
+    confirmAge();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with Google' }));
     await waitFor(() => expect(screen.getByTestId('provider-connecting')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -94,6 +98,7 @@ describe('simulated provider flow (frontend only — no real OAuth)', () => {
 
   test('sign-out after a provider session returns the logged-out screen', async () => {
     renderAuth();
+    confirmAge();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with Apple' }));
     await screen.findAllByRole('navigation', { name: 'Main navigation' }, { timeout: FLOW_MS });
     // Sign out from the header's account menu, like a real user would.

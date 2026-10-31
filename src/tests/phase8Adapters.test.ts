@@ -7,7 +7,7 @@ import { selectProvider } from '../../supabase/functions/_shared/payments/regist
 import { createSandboxProvider, signSandboxPayload, SANDBOX_SIGNATURE_HEADER } from '../../supabase/functions/_shared/payments/sandbox.ts';
 import { createTapProvider, tapHashString } from '../../supabase/functions/_shared/payments/tap.ts';
 import type { ProviderPayment } from '../../supabase/functions/_shared/payments/types.ts';
-import { createResendEmail, dispatchOutbox, renderMessage, type OutboxDb, type OutboxRow } from '../../supabase/functions/_shared/messaging/providers.ts';
+import { createResendEmail, dispatchOutbox, renderMessage, withTimeout, type OutboxDb, type OutboxRow } from '../../supabase/functions/_shared/messaging/providers.ts';
 import { formatHalala, formatSar, halalaToCsvDecimal } from '../domain/money';
 import { decodeZatcaQr, encodeZatcaQr } from '../domain/zatcaQr';
 import { buildPdf, pdfSafeText } from '../domain/pdf';
@@ -167,7 +167,8 @@ describe('notification dispatcher', () => {
   it('marks sent only with a provider id; failures and missing recipients are recorded', async () => {
     const completed: Array<[string, string]> = [];
     const db: OutboxDb = {
-      claim: async () => [row({}), row({ outbox_id: 'o2', recipient: null }), row({ outbox_id: 'o3', channel: 'sms', recipient: '+966500000000' }), row({ outbox_id: 'o4' })],
+      claim: (() => { let queue = [row({}), row({ outbox_id: 'o2', recipient: null }), row({ outbox_id: 'o3', channel: 'sms', recipient: '+966500000000' }), row({ outbox_id: 'o4' })];
+        return async (n: number) => { const out = queue.slice(0, n); queue = queue.slice(n); return out; }; })(),
       complete: async (id, outcome) => { completed.push([id, outcome]); return outcome; },
     };
     let call = 0;
@@ -176,9 +177,47 @@ describe('notification dispatcher', () => {
       return call === 1 ? new Response(JSON.stringify({ id: 'msg_1' })) : new Response('{}', { status: 503 });
     }) });
     const counts = await dispatchOutbox(db, { email });
-    expect(counts).toEqual({ claimed: 4, sent: 1, failed: 2, no_recipient: 1 });
+    expect(counts).toEqual({ claimed: 4, sent: 1, failed: 2, no_recipient: 1, unrecorded: 0 });
     expect(completed).toEqual([['o1', 'sent'], ['o2', 'no_recipient'], ['o3', 'failed'], ['o4', 'failed']]);
   });
+  const queueDb = (rows: OutboxRow[], complete: OutboxDb['complete']): OutboxDb => {
+    let queue = [...rows];
+    return { claim: async n => { const out = queue.slice(0, n); queue = queue.slice(n); return out; }, complete };
+  };
+  const okEmail = () => createResendEmail({ apiKey: 'k', from: 'no-reply@example.test', appUrl: 'https://app.example',
+    fetch: vi.fn(async () => new Response(JSON.stringify({ id: 'msg_ok' }))) });
+  const noSleep = { sleep: async () => undefined };
+
+  it('a message the provider accepted is never marked failed (no duplicate send) when recording it fails transiently', async () => {
+    const outcomes: string[] = []; let failures = 2;
+    const db = queueDb([row({})], async (_id, outcome) => { if (outcome === 'sent' && failures-- > 0) throw new Error('db blip'); outcomes.push(outcome); return outcome; });
+    const counts = await dispatchOutbox(db, { email: okEmail() }, 50, noSleep);
+    expect(counts.sent).toBe(1);
+    expect(outcomes).toEqual(['sent']);
+  });
+
+  it('if recording keeps failing, the row is left under its lease (unrecorded) — never re-queued as failed', async () => {
+    const outcomes: string[] = [];
+    const db = queueDb([row({})], async (_id, outcome) => { if (outcome === 'sent') throw new Error('db down'); outcomes.push(outcome); return outcome; });
+    const counts = await dispatchOutbox(db, { email: okEmail() }, 50, noSleep);
+    expect(counts).toMatchObject({ sent: 0, failed: 0, unrecorded: 1 });
+    expect(outcomes).toEqual([]);
+  });
+
+  it('a hung provider becomes a retryable failure instead of stalling the run', async () => {
+    const hung = withTimeout(() => new Promise<Response>(() => undefined), 20);
+    await expect(hung('https://provider.example', {})).rejects.toMatchObject({ retryable: true, message: 'provider timeout' });
+  });
+
+  it('claims in small chunks and stops claiming when the time budget is spent', async () => {
+    const claims: number[] = []; let t = 0;
+    const db: OutboxDb = { claim: async n => { claims.push(n); return Array.from({ length: n }, (_, i) => row({ outbox_id: `o${claims.length}-${i}` })); },
+      complete: async (_id, outcome) => { t += 30_000; return outcome; } };
+    const counts = await dispatchOutbox(db, { email: okEmail() }, 50, { chunk: 2, budgetMs: 90_000, now: () => t, ...noSleep });
+    expect(claims.every(n => n <= 2)).toBe(true);
+    expect(counts.claimed).toBeLessThan(50);
+  });
+
   it('renders minimal bilingual content without personal data and only same-site links', () => {
     expect(renderMessage('booking_created', 'ar', '/bookings/GM-1', 'https://app.example').text).toBe('تم إنشاء حجزك في Gulf Mover.\nhttps://app.example/bookings/GM-1');
     expect(renderMessage('booking_created', 'en', 'https://evil.example', 'https://app.example').text).toContain('\nhttps://app.example');

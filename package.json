@@ -12,7 +12,7 @@
     "test:integration": "vitest run src/tests/integration",
     "test:e2e:local": "node scripts/e2e/local-journeys.mjs",
     "test:e2e:signed-in": "node scripts/e2e/phase11-signed-in-routes.mjs",
-    "build:release": "vite build && node scripts/release/write-build-info.mjs",
+    "build:release": "vite build && node scripts/release/write-build-info.mjs && node scripts/release/write-csp.mjs",
     "test:db": "vitest run --no-file-parallelism src/tests/db",
     "test:db:upgrade": "GM_DB_UPGRADE=1 vitest run src/tests/db/phase8.upgrade.db.test.ts",
     "db:up": "scripts/db/local-db.sh up",
@@ -26,7 +26,8 @@
     "test:e2e:lifecycle-roles": "node scripts/e2e/phase15-lifecycle-roles.mjs",
     "test:e2e:booking-verify": "node scripts/e2e/phase16-booking-verify.mjs",
     "test:e2e:roles-redirects": "node scripts/e2e/phase16-roles-redirects.mjs",
-    "test:e2e:register-company": "node scripts/e2e/phase18-register-company.mjs"
+    "test:e2e:register-company": "node scripts/e2e/phase18-register-company.mjs",
+    "test:load": "scripts/load/run-load-test.sh"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

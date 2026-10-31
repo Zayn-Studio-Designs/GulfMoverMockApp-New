@@ -190,18 +190,40 @@ export interface CommercialStatus {
   readonly state: 'awaiting_minimum' | 'threshold_met' | 'below_minimum_after_deadline' | 'proceed_below_minimum';
 }
 
+const toCommercial = (r: Row): CommercialStatus => ({
+  reservedTickets: n(r.reserved_tickets), qualifyingTickets: n(r.qualifying_tickets), qualifyingRevenueHalala: n(r.qualifying_revenue_halala),
+  thresholdTickets: n(r.threshold_tickets), thresholdRevenueHalala: n(r.threshold_revenue_halala), thresholdMet: b(r.threshold_met),
+  confirmationDeadline: s(r.confirmation_deadline), state: s(r.commercial_state) as CommercialStatus['state'],
+});
+
 export async function sailingCommercialStatus(sailingId: string, env?: EnvSource): Promise<CommercialStatus> {
   const [r] = await rpcRows('sailing_commercial_status', { p_sailing_id: sailingId }, env);
   if (!r) throw new DataServiceError('unexpected-response');
-  return {
-    reservedTickets: n(r.reserved_tickets), qualifyingTickets: n(r.qualifying_tickets), qualifyingRevenueHalala: n(r.qualifying_revenue_halala),
-    thresholdTickets: n(r.threshold_tickets), thresholdRevenueHalala: n(r.threshold_revenue_halala), thresholdMet: b(r.threshold_met),
-    confirmationDeadline: s(r.confirmation_deadline), state: s(r.commercial_state) as CommercialStatus['state'],
-  };
+  return toCommercial(r);
 }
 
 export async function sailingGate(sailingId: string, env?: EnvSource): Promise<string> {
   return s(await rpcValue('sailing_boarding_gate', { p_sailing_id: sailingId }, env));
+}
+
+export interface SailingStatus { readonly commercial: CommercialStatus; readonly gate: string }
+
+/** Largest id list the database accepts per `sailing_control_status` call. */
+export const SAILING_STATUS_BATCH = 500;
+
+/**
+ * Minimum-sailing status AND boarding gate for many sailings in one round trip
+ * per 500 sailings — never one request per sailing (the N+1 pattern). Sailings
+ * the caller cannot see or that do not exist are simply absent from the map.
+ */
+export async function sailingControlStatus(sailingIds: readonly string[], env?: EnvSource): Promise<Map<string, SailingStatus>> {
+  const ids = [...new Set(sailingIds.filter(Boolean))];
+  const out = new Map<string, SailingStatus>();
+  for (let i = 0; i < ids.length; i += SAILING_STATUS_BATCH) {
+    const rows = await rpcRows('sailing_control_status', { p_sailing_ids: ids.slice(i, i + SAILING_STATUS_BATCH) }, env);
+    for (const r of rows) out.set(s(r.sailing_id), { commercial: toCommercial(r), gate: s(r.boarding_gate) });
+  }
+  return out;
 }
 
 /* ------------------------------- payments ------------------------------- */

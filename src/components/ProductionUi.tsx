@@ -64,6 +64,8 @@ const ERROR_KEYS: Record<DataErrorKind, string> = {
   'vessel-conflict': 'p8ErrVesselConflict',
   'payload-exceeded': 'p8ErrPayload',
   'no-tariff': 'p8ErrNoTariff',
+  'rate-limited': 'dsErrRateLimited',
+  'too-many-holds': 'dsErrTooManyHolds',
 };
 
 /** Translation key for any thrown service error (never the raw database text). */

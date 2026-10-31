@@ -25,6 +25,21 @@ export class MessageError extends Error {
   constructor(message: string, readonly retryable: boolean) { super(message); }
 }
 
+/** Provider calls are bounded: a hung provider becomes a retryable failure instead of
+ *  stalling the whole run until the platform kills it mid-send. */
+export const PROVIDER_TIMEOUT_MS = 10_000;
+export function withTimeout(f: FetchLike, ms = PROVIDER_TIMEOUT_MS): FetchLike {
+  return async (input, init) => {
+    const ctrl = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Race as well as abort: a client that ignores the signal still cannot hang the run.
+    const timeout = new Promise<never>((_, reject) => { timer = setTimeout(() => { ctrl.abort(); reject(new MessageError('provider timeout', true)); }, ms); });
+    try { return await Promise.race([f(input, { ...init, signal: ctrl.signal }), timeout]); }
+    catch (e) { throw e instanceof MessageError ? e : new MessageError(`provider unreachable: ${e instanceof Error ? e.message.slice(0, 80) : ''}`, true); }
+    finally { clearTimeout(timer); }
+  };
+}
+
 export interface MessageProvider {
   readonly id: string;
   readonly channel: Channel;
@@ -53,7 +68,7 @@ export function renderMessage(templateKey: string, locale: 'en' | 'ar', link: st
 }
 
 export function createResendEmail(config: { apiKey: string; from: string; appUrl: string; fetch?: FetchLike }): MessageProvider {
-  const doFetch: FetchLike = config.fetch ?? ((i, init) => fetch(i, init));
+  const doFetch: FetchLike = withTimeout(config.fetch ?? ((i, init) => fetch(i, init)));
   return {
     id: 'resend', channel: 'email',
     async send(m) {
@@ -71,7 +86,7 @@ export function createResendEmail(config: { apiKey: string; from: string; appUrl
 }
 
 export function createUnifonicSms(config: { appSid: string; senderId: string; appUrl: string; fetch?: FetchLike }): MessageProvider {
-  const doFetch: FetchLike = config.fetch ?? ((i, init) => fetch(i, init));
+  const doFetch: FetchLike = withTimeout(config.fetch ?? ((i, init) => fetch(i, init)));
   return {
     id: 'unifonic', channel: 'sms',
     async send(m) {
@@ -89,7 +104,7 @@ export function createUnifonicSms(config: { appSid: string; senderId: string; ap
 }
 
 export function createWhatsAppCloud(config: { accessToken: string; phoneNumberId: string; apiVersion: string; templatePrefix: string; fetch?: FetchLike }): MessageProvider {
-  const doFetch: FetchLike = config.fetch ?? ((i, init) => fetch(i, init));
+  const doFetch: FetchLike = withTimeout(config.fetch ?? ((i, init) => fetch(i, init)));
   return {
     id: 'whatsapp-cloud', channel: 'whatsapp',
     async send(m) {
@@ -120,22 +135,63 @@ export interface OutboxDb {
   complete(id: string, outcome: 'sent' | 'failed' | 'no_recipient', provider: string | null, providerMessageId: string | null, error: string | null): Promise<string>;
 }
 
-/** One dispatcher pass. Returns counts; never marks a message sent without a provider id. */
-export async function dispatchOutbox(db: OutboxDb, providers: Partial<Record<Channel, MessageProvider>>, limit = 50) {
-  const rows = await db.claim(limit);
-  const counts = { claimed: rows.length, sent: 0, failed: 0, no_recipient: 0 };
-  for (const row of rows) {
-    const provider = providers[row.channel];
-    if (!row.recipient) { await db.complete(row.outbox_id, 'no_recipient', null, null, null); counts.no_recipient += 1; continue; }
-    if (!provider) { await db.complete(row.outbox_id, 'failed', null, null, 'provider_not_configured'); counts.failed += 1; continue; }
-    try {
-      const { providerMessageId } = await provider.send({ outboxId: row.outbox_id, to: row.recipient, templateKey: row.template_key,
-        locale: row.locale === 'ar' ? 'ar' : 'en', link: row.target });
-      await db.complete(row.outbox_id, 'sent', provider.id, providerMessageId, null);
-      counts.sent += 1;
-    } catch (e) {
-      await db.complete(row.outbox_id, 'failed', provider.id, null, e instanceof Error ? e.message.slice(0, 200) : 'send failed');
-      counts.failed += 1;
+/** Retries recording the outcome; a send that the provider accepted must never be re-sent
+ *  just because the database write that records it failed once. */
+async function recordWithRetry(op: () => Promise<string>, attempts = 3, sleep = (ms: number) => new Promise(r => setTimeout(r, ms))) {
+  for (let i = 1; ; i++) {
+    try { return await op(); } catch (e) { if (i >= attempts) throw e; await sleep(250 * 4 ** (i - 1)); }
+  }
+}
+
+export interface DispatchOptions {
+  /** Rows claimed per database round trip (claim only what this run will process). */
+  readonly chunk?: number;
+  /** Stop claiming new rows after this long, well inside the edge-function wall-clock limit. */
+  readonly budgetMs?: number;
+  readonly now?: () => number;
+  readonly sleep?: (ms: number) => Promise<unknown>;
+}
+
+/**
+ * One dispatcher pass, at-least-once and idempotent:
+ * - rows are claimed in small chunks under a lease (FOR UPDATE SKIP LOCKED in the database),
+ *   so parallel runs never take the same row and a crashed run's rows are retried later;
+ * - a provider failure is recorded as `failed` (retried with exponential backoff, max 5 attempts);
+ * - a SUCCESSFUL send is never turned into a failure: recording it is retried, and if that
+ *   still fails the row keeps its lease and the error is surfaced (counts.unrecorded) for alerting;
+ * - providers receive the outbox id as their idempotency/correlation key.
+ * Never marks a message sent without a provider id.
+ */
+export async function dispatchOutbox(db: OutboxDb, providers: Partial<Record<Channel, MessageProvider>>, limit = 50, options: DispatchOptions = {}) {
+  const chunk = Math.max(1, Math.min(options.chunk ?? 10, limit));
+  const budgetMs = options.budgetMs ?? 90_000;
+  const now = options.now ?? (() => Date.now());
+  const sleep = options.sleep ?? ((ms: number) => new Promise(r => setTimeout(r, ms)));
+  const started = now();
+  const counts = { claimed: 0, sent: 0, failed: 0, no_recipient: 0, unrecorded: 0 };
+  while (counts.claimed < limit && now() - started < budgetMs) {
+    const rows = await db.claim(Math.min(chunk, limit - counts.claimed));
+    if (rows.length === 0) break;
+    counts.claimed += rows.length;
+    for (const row of rows) {
+      const provider = providers[row.channel];
+      if (!row.recipient) { await recordWithRetry(() => db.complete(row.outbox_id, 'no_recipient', null, null, null), 3, sleep); counts.no_recipient += 1; continue; }
+      if (!provider) { await recordWithRetry(() => db.complete(row.outbox_id, 'failed', null, null, 'provider_not_configured'), 3, sleep); counts.failed += 1; continue; }
+      let providerMessageId: string;
+      try {
+        ({ providerMessageId } = await provider.send({ outboxId: row.outbox_id, to: row.recipient, templateKey: row.template_key,
+          locale: row.locale === 'ar' ? 'ar' : 'en', link: row.target }));
+      } catch (e) {
+        await recordWithRetry(() => db.complete(row.outbox_id, 'failed', provider.id, null, e instanceof Error ? e.message.slice(0, 200) : 'send failed'), 3, sleep);
+        counts.failed += 1;
+        continue;
+      }
+      try {
+        await recordWithRetry(() => db.complete(row.outbox_id, 'sent', provider.id, providerMessageId, null), 3, sleep);
+        counts.sent += 1;
+      } catch {
+        counts.unrecorded += 1; // sent, but not yet recorded: never marked failed (no duplicate message)
+      }
     }
   }
   return counts;

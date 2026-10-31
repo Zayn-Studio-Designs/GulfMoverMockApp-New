@@ -8,6 +8,7 @@ import {
 } from '../lib/authService';
 import { getAppConfig, type AppConfig, type EnvSource, type SupabaseConfigIssue } from '../lib/supabase';
 import { readRecoveryLinkSignal, type RecoveryLinkSignal } from '../lib/recoveryLink';
+import { checkDateOfBirth } from '../domain/age';
 
 // DEMO ACCOUNTS ONLY — not real authentication. Accounts live in this browser's localStorage,
 // there is no server, and nothing is sent anywhere. Passwords are stored as a salted SHA-256
@@ -54,6 +55,8 @@ export type AuthError =
   | 'errEmail' | 'errUsername' | 'errCompany' | 'errPasswordRules' | 'errPasswordMatch'
   | 'errEmailTaken' | 'errUsernameTaken' | 'errSignIn' | 'errCurrentPassword' | 'errNoAccount'
   | 'errPhone' | 'errWebsite' | 'errResetCode' | 'errSameEmail'
+  // Age of consent (18+), both modes:
+  | 'errAgeConfirm' | 'errUnderAge' | 'errDob'
   // Production (Supabase) mode:
   | 'errEmailNotConfirmed' | 'errAuthGeneric' | 'errDemoOnly' | 'errResetRedirect'
   | 'errAuthUnavailable' | 'errAuthNetwork' | 'errSignInEmail' | 'errSignOutFailed'
@@ -179,7 +182,14 @@ export const isValidWebsite = (w: string) => !w.trim() || /^(https?:\/\/)?[^\s.]
 
 const toPublic = ({ salt: _salt, passwordHash: _hash, ...rest }: Account): PublicAccount => rest;
 
-interface SignUpInput { email: string; username: string; company: string; password: string; confirm: string }
+/** `dateOfBirth` (YYYY-MM-DD) is checked against the 18+ age of consent and never stored. */
+interface SignUpInput { email: string; username: string; company: string; password: string; confirm: string; dateOfBirth: string }
+
+/** Age-of-consent gate shared by both modes: the account holder must be 18 or older. */
+function dateOfBirthError(dateOfBirth: string): AuthError | null {
+  const check = checkDateOfBirth(dateOfBirth);
+  return check === 'ok' ? null : check === 'under-age' ? 'errUnderAge' : 'errDob';
+}
 
 /** Authentication is not usable at all in this mode/configuration (production mode only). */
 export interface AuthUnavailable {
@@ -200,10 +210,11 @@ export interface AuthContextValue {
   /** Production sign-up that returned no session: confirmation of the email is required first. */
   confirmationPending: string | null;
   signUp: (input: SignUpInput) => Promise<AuthError | null>;
-  signIn: (login: string, password: string, remember?: boolean) => Promise<AuthError | null>;
-  signInAsGuest: () => Promise<void>;
+  /** `ageConfirmed` must be true (the user confirmed they are 18 or older) or sign-in is refused with `errAgeConfirm`. */
+  signIn: (login: string, password: string, remember?: boolean, ageConfirmed?: boolean) => Promise<AuthError | null>;
+  signInAsGuest: (ageConfirmed?: boolean) => Promise<AuthError | null>;
   /** Simulated provider sign-in: session only, no real identity provider is contacted (demo mode). */
-  signInWithProvider: (provider: DemoProvider) => Promise<void>;
+  signInWithProvider: (provider: DemoProvider, ageConfirmed?: boolean) => Promise<AuthError | null>;
   /** Resolves null only once the session is really gone; otherwise an error key and the user stays signed in. */
   signOut: () => Promise<AuthError | null>;
   updateProfile: (patch: ProfilePatch) => AuthError | null;
@@ -250,8 +261,10 @@ function DemoAuthProvider({ children }: { children: ReactNode }) {
   const current = accounts.find(a => a.id === sessionId);
   const user = current ? toPublic(current) : null;
 
-  const signUp = useCallback(async ({ email, username, company, password, confirm }: SignUpInput): Promise<AuthError | null> => {
+  const signUp = useCallback(async ({ email, username, company, password, confirm, dateOfBirth }: SignUpInput): Promise<AuthError | null> => {
     if (!isValidEmail(email)) return 'errEmail';
+    const ageError = dateOfBirthError(dateOfBirth);
+    if (ageError) return ageError;
     if (!isValidUsername(username)) return 'errUsername';
     if (!company.trim()) return 'errCompany';
     if (!isValidPassword(password)) return 'errPasswordRules';
@@ -269,7 +282,8 @@ function DemoAuthProvider({ children }: { children: ReactNode }) {
     return null;
   }, [accounts, setAccounts, startSession]);
 
-  const signIn = useCallback(async (login: string, password: string, remember = true): Promise<AuthError | null> => {
+  const signIn = useCallback(async (login: string, password: string, remember = true, ageConfirmed = false): Promise<AuthError | null> => {
+    if (!ageConfirmed) return 'errAgeConfirm';
     const key = login.trim().toLowerCase();
     const account = accounts.find(a => a.email.toLowerCase() === key || a.username.toLowerCase() === key);
     if (!account || (await hashPassword(password, account.salt)) !== account.passwordHash) return 'errSignIn';
@@ -277,9 +291,10 @@ function DemoAuthProvider({ children }: { children: ReactNode }) {
     return null;
   }, [accounts, startSession]);
 
-  const signInAsGuest = useCallback(async () => {
+  const signInAsGuest = useCallback(async (ageConfirmed = false): Promise<AuthError | null> => {
+    if (!ageConfirmed) return 'errAgeConfirm';
     const existing = accounts.find(a => a.email === DEMO_GUEST.email);
-    if (existing) { startSession(existing.id); return; }
+    if (existing) { startSession(existing.id); return null; }
     const salt = randomId();
     const guest: Account = {
       id: `U-guest`, ...DEMO_GUEST, fullName: '', phone: '', companyLogo: '', companyAddress: '', companyWebsite: '', avatar: '', notifications: { ...DEFAULT_NOTIFICATIONS }, createdAt: new Date().toISOString(),
@@ -287,14 +302,16 @@ function DemoAuthProvider({ children }: { children: ReactNode }) {
     };
     setAccounts([...accounts, guest]);
     startSession(guest.id);
+    return null;
   }, [accounts, setAccounts, startSession]);
 
   /** Simulated "continue with Google/Apple": creates (or reuses) a clearly-labelled demo
       account and starts the session — the real product would run OAuth here instead. */
-  const signInWithProvider = useCallback(async (provider: DemoProvider) => {
+  const signInWithProvider = useCallback(async (provider: DemoProvider, ageConfirmed = false): Promise<AuthError | null> => {
+    if (!ageConfirmed) return 'errAgeConfirm';
     const meta = DEMO_PROVIDERS[provider];
     const existing = accounts.find(a => a.email === meta.email);
-    if (existing) { startSession(existing.id); return; }
+    if (existing) { startSession(existing.id); return null; }
     const salt = randomId();
     const providerAccount: Account = {
       id: `U-provider-${provider}`, ...meta, company: 'Demo Logistics Co.',
@@ -304,6 +321,7 @@ function DemoAuthProvider({ children }: { children: ReactNode }) {
     };
     setAccounts([...accounts, providerAccount]);
     startSession(providerAccount.id);
+    return null;
   }, [accounts, setAccounts, startSession]);
 
   const signOut = useCallback(async (): Promise<AuthError | null> => { startSession(null); return null; }, [startSession]);
@@ -548,13 +566,16 @@ function SupabaseAuthProvider({ children, recoverySignal }: { children: ReactNod
     return fallback;
   }, []);
 
-  const signUp = useCallback(async ({ email, password, confirm, username }: SignUpInput): Promise<AuthError | null> => {
+  const signUp = useCallback(async ({ email, password, confirm, username, dateOfBirth }: SignUpInput): Promise<AuthError | null> => {
     if (!isValidEmail(email)) return 'errEmail';
+    const ageError = dateOfBirthError(dateOfBirth);
+    if (ageError) return ageError;
     if (!isValidPassword(password)) return 'errPasswordRules';
     if (password !== confirm) return 'errPasswordMatch';
     if (authUnavailable) return 'errAuthUnavailable'; // never a silent "success"
+    // Only the confirmation that the person is 18+ is recorded on the account — never the date of birth.
     const serviceInput: SupabaseSignUpInput =
-      username.trim() ? { email, password, displayName: username.trim() } : { email, password };
+      username.trim() ? { email, password, displayName: username.trim(), ageConfirmed: true } : { email, password, ageConfirmed: true };
     try {
       const result = await supabaseAuth.signUp(serviceInput, env);
       if (result.session) {
@@ -569,7 +590,8 @@ function SupabaseAuthProvider({ children, recoverySignal }: { children: ReactNod
     }
   }, [authUnavailable, env, applySession, mapAuthFailure]);
 
-  const signIn = useCallback(async (login: string, password: string, _remember?: boolean): Promise<AuthError | null> => {
+  const signIn = useCallback(async (login: string, password: string, _remember?: boolean, ageConfirmed = false): Promise<AuthError | null> => {
+    if (!ageConfirmed) return 'errAgeConfirm'; // checked before any network call
     if (!isValidEmail(login)) return 'errEmail'; // production accepts an email address only
     if (!password.trim()) return 'errSignInEmail'; // fixed generic text: no per-field hints, no echo
     if (authUnavailable) return 'errAuthUnavailable'; // never a silent "success"
@@ -595,8 +617,8 @@ function SupabaseAuthProvider({ children, recoverySignal }: { children: ReactNod
   }, [authUnavailable, env, applySignedOut]);
 
   // Guest and provider flows are demo-only presentation: not rendered in production mode.
-  const signInAsGuest = useCallback(async () => { /* unavailable in production */ }, []);
-  const signInWithProvider = useCallback(async () => { /* unavailable in production */ }, []);
+  const signInAsGuest = useCallback(async (): Promise<AuthError | null> => 'errDemoOnly', []);
+  const signInWithProvider = useCallback(async (): Promise<AuthError | null> => 'errDemoOnly', []);
 
   // Demo-data writes are not real persistence in production mode; the Settings UI hides those
   // cards, and any accidental use gets a clearly-labelled refusal (never a fake success).

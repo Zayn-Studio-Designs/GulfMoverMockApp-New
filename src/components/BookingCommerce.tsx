@@ -5,8 +5,8 @@ import { DataServiceError, newRequestKey } from '../lib/dataService';
 import { listOpenSailings, type Booking, type Sailing } from '../lib/bookingService';
 import {
   bookingCommercial, bookingEvents, cancelBookingV2, listCreditNotes, listInvoicesForBooking, listPaymentsV2, listRefunds,
-  rescheduleLeg, sailingCommercialStatus, sailingGate, simulateSandboxPayment, startCheckout,
-  type BookingCommercial, type BookingEvent, type CommercialStatus, type CreditNote, type InvoiceV2, type PaymentMethodV2, type PaymentV2, type Refund,
+  rescheduleLeg, sailingControlStatus, simulateSandboxPayment, startCheckout,
+  type BookingCommercial, type BookingEvent, type CommercialStatus, type CreditNote, type InvoiceV2, type PaymentMethodV2, type PaymentV2, type Refund, type SailingStatus,
 } from '../lib/phase8Service';
 import { formatSar } from '../domain/money';
 import { SailingTime, dataErrorKey } from './ProductionUi';
@@ -58,11 +58,13 @@ export function BookingCommerce({ booking, onChanged }: { booking: Booking; onCh
       const [c, p, i, cn, r, ev] = await Promise.all([bookingCommercial(booking.id), listPaymentsV2(booking.id), listInvoicesForBooking(booking.id),
         listCreditNotes(booking.id), listRefunds({ bookingId: booking.id }), bookingEvents(booking.id)]);
       setCommercial(c); setPayments(p); setInvoices(i); setCredits(cn); setRefunds(r); setEvents(ev);
-      const entries = await Promise.all(booking.legs.filter(l => l.sailing).map(async l => {
-        const [cs, gate] = await Promise.all([sailingCommercialStatus(l.sailing!.id).catch(() => null), sailingGate(l.sailing!.id).catch(() => '')]);
-        return [l.leg, { commercial: cs, gate }] as const;
-      }));
-      setLegStatus(Object.fromEntries(entries));
+      // One request for every leg's minimum status and gate (not two requests per leg).
+      const legs = booking.legs.filter(l => l.sailing);
+      const statuses = await sailingControlStatus(legs.map(l => l.sailing!.id)).catch(() => new Map<string, SailingStatus>());
+      setLegStatus(Object.fromEntries(legs.map(l => {
+        const st = statuses.get(l.sailing!.id);
+        return [l.leg, { commercial: st?.commercial ?? null, gate: st?.gate ?? '' }] as const;
+      })));
     } catch (e) { setError(dataErrorKey(e)); }
   }, [booking.id, booking.legs]);
   useEffect(() => { void load(); }, [load]);
