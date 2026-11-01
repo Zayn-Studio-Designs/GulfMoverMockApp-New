@@ -6,7 +6,7 @@ import { StatusPill } from '../components/StatusPill';
 import { ArrowIcon, Icon } from '../components/Icon';
 import { ContactAtcoLink } from '../components/ContactCard';
 import { formatTime } from '../domain/fleet';
-import { BOATS, today } from '../data/demoData';
+import { today } from '../data/demoData';
 
 /**
  * Customer home screen. Answers the three customer questions in one glance:
@@ -16,7 +16,7 @@ import { BOATS, today } from '../data/demoData';
  */
 export default function CustomerHome() {
   const { t, tx, lang } = useLanguage();
-  const { bookings } = useDemo();
+  const { bookings, boats } = useDemo();
   const navigate = useNavigate();
 
   /** Earliest booking on today or a future date (demo sample + user bookings). */
@@ -27,7 +27,7 @@ export default function CustomerHome() {
       .sort((a, b) => (a.date === b.date ? a.time.localeCompare(b.time) : a.date.localeCompare(b.date)))[0] ?? null;
   }, [bookings]);
 
-  const boatName = (id?: string) => BOATS.find(b => b.id === id)?.name[lang];
+  const boatName = (id?: string) => boats.find(b => b.id === id)?.name[lang];
 
   const goBook = () => navigate('/book');
 

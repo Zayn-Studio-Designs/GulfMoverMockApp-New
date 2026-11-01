@@ -12,14 +12,15 @@ import { legDetails, passStatusKind } from './passView';
  * side-button simulation. Status text is resolved from the *live* ticket state
  * each render, so a saved pass can never show a stale copied status.
  */
-export function WalletPassVisual({ booking, leg, ticket, legDate }: {
+export function WalletPassVisual({ booking, leg, ticket, legDate, boats }: {
   booking: Booking;
   leg: 'outbound' | 'return';
   ticket: Ticket;
   legDate?: string;
+  boats?: ReadonlyArray<{ id: string; name: { en: string; ar: string } }>;
 }) {
   const { t, tx, lang } = useLanguage();
-  const { from, to, time, date, boat } = legDetails(booking, leg, lang, tx, legDate);
+  const { from, to, time, date, boat } = legDetails(booking, leg, lang, tx, legDate, boats);
   const status = passStatus(t, passStatusKind(ticket, booking.payment));
   return (
     <div className="pass-card" dir="ltr">

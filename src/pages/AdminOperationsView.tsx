@@ -5,6 +5,8 @@ import {
   type ManifestEntry, type RecordStatus, type Route, type Sailing, type SailingStatus, type Vessel,
 } from '../lib/bookingService';
 import { ProdPageHeader, RequireRoles, SailingTime, dataErrorKey } from '../components/ProductionUi';
+import { Stepper } from '../components/Stepper';
+import { useUi } from '../context/UiContext';
 import { saudiDateTimeParts, saudiDateTimeToIso } from '../domain/dates';
 
 /**
@@ -40,6 +42,22 @@ const STATUS_KEY: Record<SailingStatus, string> = { open: 'opsStatusOpen', close
 
 function VesselsPanel({ vessels, reload }: { vessels: Vessel[]; reload: () => Promise<void> }) {
   const { t } = useLanguage();
+  const { openModal } = useUi();
+  const retire = (vessel: Vessel) => {
+    openModal({
+      title: t('opsRetireTitle'), desc: t('opsRetireDesc'), confirmText: t('opsRetire'),
+      requireReason: false, danger: true,
+      onConfirm: () => {
+        void run(async () => {
+          try {
+            await saveVessel({ id: vessel.id, name: vessel.name, passengerCapacity: vessel.passengerCapacity, status: 'inactive' });
+            setMessage({ tone: 'ok', text: t('opsSaved') });
+            await reload();
+          } catch (error) { setMessage({ tone: 'error', text: t(dataErrorKey(error)) }); }
+        });
+      },
+    });
+  };
   const empty = { id: '', name: '', capacity: '', status: 'active' as RecordStatus };
   const [form, setForm] = useState(empty);
   const [message, setMessage] = useState<Message>(null);
@@ -69,8 +87,14 @@ function VesselsPanel({ vessels, reload }: { vessels: Vessel[]; reload: () => Pr
         <form className="form-grid" style={{ marginTop: 12 }} onSubmit={submit} aria-busy={busy}>
           <div className="field"><label htmlFor="ops-vessel-name">{t('opsVesselName')} *</label>
             <input id="ops-vessel-name" maxLength={120} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
-          <div className="field"><label htmlFor="ops-vessel-cap">{t('opsVesselCapacity')}</label>
-            <input id="ops-vessel-cap" type="number" min={1} max={1000} inputMode="numeric" value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))} />
+          <div className="field"><span className="label" id="ops-vessel-cap-label">{t('opsVesselCapacity')}</span>
+            <div className="row" style={{ flexWrap: 'wrap' }}>
+              <Stepper labelledBy="ops-vessel-cap-label"
+                value={form.capacity.trim() === '' || !Number.isInteger(Number(form.capacity)) ? null : Number(form.capacity)}
+                min={1} max={1000}
+                onChange={next => setForm(f => ({ ...f, capacity: next === null ? '' : String(next) }))} />
+              {form.capacity !== '' && <button type="button" className="link-btn" onClick={() => setForm(f => ({ ...f, capacity: '' }))}>{t('clearValue')}</button>}
+            </div>
             <small>{t('opsVesselCapacityHint')}</small></div>
           <div className="field"><label htmlFor="ops-vessel-status">{t('opsRecordStatus')}</label>
             <select id="ops-vessel-status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value as RecordStatus }))}>
@@ -92,6 +116,7 @@ function VesselsPanel({ vessels, reload }: { vessels: Vessel[]; reload: () => Pr
             <div className="row">
               <span className={`pill ${v.status === 'active' ? 'pill-green' : 'pill-neutral'}`}>{t(v.status === 'active' ? 'opsActive' : 'opsInactive')}</span>
               <button type="button" className="btn btn-outline btn-small" onClick={() => setForm({ id: v.id, name: v.name, capacity: v.passengerCapacity === null ? '' : String(v.passengerCapacity), status: v.status })}>{t('opsEdit')}</button>
+              {v.status === 'active' && <button type="button" className="btn btn-danger btn-small" onClick={() => retire(v)}>{t('opsRetire')}</button>}
             </div>
           </div>
         ))}

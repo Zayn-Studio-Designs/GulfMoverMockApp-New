@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  initialAudit, initialBoatSlots, initialBookings, initialMaterials, initialSailings, nowTime, today,
+  BOATS, initialAudit, initialBoatSlots, initialBookings, initialMaterials, initialSailings, nowTime, today,
   type AuditEvent, type Booking, type MaterialRequest, type PolicyAcceptance, type Sailing,
 } from '../data/demoData';
 import {
@@ -87,6 +87,25 @@ const initialBoarding = (): BoardingState => ({ selectedSailingId: 'S-0700', que
  */
 const PERSIST_KEY = 'gm-demo-state-v1';
 
+export interface DemoBoat {
+  id: string;
+  name: { en: string; ar: string };
+  status: 'active' | 'retired';
+}
+
+export const initialDemoBoats = (): DemoBoat[] =>
+  BOATS.map(b => ({ id: b.id, name: { ...b.name }, status: 'active' as const }));
+
+/** Next free vessel number (B-04 after B-01…B-03), skipping retired IDs so IDs never repeat. */
+export function nextBoatId(boats: ReadonlyArray<{ id: string }>): string {
+  let n = 0;
+  for (const b of boats) {
+    const m = /^B-(\d+)$/.exec(b.id);
+    if (m) n = Math.max(n, Number(m[1]));
+  }
+  return `B-${String(n + 1).padStart(2, '0')}`;
+}
+
 interface PersistedState {
   savedAt: string;
   sailings: Sailing[];
@@ -96,6 +115,7 @@ interface PersistedState {
   boatSlots: BoatSlot[];
   config?: DemoConfig;
   passes?: WalletPass[];
+  boats?: DemoBoat[];
 }
 
 const isArray = (v: unknown): v is unknown[] => Array.isArray(v);
@@ -108,6 +128,11 @@ const PERSIST_DAMAGED_KEY = 'gm-demo-state-v1-damaged';
 const allHave = (v: unknown, field: string) =>
   isArray(v) && v.every(x => typeof x === 'object' && x !== null && typeof (x as Record<string, unknown>)[field] === 'string');
 const optionalAllHave = (v: unknown, field: string) => v === undefined || allHave(v, field);
+const isBoats = (v: unknown): v is DemoBoat[] =>
+  isArray(v) && v.every(x => typeof x === 'object' && x !== null
+    && typeof (x as Record<string, unknown>).id === 'string'
+    && typeof ((x as DemoBoat).name as { en?: unknown } | undefined)?.en === 'string'
+    && ((x as DemoBoat).status === 'active' || (x as DemoBoat).status === 'retired'));
 
 /**
  * Keeps the first damaged original (never overwrites an earlier copy) before the demo falls back to
@@ -147,6 +172,7 @@ function loadPersisted(): PersistedState | null {
       boatSlots: p.boatSlots as BoatSlot[],
       config: isConfig(p.config) ? p.config : DEFAULT_CONFIG,
       passes: isArray(p.passes) ? (p.passes as WalletPass[]) : [],
+      boats: isBoats(p.boats) && p.boats.length > 0 ? p.boats : initialDemoBoats(),
     };
   } catch {
     if (raw) keepDamagedCopy(raw);
@@ -190,6 +216,15 @@ interface DemoContextValue {
   addMaterial: (material: MaterialRequest) => void;
   /** Adds tickets to an outbound sailing's shared count (the minimum is aggregated across bookings). */
   addTicketsToSailing: (time: string, boatId: string, tickets: number) => void;
+  boats: DemoBoat[];
+  /** Only vessels available for new sailings and bookings (retired ones stay for history). */
+  activeBoats: DemoBoat[];
+  /** Adds a vessel with the next free B-number; returns it. Names are validated by the caller. */
+  addBoat: (nameEn: string, nameAr: string) => DemoBoat;
+  renameBoat: (id: string, nameEn: string, nameAr: string) => void;
+  /** Retires a vessel: hidden from new bookings/sailings, history untouched. */
+  retireBoat: (id: string, reason: string) => void;
+  reinstateBoat: (id: string) => void;
   boatSlots: BoatSlot[];
   /** Books seats on a boat's shared sailing. Fails if the boat is chartered for that slot. */
   reservePassengers: (boatId: string, date: string, time: string, passengers: number, ref: string) => boolean;
@@ -223,6 +258,10 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   const [passes, setPasses] = useState(() => persisted.current?.passes ?? []);
   const [wizard, setWizard] = useState(initialWizard);
   const [boarding, setBoarding] = useState(initialBoarding);
+  const [boats, setBoats] = useState<DemoBoat[]>(() => persisted.current?.boats ?? initialDemoBoats());
+  const activeBoats = useMemo(() => boats.filter(b => b.status === 'active'), [boats]);
+  const boatsRef = useRef<DemoBoat[]>(boats);
+  boatsRef.current = boats;
   const [boatSlots, setBoatSlotsState] = useState(() => persisted.current?.boatSlots ?? initialBoatSlots());
   // Mirror of boatSlots so a booking check always sees the latest reservations (prevents double booking).
   const slotsRef = useRef<BoatSlot[]>(boatSlots);
@@ -233,11 +272,11 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   // Keep the saved demo data in sync after every change (same-day persistence).
   useEffect(() => {
     try {
-      localStorage.setItem(PERSIST_KEY, JSON.stringify({ savedAt: today(), sailings, bookings, materials, audit, boatSlots, config, passes }));
+      localStorage.setItem(PERSIST_KEY, JSON.stringify({ savedAt: today(), sailings, bookings, materials, audit, boatSlots, config, passes, boats }));
     } catch {
       // Storage unavailable (private mode): data lasts for the session only.
     }
-  }, [sailings, bookings, materials, audit, boatSlots, config, passes]);
+  }, [sailings, bookings, materials, audit, boatSlots, config, passes, boats]);
 
   const addAudit = useCallback((actor: string, action: string) => {
     setAudit(prev => [...prev, { time: nowTime(), actor, action }]);
@@ -408,8 +447,37 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     return pass;
   }, [passes, findBookingByTicket]);
 
+  const addBoat = useCallback((nameEn: string, nameAr: string) => {
+    const trimmed = nameEn.trim();
+    const withId: DemoBoat = {
+      id: nextBoatId(boatsRef.current),
+      name: { en: trimmed, ar: nameAr.trim() || trimmed },
+      status: 'active',
+    };
+    setBoats(prev => (prev.some(b => b.id === withId.id) ? prev : [...prev, withId]));
+    addAudit('Demo operations user', `Added vessel ${withId.id} “${withId.name.en}” (demo)`);
+    return withId;
+  }, [addAudit]);
+
+  const renameBoat = useCallback((id: string, nameEn: string, nameAr: string) => {
+    setBoats(prev => prev.map(b => (b.id === id
+      ? { ...b, name: { en: nameEn.trim(), ar: nameAr.trim() || nameEn.trim() } } : b)));
+    addAudit('Demo operations user', `Renamed vessel ${id} (demo)`);
+  }, [addAudit]);
+
+  const retireBoat = useCallback((id: string, reason: string) => {
+    setBoats(prev => prev.map(b => (b.id === id ? { ...b, status: 'retired' as const } : b)));
+    addAudit('Demo operations user', `Retired vessel ${id} (demo): ${reason}`);
+  }, [addAudit]);
+
+  const reinstateBoat = useCallback((id: string) => {
+    setBoats(prev => prev.map(b => (b.id === id ? { ...b, status: 'active' as const } : b)));
+    addAudit('Demo operations user', `Reinstated vessel ${id} (demo)`);
+  }, [addAudit]);
+
   const resetDemoData = useCallback(() => {
     try { localStorage.removeItem(PERSIST_KEY); } catch { /* ignore */ }
+    setBoats(initialDemoBoats());
     setSailings(initialSailings());
     setBookings(initialBookings());
     setMaterials(initialMaterials());
@@ -423,10 +491,12 @@ export function DemoProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<DemoContextValue>(() => ({
     sailings, bookings, materials, audit, config, setConfig, wizard, updateWizard, resetWizard, boarding, updateBoarding,
-    passes, addAudit, addBooking, createBooking, addMaterial, addTicketsToSailing, boatSlots, reservePassengers, requestCharter,
+    passes, addAudit, addBooking, createBooking, addMaterial, addTicketsToSailing, boats, activeBoats, addBoat, renameBoat,
+    retireBoat, reinstateBoat, boatSlots, reservePassengers, requestCharter,
     releaseSlot, suspendSailing, setSailingOps, decideMaterial, boardTicket, overrideBoarding, findBookingByTicket, addWalletPass, setBookingPo, resetDemoData,
   }), [sailings, bookings, materials, audit, config, setConfig, wizard, updateWizard, resetWizard, boarding, updateBoarding,
-    passes, addAudit, addBooking, createBooking, addMaterial, addTicketsToSailing, boatSlots, reservePassengers, requestCharter,
+    passes, addAudit, addBooking, createBooking, addMaterial, addTicketsToSailing, boats, activeBoats, addBoat, renameBoat,
+    retireBoat, reinstateBoat, boatSlots, reservePassengers, requestCharter,
     releaseSlot, suspendSailing, setSailingOps, decideMaterial, boardTicket, overrideBoarding, findBookingByTicket, addWalletPass, setBookingPo, resetDemoData]);
 
   return <DemoContext.Provider value={value}>{children}</DemoContext.Provider>;

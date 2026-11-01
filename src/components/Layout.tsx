@@ -17,9 +17,9 @@ interface NavItem {
   to: string;
   key: string;
   icon: IconName;
-  /** Phone-only entry: the desktop staff sidebar keeps its existing destinations. */
+  /** Phone-only entry: hidden on the desktop sidebar, shown in the phone bar. */
   mobileOnly?: boolean;
-  /** Desktop-only entry: the phone staff bar shows the six destinations a crew needs on site. */
+  /** Desktop-only entry: hidden in the phone bar, shown in the desktop sidebar. */
   desktopOnly?: boolean;
   /** The phone staff entry that opens the Agent Ops chooser instead of a single page. */
   hub?: boolean;
@@ -36,7 +36,9 @@ const AGENT_OPS_LINKS: ReadonlyArray<NavItem> = [
  * stays reachable by URL and the demo banner carries the no-real-permissions notice.
  */
 export const NAV_ITEMS: ReadonlyArray<NavItem> = [
-  { to: '/', key: 'navHome', icon: 'home', mobileOnly: true },
+  // Phase 19: Home restored on desktop (was mobileOnly). The homepage at /
+  // still exists in demo; hiding its entry stranded desktop staff users.
+  { to: '/', key: 'navHome', icon: 'home' },
   { to: '/book', key: 'navBook', icon: 'navBook', desktopOnly: true },
   { to: '/bookings', key: 'navBookings', icon: 'navBookings' },
   { to: '/corporate', key: 'navCorporate', icon: 'navCorporate', desktopOnly: true },
@@ -278,8 +280,31 @@ export function Layout() {
     toast(t('resetDone'));
   };
 
+  const renderNavItem = (item: NavItem) => item.hub ? (
+    <button key={item.key} type="button" ref={hubTriggerRef} data-tour={`nav-${item.key}`}
+      className={`nav-btn nav-hub${agentOpsActive ? ' active' : ''}${item.mobileOnly ? ' nav-mobile-only' : ''}`}
+      aria-haspopup="menu" aria-expanded={hubOpen} onClick={() => setHubOpen(open => !open)}>
+      <Icon name={item.icon} />
+      <span className="nav-full">{t(item.key)}</span>
+      <span className="nav-short">{t(`${item.key}Short`)}</span>
+    </button>
+  ) : (
+    <NavLink key={item.to} to={item.to} end className={({ isActive }) => `nav-btn${isActive ? ' active' : ''}${item.mobileOnly ? ' nav-mobile-only' : ''}${item.desktopOnly ? ' nav-desktop-only' : ''}`}
+      data-tour={`nav-${item.key}`}>
+      <Icon name={item.icon} />
+      <span className="nav-full">{t(item.key)}</span>
+      <span className="nav-short">{t(`${item.key}Short`)}</span>
+    </NavLink>
+  );
+  // HIG macOS sidebar: two stable sections (trips vs operations) for the staff
+  // demo view. Order is unchanged; grouping is visual/ARIA only.
+  const staffTrips = NAV_ITEMS.filter(i => i.key === 'navHome' || i.key === 'navBook' || i.key === 'navBookings');
+  const staffOps = NAV_ITEMS.filter(i => i.key !== 'navHome' && i.key !== 'navBook' && i.key !== 'navBookings');
+  const groupedStaffNav = isDemoAuth && !isCustomer;
+
   return (
     <>
+      <a href="#app-main" className="skip-link">{t('skipToContent')}</a>
       <div className="demo-banner"><span className="dot" /><span>{isDemoAuth ? t('demoBanner') : t('prodBanner')}</span></div>
       <header className="app-header">
         <div className="header-inner">
@@ -302,7 +327,8 @@ export function Layout() {
               ATCO screens appear only for accounts whose server-side roles allow them. */}
           {isDemoAuth && (
             <div className="ws-switch" role="group" data-tour="ws-switch" aria-label={t('wsSwitchGroup')}>
-              <div className="ws-seg">
+              <div className={`ws-seg${isCustomer ? ' is-customer' : ' is-staff'}`}>
+                <span className="ws-thumb" aria-hidden="true" />
                 <button type="button" className={`ws-btn${isCustomer ? ' active' : ''}`} aria-pressed={isCustomer} onClick={() => setMode('customer')}>{t('wsCustomerLabel')}</button>
                 <button type="button" className={`ws-btn${isCustomer ? '' : ' active'}`} aria-pressed={!isCustomer} onClick={() => setMode('staff')}>{t('wsStaffLabel')}</button>
               </div>
@@ -310,22 +336,20 @@ export function Layout() {
             </div>
           )}
           <nav className={`nav-list${isCustomer || !isDemoAuth ? '' : ' nav-list-staff'}`} aria-label={t('mainNavigation')} data-tour="nav">
-            {navItems.map(item => item.hub ? (
-              <button key={item.key} type="button" ref={hubTriggerRef} data-tour={`nav-${item.key}`}
-                className={`nav-btn nav-hub${agentOpsActive ? ' active' : ''}${item.mobileOnly ? ' nav-mobile-only' : ''}`}
-                aria-haspopup="menu" aria-expanded={hubOpen} onClick={() => setHubOpen(open => !open)}>
-                <Icon name={item.icon} />
-                <span className="nav-full">{t(item.key)}</span>
-                <span className="nav-short">{t(`${item.key}Short`)}</span>
-              </button>
+            {groupedStaffNav ? (
+              <>
+                <div className="nav-section" role="group" aria-label={t('navSectionTrips')}>
+                  <div className="nav-section-label" aria-hidden="true">{t('navSectionTrips')}</div>
+                  {staffTrips.map(renderNavItem)}
+                </div>
+                <div className="nav-section" role="group" aria-label={t('navSectionOps')}>
+                  <div className="nav-section-label" aria-hidden="true">{t('navSectionOps')}</div>
+                  {staffOps.map(renderNavItem)}
+                </div>
+              </>
             ) : (
-              <NavLink key={item.to} to={item.to} end className={({ isActive }) => `nav-btn${isActive ? ' active' : ''}${item.mobileOnly ? ' nav-mobile-only' : ''}${item.desktopOnly ? ' nav-desktop-only' : ''}`}
-                data-tour={`nav-${item.key}`}>
-                <Icon name={item.icon} />
-                <span className="nav-full">{t(item.key)}</span>
-                <span className="nav-short">{t(`${item.key}Short`)}</span>
-              </NavLink>
-            ))}
+              <>{navItems.map(renderNavItem)}</>
+            )}
           </nav>
           {/* Phone-only chooser: both underlying pages keep their own routes and demo state. */}
           {hubOpen && !isCustomer && (

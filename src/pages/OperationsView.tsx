@@ -8,13 +8,13 @@ import { StatusPill } from '../components/StatusPill';
 import { Icon, type IconName } from '../components/Icon';
 import { isMinimumMet, thresholdLabel } from '../domain/rules';
 import { formatTime } from '../domain/fleet';
-import { BOATS } from '../data/demoData';
+
 import { toCsv, downloadCsv } from '../domain/csv';
 import { useTicketIndex, type TicketEntry } from '../hooks/useTicketIndex';
 
 export default function OperationsView() {
   const { t, tx, lang } = useLanguage();
-  const { sailings, materials, audit, bookings, suspendSailing, setSailingOps } = useDemo();
+  const { sailings, materials, audit, bookings, suspendSailing, setSailingOps, boats } = useDemo();
   const { toast, openModal } = useUi();
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState('all');
@@ -82,18 +82,22 @@ export default function OperationsView() {
         <div className="card-pad">
           <div className="between" style={{ flexWrap: 'wrap' }}>
             <div><h2 className="card-title">{t('sailingTable')}</h2><p className="card-desc">{tx('All counts/statuses are sample data; capacity not configured.')}</p></div>
-            <div className="chip-row">
+            <div className="chip-row ops-filters">
               <button type="button" className="btn btn-outline btn-small" onClick={exportSailings}>{t('exportOccupancy')}</button>
-              <select className="filter-select" aria-label={tx('Filter by operations status')} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-                <option value="all">{t('filterAll')}</option>
-                <option value="awaiting">{tx('Awaiting approval')}</option>
-                <option value="suspended">{tx('Suspended (demo)')}</option>
-              </select>
-              <select className="filter-select" aria-label={tx('Filter by direction')} value={directionFilter} onChange={e => setDirectionFilter(e.target.value)}>
-                <option value="all">{t('filterAllDirections')}</option>
-                <option value="outbound">{tx('Outbound')}</option>
-                <option value="return">{tx('Return')}</option>
-              </select>
+              <label className="filter-group"><span>{t('status')}</span>
+                <select className="filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                  <option value="all">{t('filterAll')}</option>
+                  <option value="awaiting">{tx('Awaiting approval')}</option>
+                  <option value="suspended">{tx('Suspended (demo)')}</option>
+                </select>
+              </label>
+              <label className="filter-group"><span>{t('direction')}</span>
+                <select className="filter-select" value={directionFilter} onChange={e => setDirectionFilter(e.target.value)}>
+                  <option value="all">{t('filterAllDirections')}</option>
+                  <option value="outbound">{tx('Outbound')}</option>
+                  <option value="return">{tx('Return')}</option>
+                </select>
+              </label>
             </div>
           </div>
         </div>
@@ -107,9 +111,9 @@ export default function OperationsView() {
               {list.map(s => (
                 <tr key={s.id}>
                   <td data-label={t('time')}><strong className="mono">{formatTime(s.time, lang)}</strong><div className="tiny muted">{tx(s.dir)} · {tx('demo')}</div></td>
-                  <td data-label={t('boat')}>{BOATS.find(b => b.id === s.boatId)?.name[lang]}</td>
+                  <td data-label={t('boat')}>{boats.find(b => b.id === s.boatId)?.name[lang]}</td>
                   <td data-label={t('route')}><strong>{tx(s.dest)}</strong><div className="tiny muted">{s.id}</div></td>
-                  <td data-label={t('tickets')}>{s.count} / {s.minimum} <div className="bar"><span style={{ width: `${Math.min(100, (s.count / s.minimum) * 100)}%` }} /></div></td>
+                  <td data-label={t('tickets')}><span dir="ltr">{s.count} / {s.minimum}</span> <div className="bar"><span style={{ width: `${Math.min(100, (s.count / s.minimum) * 100)}%` }} /></div></td>
                   <td data-label={t('threshold')}><StatusPill text={thresholdLabel(s.count)} /></td>
                   <td data-label={t('readiness')}><StatusPill text={s.ops} /></td>
                   <td data-label={t('manifest')}>{tx(s.manifest)}</td>
@@ -130,13 +134,13 @@ export default function OperationsView() {
             <div className="between">
               <div>
                 <div className="eyebrow">{tx('DEMO SAILING DETAIL')}</div>
-                <h2 className="card-title"><span className="mono">{selected.id}</span> · {formatTime(selected.time, lang)} · {tx(selected.dest)} · {BOATS.find(b => b.id === selected.boatId)?.name[lang]}</h2>
+                <h2 className="card-title"><span className="mono">{selected.id}</span> · {formatTime(selected.time, lang)} · {tx(selected.dest)} · {boats.find(b => b.id === selected.boatId)?.name[lang]}</h2>
                 <p className="card-desc">{tx('Passenger list below mirrors the live demo bookings for this sailing — not an approved operating manifest.')}</p>
               </div>
               <button type="button" className="btn btn-outline btn-small" onClick={() => setSelectedId(null)}>{tx('Close')}</button>
             </div>
             <div className="status-grid" style={{ marginTop: 13 }}>
-              <div className="status-item"><div className="status-label">{tx('Tickets / minimum')}</div><div className="status-text">{selected.count} / {selected.minimum}</div></div>
+              <div className="status-item"><div className="status-label">{tx('Tickets / minimum')}</div><div className="status-text"><span dir="ltr">{selected.count} / {selected.minimum}</span></div></div>
               <div className="status-item"><div className="status-label">{t('threshold')}</div><div className="status-text">{tx(thresholdLabel(selected.count))}</div></div>
               <div className="status-item"><div className="status-label">{tx('Operations')}</div><div className="status-text">{tx(selected.ops)}</div></div>
               <div className="status-item"><div className="status-label">{t('manifest')}</div><div className="status-text">{tx(selected.manifest)}</div></div>

@@ -1,0 +1,162 @@
+/**
+ * PHASE 26 — Liquid Glass is now the DEFAULT design language (approved).
+ * Formerly scoped under `.liquid-glass-preview`; the experiment switch is gone
+ * and these rules apply to every route. Content surfaces stay solid; glass is
+ * reserved for floating/functional layers. Guards (fallbacks, reduced-motion,
+ * reduced-transparency) are preserved.
+ * Skill sources: apple-liquid-glass tokens/motion/checklist + apple-hig macOS.
+ */
+
+/* ---- Global rounded + glass tokens (single source of truth) ------------- */
+:root{
+  --r-sm:13px;   /* small controls, chips, thumbs            */
+  --r-md:16px;   /* standard inputs, buttons, small panels   */
+  --r-lg:22px;   /* content cards, sidebar, sheets           */
+  --r-xl:28px;   /* hero, large dialogs                     */
+  --r-pill:999px;/* segmented controls, progress, badges     */
+  --glass:rgba(245,245,247,.72);
+  --glass-strong:rgba(255,255,255,.82);
+  --glass-dark:rgba(29,29,31,.82);
+  --edge-hi:inset 0 1px 0 rgba(255,255,255,.65);
+  --edge-line:rgba(0,0,0,.07);
+  --ease-spring:cubic-bezier(.32,.72,0,1);
+  --ease-out-quart:cubic-bezier(.25,1,.5,1);
+}
+
+/* ---- Functional layer: frosted chrome ---------------------------------- */
+.app-header{
+  background:var(--glass);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  backdrop-filter:saturate(180%) blur(20px);
+  border-bottom:1px solid var(--edge-line);
+  box-shadow:var(--edge-hi),0 1px 12px rgba(0,0,0,.04);
+}
+.sidebar{
+  background:rgba(255,255,255,.68);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  backdrop-filter:saturate(180%) blur(20px);
+  border:1px solid rgba(255,255,255,.5);
+  box-shadow:0 1px 2px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.06);
+}
+/* Phase 27: the account popover must be opaque for readability — page text
+   showing through made it hard to read. Solid surface, no backdrop blur;
+   radius/spacing/shadow stay in the Liquid Glass family. Modals keep glass. */
+.account-pop{
+  background:var(--surface);
+  -webkit-backdrop-filter:none;
+  backdrop-filter:none;
+  border:1px solid var(--line);
+  box-shadow:0 2px 8px rgba(0,0,0,.1),0 30px 80px rgba(0,0,0,.22);
+}
+.modal,
+.provider-card{
+  background:var(--glass-strong);
+  -webkit-backdrop-filter:saturate(180%) blur(24px);
+  backdrop-filter:saturate(180%) blur(24px);
+  border:1px solid rgba(255,255,255,.55);
+  box-shadow:0 2px 8px rgba(0,0,0,.1),0 30px 80px rgba(0,0,0,.22);
+}
+.toast{
+  background:var(--glass-dark);
+  -webkit-backdrop-filter:saturate(160%) blur(16px);
+  backdrop-filter:saturate(160%) blur(16px);
+  border:1px solid rgba(255,255,255,.14);
+}
+
+/* ---- Content surfaces: solid, consistent rounded family ------------------ */
+/* Nested corners: inputs inside panels use a smaller radius than the panel. */
+.card,
+.metric,
+.service-card,
+.sailing-option,
+.boat-option,
+.timeline-wrap,
+.table-wrap{
+  border-radius:var(--r-lg,22px);
+}
+.table-wrap{
+  overflow:hidden;
+  border:1px solid var(--line);
+  background:var(--surface);
+}
+.table-wrap table{min-width:100%}
+/* Segmented + pills stay capsule-shaped; everything else uses the rounded family. */
+.seg,
+.lang-toggle,
+.ws-seg,
+.bar,
+.bar span,
+.pill,
+.route-badge{
+  border-radius:var(--r-pill,999px);
+}
+.seg-btn,
+.ws-btn,
+.lang-toggle button{
+  border-radius:var(--r-pill,999px);
+}
+/* Dropdown overlays (native selects stay solid for readability). */
+.filter-select{
+  border-radius:var(--r-sm,13px);
+  background:var(--surface);
+}
+/* Refined focus: visible 3px ring with a soft outer glow, matching rounded shape. */
+.btn:focus-visible,
+.nav-btn:focus-visible,
+.settings-tab:focus-visible,
+.account-item:focus-visible,
+.filter-select:focus-visible,
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible{
+  outline:3px solid #03643C;
+  outline-offset:2px;
+  box-shadow:0 0 0 5px rgba(3,100,60,.14);
+}
+
+/* ---- Fluid motion for summoned layers only ------------------------------ */
+.account-pop{transform-origin:top center;animation:lg-materialize .38s var(--ease-spring)}
+.modal,.provider-card{transform-origin:center center;animation:lg-materialize .4s var(--ease-spring)}
+.toast.show{transition:opacity .25s var(--ease-out-quart),transform .25s var(--ease-out-quart)}
+@keyframes lg-materialize{
+  from{opacity:0;transform:scale(.96) translateY(6px);filter:blur(6px)}
+  to{opacity:1;transform:none;filter:blur(0)}
+}
+/* Pointer-down feedback on primary/floating controls. */
+.btn-primary:active,
+.nav-btn:active{transform:scale(.97);transition:transform 100ms ease-out}
+.nav-btn{transition:background .2s var(--ease-out-quart),transform .2s var(--ease-out-quart)}
+.nav-btn:hover{transform:translateY(-1px)}
+
+/* ---- Dark-mode glass tuning (keep contrast, avoid milky panels) ---------- */
+[data-theme="dark"] .app-header{background:rgba(13,26,36,.78)}
+[data-theme="dark"] .sidebar{background:rgba(19,34,47,.72)}
+[data-theme="dark"] .account-pop{background:var(--surface)}
+[data-theme="dark"] .modal,
+[data-theme="dark"] .provider-card{background:rgba(22,39,58,.88)}
+[data-theme="dark"] .table-wrap{background:var(--surface)}
+
+/* ---- Fallbacks & guards -------------------------------------------------- */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  .app-header{background:rgba(245,245,247,.96)}
+  .sidebar,
+  .account-pop,
+  .modal,
+  .provider-card{background:var(--surface)}
+  .toast{background:#1d1d1f}
+}
+@media (prefers-reduced-transparency: reduce){
+  .app-header{background:rgba(245,245,247,.96)}
+  .sidebar,
+  .account-pop,
+  .modal,
+  .provider-card{background:var(--surface)}
+  .toast{background:#1d1d1f}
+}
+@media (prefers-reduced-motion: reduce){
+  .account-pop,
+  .modal,.provider-card{animation:none}
+  .btn-primary:active,
+  .nav-btn:active,
+  .nav-btn:hover{transform:none}
+}

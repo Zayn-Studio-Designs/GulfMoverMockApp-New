@@ -40,6 +40,7 @@ import { OnboardingProvider } from './context/OnboardingContext';
 import { RECOVERY_PATH } from './lib/recoveryLink';
 import './styles/fonts.css';
 import './styles/index.css';
+import './styles/liquid-glass.css';
 import { HostHomeBridge, WalletHostBridge } from './components/wallet/WalletHostBridge';
 import { AppCrashScreen, ErrorBoundary } from './components/ErrorBoundary';
 import './styles/wallet.css';

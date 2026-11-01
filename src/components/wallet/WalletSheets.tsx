@@ -28,7 +28,7 @@ function Sheet({ onClose, label, children }: { onClose: () => void; label: strin
 /** "Add to Apple Wallet" → preview → Add → success → Done. One pass per ticket. */
 export function WalletAddSheet({ entry, onClose }: { entry: TicketEntry; onClose: () => void }) {
   const { t } = useLanguage();
-  const { addWalletPass } = useDemo();
+  const { addWalletPass, boats } = useDemo();
   const [state, setState] = useState<'preview' | 'added'>('preview');
   const busy = useRef(false);
 
@@ -49,7 +49,7 @@ export function WalletAddSheet({ entry, onClose }: { entry: TicketEntry; onClose
             <span className="wallet-demo-tag">presentation simulation</span>
           </div>
           <p className="sheet-sub">{t('walletAddSub')}</p>
-          <WalletPassVisual booking={entry.booking} leg={entry.leg} ticket={entry.ticket} legDate={entry.legDate} />
+          <WalletPassVisual booking={entry.booking} leg={entry.leg} ticket={entry.ticket} legDate={entry.legDate} boats={boats} />
           <div className="notice warn" style={{ marginTop: 13 }}><strong>{t('demoOnly')}</strong>{t('walletSimNote')}</div>
           <div className="wallet-actions">
             <button type="button" className="btn btn-outline" autoFocus onClick={onClose}>{t('walletCancel')}</button>
@@ -75,6 +75,7 @@ export function WalletAddSheet({ entry, onClose }: { entry: TicketEntry; onClose
 /** Saved pass view: re-renders straight from live demo state, never a stale copy. */
 export function WalletPassSheet({ entry, onClose }: { entry: TicketEntry; onClose: () => void }) {
   const { t } = useLanguage();
+  const { boats } = useDemo();
   return (
     <Sheet onClose={onClose} label={t('walletOpenSaved')}>
       <div className="between">
@@ -82,7 +83,7 @@ export function WalletPassSheet({ entry, onClose }: { entry: TicketEntry; onClos
         <span className="wallet-demo-tag">presentation simulation</span>
       </div>
       <div className="wallet-open">
-        <WalletPassVisual booking={entry.booking} leg={entry.leg} ticket={entry.ticket} legDate={entry.legDate} />
+        <WalletPassVisual booking={entry.booking} leg={entry.leg} ticket={entry.ticket} legDate={entry.legDate} boats={boats} />
       </div>
       <div className="wallet-actions">
         <button type="button" className="btn wallet-add-btn" autoFocus onClick={onClose}>{t('walletDone')}</button>

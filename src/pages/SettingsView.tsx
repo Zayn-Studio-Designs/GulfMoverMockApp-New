@@ -17,6 +17,15 @@ const TAB_LABEL: Record<Tab, string> = {
   preferences: 'preferencesTitle', account: 'accountTitle', atco: 'atcoInfoTab',
 };
 
+/** Phase 20: HIG macOS sidebar grouping. Order follows SETTINGS_TABS; the
+    production subset keeps the same sections. */
+const TAB_SECTION: Record<Tab, 'setSectionAccount' | 'setSectionDevice' | 'setSectionInfo'> = {
+  profile: 'setSectionAccount', company: 'setSectionAccount', security: 'setSectionAccount',
+  notifications: 'setSectionAccount', preferences: 'setSectionDevice', account: 'setSectionDevice',
+  atco: 'setSectionInfo',
+};
+const SECTION_ORDER = ['setSectionAccount', 'setSectionDevice', 'setSectionInfo'] as const;
+
 /** ATCO company information and contact details, moved here from the bottom of the pages. */
 function AtcoInfoTab() {
   const { t } = useLanguage();
@@ -25,10 +34,11 @@ function AtcoInfoTab() {
   const from = (useLocation().state as { from?: string } | null)?.from;
   const back = from ?? (user ? null : '/signin');
   return (
-    <section className="grid" aria-labelledby="atco-info-title" style={{ gap: 14 }}>
-      <div className="card card-pad atco-info-head">
+    <section className="set-panel-plain" aria-labelledby="atco-info-title">
+      {/* Phase 21: plain header block — the contact card below is the one container. */}
+      <div className="between" style={{ marginBottom: 14 }}>
         <div>
-          <h2 id="atco-info-title" className="card-title">{t('atcoInfoTab')}</h2>
+          <h2 id="atco-info-title" className="page-title" style={{ fontSize: 20 }}>{t('atcoInfoTab')}</h2>
           <p className="card-desc">{t('atcoInfoSub')}</p>
         </div>
         {back && <button type="button" className="btn btn-outline btn-small" onClick={() => navigate(back)}><span className="dir-flip" aria-hidden="true">←</span> {t('back')}</button>}
@@ -90,9 +100,9 @@ function ProfileTab() {
             <small>{t('phoneHint')}</small>
           </div>
         </div>
-        <div className="between">
-          <span className="small muted">{t('memberSince')}: <span className="mono">{user.createdAt.slice(0, 10)}</span></span>
+        <div className="save-row">
           <button type="submit" className="btn btn-primary">{t('saveChanges')}</button>
+          <span className="small muted">{t('memberSince')}: <span className="mono">{user.createdAt.slice(0, 10)}</span></span>
         </div>
       </form>
     </section>
@@ -185,7 +195,8 @@ function SecurityTab() {
 
   // PRODUCTION: Supabase handles the password inside the active session; email
   // changes and the demo reset-code flow belong to the demo experience only, so
-  // those cards are hidden rather than silently faking success (errDemoOnly).
+  // those groups are hidden rather than silently faking success (errDemoOnly).
+  // Phase 21: one card per tab — groups separated by hairlines, not boxes.
   if (!isDemoAuth) {
     return (
       <section className="card card-pad" aria-labelledby="set-password">
@@ -206,9 +217,9 @@ function SecurityTab() {
   }
 
   return (
-    <>
-      <section className="card card-pad" aria-labelledby="set-email">
-        <h2 id="set-email" className="card-title">{t('emailTitle')}</h2>
+    <section className="card card-pad set-panel" aria-labelledby="set-email">
+      <div className="set-group">
+        <h2 id="set-email" className="set-group-title">{t('emailTitle')}</h2>
         <p className="card-desc">{t('currentEmail')}: <strong dir="ltr">{user.email}</strong></p>
         <form className="grid" onSubmit={saveEmail} noValidate style={{ marginTop: 14 }}>
           {emailError && <div className="notice danger" role="alert">{t(emailError)}</div>}
@@ -221,37 +232,44 @@ function SecurityTab() {
           </div>
           <div><button type="submit" className="btn btn-primary">{t('changeEmailBtn')}</button></div>
         </form>
-      </section>
+      </div>
 
-      <section className="card card-pad" aria-labelledby="set-password">
-        <h2 id="set-password" className="card-title">{t('securityTitle')}</h2>
+      <hr className="set-sep" />
+
+      <div className="set-group" aria-labelledby="set-password">
+        <h2 id="set-password" className="set-group-title">{t('securityTitle')}</h2>
         <p className="card-desc">{t('securitySub')}</p>
         <form className="grid" onSubmit={savePassword} noValidate style={{ marginTop: 14 }}>
           {pwError && <div className="notice danger" role="alert">{t(pwError)}</div>}
-          <PasswordInput id="set-pw-current" label={t('currentPassword')} value={pw.current} onChange={v => setPw(p => ({ ...p, current: v }))} autoComplete="current-password" />
-          <div className="form-grid">
+          <div className="form-grid cols-3">
+            <PasswordInput id="set-pw-current" label={t('currentPassword')} value={pw.current} onChange={v => setPw(p => ({ ...p, current: v }))} autoComplete="current-password" />
             <PasswordInput id="set-pw-new" label={t('newPassword')} value={pw.next} onChange={v => setPw(p => ({ ...p, next: v }))} autoComplete="new-password" hint={t('passwordHint')} />
             <PasswordInput id="set-pw-confirm" label={t('confirmPassword')} value={pw.confirm} onChange={v => setPw(p => ({ ...p, confirm: v }))} autoComplete="new-password" />
           </div>
           <div><button type="submit" className="btn btn-primary">{t('changePasswordBtn')}</button></div>
         </form>
-      </section>
+      </div>
 
-      <section className="card card-pad" aria-labelledby="set-reset">
-        <h2 id="set-reset" className="card-title">{t('resetTitle')}</h2>
+      <hr className="set-sep" />
+
+      <div className="set-group" aria-labelledby="set-reset">
+        <h2 id="set-reset" className="set-group-title">{t('resetTitle')}</h2>
         <p className="card-desc">{t('resetSettingsSub')}</p>
         {resetError && <div className="notice danger" role="alert" style={{ marginTop: 14 }}>{t(resetError)}</div>}
         {!reset.sent ? (
           <div style={{ marginTop: 14 }}><button type="button" className="btn btn-outline" onClick={sendCode}>{t('sendCode')}</button></div>
         ) : (
           <form className="grid" onSubmit={doReset} noValidate style={{ marginTop: 14 }}>
-            <div className="notice blue" role="status">
-              <strong>{t('demoCodeTitle')}</strong>
+            <p className="small" role="status">
+              <strong>{t('demoCodeTitle')} — </strong>
               {t('demoCodeBody')} <span className="mono code-chip">{reset.sent}</span>
-            </div>
-            <div className="field">
-              <label htmlFor="set-reset-code">{t('resetCode')}</label>
-              <input id="set-reset-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={reset.code} onChange={e => setReset(r => ({ ...r, code: e.target.value.replace(/\D/g, '') }))} />
+            </p>
+            <div className="form-grid">
+              <div className="field">
+                <label htmlFor="set-reset-code">{t('resetCode')}</label>
+                <input id="set-reset-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={reset.code} onChange={e => setReset(r => ({ ...r, code: e.target.value.replace(/\D/g, '') }))} />
+              </div>
+              <span aria-hidden="true" />
             </div>
             <div className="form-grid">
               <PasswordInput id="set-reset-new" label={t('resetNewPassword')} value={reset.next} onChange={v => setReset(r => ({ ...r, next: v }))} autoComplete="new-password" hint={t('passwordHint')} />
@@ -263,8 +281,8 @@ function SecurityTab() {
             </div>
           </form>
         )}
-      </section>
-    </>
+      </div>
+    </section>
   );
 }
 
@@ -295,30 +313,43 @@ function NotificationsTab() {
 function PreferencesTab() {
   const { t, lang, setLang } = useLanguage();
   const { pref: theme, setPref: setTheme } = useTheme();
+  const themes: Array<{ value: ThemePref; label: string }> = [
+    { value: 'light', label: t('themeLight') },
+    { value: 'dark', label: t('themeDark') },
+    { value: 'system', label: t('themeSystem') },
+  ];
   return (
     <section className="card card-pad" aria-labelledby="set-language">
       <h2 id="set-language" className="card-title">{t('preferencesTitle')}</h2>
       <p className="card-desc">{t('preferencesSub')}</p>
-      <div className="field" style={{ marginTop: 14, maxWidth: 320 }}>
-        <label htmlFor="set-lang">{t('languagePref')}</label>
-        <select id="set-lang" value={lang} onChange={e => setLang(e.target.value as 'en' | 'ar')}>
-          <option value="en">English</option>
-          <option value="ar">العربية</option>
-        </select>
-      </div>
-      <div className="field" style={{ marginTop: 14, maxWidth: 320 }}>
-        <label htmlFor="set-appearance">{t('appearancePref')}</label>
-        <select id="set-appearance" value={theme} onChange={e => setTheme(e.target.value as ThemePref)}>
-          <option value="light">{t('themeLight')}</option>
-          <option value="dark">{t('themeDark')}</option>
-          <option value="system">{t('themeSystem')}</option>
-        </select>
+      {/* Phase 20: HIG segmented controls — native radios, same handlers. */}
+      <fieldset className="seg-field" style={{ marginTop: 14 }}>
+        <legend>{t('languagePref')}</legend>
+        <div className="seg" role="presentation">
+          {(['en', 'ar'] as const).map(value => (
+            <label key={value} className={`seg-btn${lang === value ? ' active' : ''}`}>
+              <input type="radio" name="set-lang" value={value} checked={lang === value} onChange={() => setLang(value)} />
+              <span lang={value === 'ar' ? 'ar' : undefined}>{value === 'en' ? 'English' : 'العربية'}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className="seg-field" style={{ marginTop: 14 }}>
+        <legend>{t('appearancePref')}</legend>
+        <div className="seg" role="presentation">
+          {themes.map(({ value, label }) => (
+            <label key={value} className={`seg-btn${theme === value ? ' active' : ''}`}>
+              <input type="radio" name="set-appearance" value={value} checked={theme === value} onChange={() => setTheme(value)} />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
         <small>{t('appearanceHint')}</small>
-      </div>
-      <div className="inset small" style={{ marginTop: 16 }}>
-        <div className="between"><span className="muted">{t('timeFormat')}</span><strong>{t('timeFormat12')}</strong></div>
-        <div className="between" style={{ marginTop: 8 }}><span className="muted">{t('timeZone')}</span><strong>{t('timeZoneValue')}</strong></div>
-      </div>
+      </fieldset>
+      <dl className="set-facts">
+        <div><dt>{t('timeFormat')}</dt><dd>{t('timeFormat12')}</dd></div>
+        <div><dt>{t('timeZone')}</dt><dd>{t('timeZoneValue')}</dd></div>
+      </dl>
     </section>
   );
 }
@@ -342,27 +373,31 @@ function AccountTab() {
     navigate('/signin', { replace: true });
   };
   const askDelete = () => openModal({
-    title: t('deleteAccount'), desc: t('deleteConfirm'), confirmText: t('deleteAccount'), requireReason: true,
+    title: t('deleteAccount'), desc: t('deleteConfirm'), confirmText: t('deleteAccount'), requireReason: true, danger: true,
     onConfirm: () => { deleteAccount(); toast(t('accountDeleted')); navigate('/signin', { replace: true }); },
   });
   return (
-    <>
-      <section className="card card-pad" aria-labelledby="set-signout">
-        <h2 id="set-signout" className="card-title">{t('signOut')}</h2>
+    <section className="card card-pad set-panel" aria-labelledby="set-signout">
+      <div className="set-group">
+        <h2 id="set-signout" className="set-group-title">{t('signOut')}</h2>
         <p className="card-desc">{t('signOutSub')}</p>
         {signOutError && <div className="notice danger" role="alert" style={{ marginTop: 14 }}>{t(signOutError)}</div>}
         <div style={{ marginTop: 14 }}><button type="button" className="btn btn-navy" onClick={doSignOut} disabled={signingOut}>{t('signOut')}</button></div>
-      </section>
+      </div>
       {/* Account deletion removes the local demo account only; it stays a demo-only
-          action. In production, account/data deletion is a later, server-backed step. */}
+          action. In production, account/data deletion is a later, server-backed step.
+          Phase 21: divider + red title/button carry the warning — no pink box. */}
       {isDemoAuth && (
-        <section className="card card-pad danger-zone" aria-labelledby="set-delete">
-          <h2 id="set-delete" className="card-title">{t('deleteAccount')}</h2>
-          <p className="card-desc">{t('deleteSub')}</p>
-          <div style={{ marginTop: 14 }}><button type="button" className="btn btn-danger" onClick={askDelete}>{t('deleteAccount')}</button></div>
-        </section>
+        <>
+          <hr className="set-sep" />
+          <div className="set-group set-danger" aria-labelledby="set-delete">
+            <h2 id="set-delete" className="set-group-title">{t('deleteAccount')}</h2>
+            <p className="card-desc">{t('deleteSub')}</p>
+            <div style={{ marginTop: 14 }}><button type="button" className="btn btn-danger" onClick={askDelete}>{t('deleteAccount')}</button></div>
+          </div>
+        </>
       )}
-    </>
+    </section>
   );
 }
 
@@ -402,12 +437,21 @@ export default function SettingsView() {
             </div>
           </div>
           <nav className="settings-tabs" aria-label={t('settingsTitle')}>
-            {visibleTabs.map(key => (
-              <button key={key} type="button" className={`settings-tab${tab === key ? ' active' : ''}`} aria-current={tab === key ? 'page' : undefined}
-                onClick={() => setParams(key === 'profile' ? {} : { tab: key }, { replace: true })}>
-                {t(TAB_LABEL[key])}
-              </button>
-            ))}
+            {SECTION_ORDER.map(section => {
+              const keys = visibleTabs.filter(key => TAB_SECTION[key] === section);
+              if (keys.length === 0) return null;
+              return (
+                <div key={section} className="nav-section" role="group" aria-label={t(section)}>
+                  <div className="nav-section-label" aria-hidden="true">{t(section)}</div>
+                  {keys.map(key => (
+                    <button key={key} type="button" className={`settings-tab${tab === key ? ' active' : ''}`} aria-current={tab === key ? 'page' : undefined}
+                      onClick={() => setParams(key === 'profile' ? {} : { tab: key }, { replace: true })}>
+                      {t(TAB_LABEL[key])}
+                    </button>
+                  ))}
+                </div>
+              );
+            })}
           </nav>
         </aside>
         <div className="grid settings-body">

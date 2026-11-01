@@ -50,7 +50,7 @@ function postToHost(message: AppToShell) {
 export function WalletHostBridge() {
   const { t, tx, lang } = useLanguage();
   const { pref, effective: theme } = useTheme();
-  const { bookings, passes, addWalletPass } = useDemo();
+  const { bookings, passes, addWalletPass, boats } = useDemo();
   const { entries } = useTicketIndex(bookings);
   const addRef = useRef(addWalletPass);
   addRef.current = addWalletPass;
@@ -58,7 +58,7 @@ export function WalletHostBridge() {
   const savedViews = useMemo(() => passes
     .map(p => entries.find(e => e.ticket.id === p.ticketId))
     .filter((e): e is TicketEntry => Boolean(e))
-    .map(e => buildPassView(e, t, tx, lang, true)), [passes, entries, t, tx, lang]);
+    .map(e => buildPassView(e, t, tx, lang, true, boats)), [passes, entries, t, tx, lang, boats]);
   const stateRef = useRef<AppToShell>({ type: 'gm-wallet:state', lang, passes: savedViews });
   stateRef.current = { type: 'gm-wallet:state', lang, passes: savedViews };
 
@@ -121,6 +121,7 @@ export function HostHomeBridge() {
 export function DeviceWalletButton({ entry, saved }: { entry: TicketEntry; saved: boolean }) {
   const device = useHostDevice();
   const { t, tx, lang } = useLanguage();
+  const { boats } = useDemo();
   if (device !== 'iphone' && device !== 'android') return null;
   const google = device === 'android';
   if (saved) {
@@ -132,7 +133,7 @@ export function DeviceWalletButton({ entry, saved }: { entry: TicketEntry; saved
   }
   return (
     <button type="button" className={`btn btn-small device-wallet-btn${google ? ' is-google' : ''}`}
-      onClick={() => postToHost({ type: 'gm-wallet:request-add', pass: buildPassView(entry, t, tx, lang, false) })}>
+      onClick={() => postToHost({ type: 'gm-wallet:request-add', pass: buildPassView(entry, t, tx, lang, false, boats) })}>
       {t(google ? 'walletAddGoogle' : 'walletAdd')}
     </button>
   );

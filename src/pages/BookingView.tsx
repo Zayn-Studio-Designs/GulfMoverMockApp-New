@@ -6,7 +6,7 @@ import { useUi } from '../context/UiContext';
 import { PageHeader } from '../components/PageHeader';
 import { StatusPill } from '../components/StatusPill';
 import { ArrowIcon, Icon, type IconName } from '../components/Icon';
-import { BOATS, CITIES, DESTINATIONS, ORIGIN, today, nowTime } from '../data/demoData';
+import { CITIES, DESTINATIONS, ORIGIN, today, nowTime } from '../data/demoData';
 import { ContactAtcoLink } from '../components/ContactCard';
 import { FARE_PER_PASSENGER_LEG, fareTotal, legCount } from '../domain/rules';
 import { BRIEF_TIMES, TIME_SLOTS, boatAvailability, canBookPassengers, canCharter, findSlot, formatTime, type Availability } from '../domain/fleet';
@@ -100,7 +100,7 @@ function TimeSelect({ id, label, value, onChange }: { id: string; label: string;
 
 function BoatChoices({ leg }: { leg: 'outbound' | 'return' }) {
   const { t, lang } = useLanguage();
-  const { wizard, updateWizard, boatSlots } = useDemo();
+  const { wizard, updateWizard, boatSlots, activeBoats } = useDemo();
   const date = leg === 'return' ? wizard.returnDate : wizard.journeyDate;
   const time = leg === 'return' ? wizard.selectedRet : wizard.selectedOut;
   const current = leg === 'return' ? wizard.selectedRetBoat : wizard.selectedBoat;
@@ -111,7 +111,7 @@ function BoatChoices({ leg }: { leg: 'outbound' | 'return' }) {
         <span className="tiny muted">{date} · {formatTime(time, lang)}</span>
       </div>
       <div className="grid grid-3">
-        {BOATS.map(boat => {
+        {activeBoats.map(boat => {
           const av = boatAvailability(boatSlots, boat.id, date, time);
           const slot = findSlot(boatSlots, boat.id, date, time);
           const allowed = boatAllowed(wizard.service, av);
@@ -294,7 +294,7 @@ function DetailsStep() {
 
 function ReviewStep() {
   const { t, tx, lang } = useLanguage();
-  const { wizard, updateWizard, resetWizard, materials, addMaterial, bookings, requestCharter } = useDemo();
+  const { wizard, updateWizard, resetWizard, materials, addMaterial, bookings, requestCharter, boats } = useDemo();
   const { toast } = useUi();
   const navigate = useNavigate();
   const pax = Math.max(1, wizard.paxCount);
@@ -302,7 +302,7 @@ function ReviewStep() {
   const isCharter = wizard.service === 'charter';
   const noPayment = materialOnly || isCharter;
   const total = noPayment ? 0 : fareTotal(pax, wizard.addReturn);
-  const boatName = (id: string) => BOATS.find(b => b.id === id)?.name[lang] ?? id;
+  const boatName = (id: string) => boats.find(b => b.id === id)?.name[lang] ?? id;
   const cityName = CITIES.find(c => c.id === wizard.city)?.name[lang] ?? wizard.city;
   const legLine = (labelKey: string, date: string, time: string, boatId: string) => (
     <>
@@ -514,14 +514,14 @@ function TicketQrCard({ ticket, t, entry, saved = false }: { ticket: Ticket; t: 
  */
 function ResultStep() {
   const { t, tx, lang } = useLanguage();
-  const { wizard, bookings, passes, resetWizard } = useDemo();
+  const { wizard, bookings, passes, resetWizard, boats } = useDemo();
   const navigate = useNavigate();
   const b = wizard.currentBooking ?? bookings[0];
   const { entries } = useTicketIndex(bookings);
   const savedTicketIds = new Set(passes.map(p => p.ticketId));
   const rows: Array<[string, string]> = [['paymentStatus', b.payment], ['thresholdStatus', b.threshold], ['opsStatus', b.ops], ['boardingStatus', b.boarding]];
-  const boat = BOATS.find(x => x.id === b.boatId);
-  const returnBoat = BOATS.find(x => x.id === b.return?.boatId);
+  const boat = boats.find(x => x.id === b.boatId);
+  const returnBoat = boats.find(x => x.id === b.return?.boatId);
   return (
     <div className="result-flow">
       <section className="card card-pad result-confirm" aria-labelledby="result-confirm-title">

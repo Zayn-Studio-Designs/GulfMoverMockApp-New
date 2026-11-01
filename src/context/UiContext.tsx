@@ -7,6 +7,8 @@ interface ModalOptions {
   confirmText: string;
   /** When true the confirm button is blocked until a reason is entered. */
   requireReason: boolean;
+  /** Phase 20: destructive actions get a red confirm button. Styling only. */
+  danger?: boolean;
   onConfirm: (reason: string) => void;
 }
 
@@ -68,10 +70,10 @@ export function UiProvider({ children }: { children: ReactNode }) {
     <UiContext.Provider value={value}>
       {children}
       <div className={`toast${toastVisible ? ' show' : ''}`} role="status" aria-live="polite">{tx(toastMessage)}</div>
-      <div className={`modal-backdrop${modal ? ' open' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div className={`modal-backdrop${modal ? ' open' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-desc" data-danger={modal?.danger ? 'true' : undefined}>
         <div className="modal">
           <h3 id="modal-title">{modal?.title ?? t('confirmAction')}</h3>
-          <p>{modal?.desc}</p>
+          <p id="modal-desc">{modal?.desc}</p>
           {modal?.requireReason !== false && (
             <div className="field">
               <label htmlFor="modal-reason">{t('reasonLabel')}</label>
@@ -82,7 +84,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
           )}
           <div className="modal-actions">
             <button className="btn btn-outline" type="button" onClick={closeModal}>{t('cancel')}</button>
-            <button className="btn btn-primary" type="button" onClick={confirm}>{modal?.confirmText ?? t('confirm')}</button>
+            <button className={`btn ${modal?.danger ? 'btn-danger' : 'btn-primary'}`} type="button" onClick={confirm}>{modal?.confirmText ?? t('confirm')}</button>
           </div>
         </div>
       </div>

@@ -8,7 +8,7 @@ import { PageHeader } from '../components/PageHeader';
 import { StatusPill } from '../components/StatusPill';
 import { ArrowIcon, Icon } from '../components/Icon';
 import { formatTime } from '../domain/fleet';
-import { BOATS } from '../data/demoData';
+
 import { QRCodeTicket } from '../components/QRCodeTicket';
 import type { Lang } from '../i18n/translations';
 import { WalletAddSheet, WalletPassSheet } from '../components/wallet/WalletSheets';
@@ -18,7 +18,7 @@ import { toCsv, downloadCsv } from '../domain/csv';
 
 export default function MyBookingsView() {
   const { t, tx, lang } = useLanguage();
-  const { bookings } = useDemo();
+  const { bookings, boats } = useDemo();
   const { isCustomer } = useWorkMode();
   const { toast, openModal } = useUi();
   const navigate = useNavigate();
@@ -28,7 +28,7 @@ export default function MyBookingsView() {
   const [addPassTicket, setAddPassTicket] = useState<TicketEntry | null>(null);
   const [openPassTicket, setOpenPassTicket] = useState<TicketEntry | null>(null);
 
-  const boatName = (id?: string) => BOATS.find(b => b.id === id)?.name[lang];
+  const boatName = (id?: string) => boats.find(b => b.id === id)?.name[lang];
 
   const filtered = bookings.filter(b =>
     (!search || b.ref.toLowerCase().includes(search.toLowerCase())) &&

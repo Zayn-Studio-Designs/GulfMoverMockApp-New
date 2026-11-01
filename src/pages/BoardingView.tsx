@@ -89,18 +89,49 @@ export default function BoardingView() {
   const resultFor = () => {
     const r = boarding.lastResult;
     if (!r) return null;
-    if (r.kind === 'valid') return { cls: '', text: t('boardMarkedOk') };
-    if (r.kind === 'duplicate') return { cls: ' duplicate', text: t('boardDuplicateMsg') };
-    if (r.kind === 'notEligible') return { cls: ' duplicate', text: t('boardNotEligible') };
-    return { cls: ' duplicate', text: t('boardUnknownTicket') };
+    if (r.kind === 'valid') return { cls: '', icon: 'check' as const, text: t('boardMarkedOk') };
+    if (r.kind === 'duplicate') return { cls: ' duplicate', icon: 'ticket' as const, text: t('boardDuplicateMsg') };
+    if (r.kind === 'notEligible') return { cls: ' duplicate', icon: 'alert' as const, text: t('boardNotEligible') };
+    return { cls: ' duplicate', icon: 'search' as const, text: t('boardUnknownTicket') };
   };
   const result = resultFor();
+  const progressPct = expected > 0 ? Math.min(100, Math.round((boardedCount / expected) * 100)) : 0;
 
   return (
     <div className="board-screen">
       <PageHeader titleKey="boardingTitle" eyebrow="ATCO MARINE / BOARDING DESK" />
 
-      {/* Primary action: the scanner, with nothing competing above it. */}
+      {/* Boarding context first: which sailing is on the desk and how far boarding has progressed. */}
+      <section className="card card-pad board-context" aria-labelledby="board-context-title">
+        <div className="board-context-top">
+          <div>
+            <h2 className="card-title" id="board-context-title">{t('selectSailing')}</h2>
+            <p className="card-desc">{sailing ? `${sailing.id} · ${tx(sailing.dest)}` : ''}</p>
+          </div>
+          <span className="pill pill-neutral">{tx('DEMO ONLY')}</span>
+        </div>
+        <div className="board-context-grid">
+          <div className="field board-sailing-field">
+            <label htmlFor="board-sailing">{t('selectSailing')}</label>
+            <select id="board-sailing" value={boarding.selectedSailingId}
+              onChange={e => updateBoarding({ selectedSailingId: e.target.value })}>
+              {sailings.map(s => <option key={s.id} value={s.id}>{formatTime(s.time, lang)} · {tx(s.dest)}</option>)}
+            </select>
+          </div>
+          <div className="board-progress" role="group" aria-label={t('boardProgress')}>
+            <div className="between">
+              <span className="board-progress-label">{t('boardProgress')}</span>
+              <span className="mono small" dir="ltr"><strong>{boardedCount}</strong> / {expected}</span>
+            </div>
+            <div className="bar board-bar" role="progressbar" aria-valuenow={boardedCount} aria-valuemin={0} aria-valuemax={expected} aria-label={t('boardProgress')}>
+              <span style={{ width: `${progressPct}%` }} />
+            </div>
+            <div className="small muted">{t('boardRemaining').replace('{n}', String(Math.max(0, expected - boardedCount)))}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* Primary action: the scanner. */}
       <section className="card board-scan" aria-labelledby="board-scan-title">
         <div className="board-scan-head">
           <div className="board-scan-copy">
@@ -127,15 +158,16 @@ export default function BoardingView() {
           <button type="button" className="btn btn-primary" onClick={() => setCameraOn(true)}>{t('boardStartCamera')}</button>
           {cameraOn && <button type="button" className="btn btn-outline" onClick={() => setCameraOn(false)}>{t('boardStopCamera')}</button>}
         </div>
-        {(cameraState === 'denied' || cameraState === 'unsupported') && (
+        {(cameraState === 'denied' || cameraState === 'unsupported' || cameraState === 'error') && (
           <div className="notice warn board-scan-notice" role="status">
-            {cameraState === 'denied' ? t('boardCameraDenied') : t('boardCameraUnsupported')}
+            {cameraState === 'denied' ? t('boardCameraDenied') : cameraState === 'unsupported' ? t('boardCameraUnsupported') : t('boardCameraError')}
           </div>
         )}
 
         {result && (
           <div className={`scan-state${result.cls}`} role="status" aria-live="polite">
             <div className="scan-state-head">
+              <span className="scan-state-icon" aria-hidden="true"><Icon name={result.icon} /></span>
               <strong>{t('boardResultTitle')}</strong>
               {scanned && <StatusPill text={scanned.ticket.status === 'boarded' ? 'Boarded (demo)' : 'Not boarded'} />}
             </div>
@@ -156,42 +188,28 @@ export default function BoardingView() {
 
       <div className="board-layout">
         <div className="card card-pad">
+          {/* Real ticket list for the selected sailing (shared demo state), as scannable rows. */}
           <div className="between">
-            <div><h2 className="card-title">{t('selectSailing')}</h2><p className="card-desc">{sailing ? `${sailing.id} · ${tx(sailing.dest)}` : ''}</p></div>
-            <span className="pill pill-neutral">{tx('DEMO ONLY')}</span>
+            <div><h2 className="card-title">{t('boardTicketsList')}</h2><p className="card-desc">{sailing ? `${formatTime(sailing.time, lang)} · ${tx(sailing.dest)}` : ''}</p></div>
+            <span className="mono small muted">{boardedCount}/{expected}</span>
           </div>
-          <div className="field" style={{ marginTop: 14 }}>
-            <label htmlFor="board-sailing">{t('selectSailing')}</label>
-            <select id="board-sailing" value={boarding.selectedSailingId}
-              onChange={e => updateBoarding({ selectedSailingId: e.target.value })}>
-              {sailings.map(s => <option key={s.id} value={s.id}>{formatTime(s.time, lang)} · {tx(s.dest)}</option>)}
-            </select>
-          </div>
-          <div className="grid grid-3" style={{ marginTop: 15 }}>
-            <div className="metric"><div className="metric-label">{tx('Expected (demo)')}</div><div className="metric-value">{expected}</div></div>
-            <div className="metric"><div className="metric-label">{tx('Boarded (demo)')}</div><div className="metric-value">{boardedCount}</div></div>
-            <div className="metric"><div className="metric-label">{tx('Not boarded')}</div><div className="metric-value">{Math.max(0, expected - boardedCount)}</div></div>
-          </div>
-
-          {/* Real ticket list for the selected sailing (shared demo state). */}
-          <h3 className="card-title" style={{ marginTop: 17 }}>{t('boardTicketsList')}</h3>
           {sailingEntries.length === 0 ? (
             <div className="no-data" style={{ marginTop: 10 }}>{tx('No ticket records exist for this demo sailing yet.')}</div>
           ) : (
-            <div className="table-wrap" style={{ marginTop: 10 }}>
-              <table style={{ minWidth: 0 }}>
-                <thead><tr><th>{t('ticketPassenger')}</th><th>{t('ticketIdLabel')}</th><th>{t('ticketState')}</th></tr></thead>
-                <tbody>
-                  {sailingEntries.map(e => (
-                    <tr key={e.ticket.id}>
-                      <td data-label={t('ticketPassenger')}>{tx(e.ticket.passengerName) || t('notProvided')}</td>
-                      <td data-label={t('ticketIdLabel')}><span className="mono tiny">{e.ticket.id}</span></td>
-                      <td data-label={t('ticketState')}><StatusPill text={e.ticket.status === 'boarded' ? t('ticketBoarded') : t('ticketNotBoarded')} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ul className="plain-list manifest-list">
+              {sailingEntries.map(e => (
+                <li key={e.ticket.id} className="manifest-row">
+                  <span className={`manifest-dot${e.ticket.status === 'boarded' ? ' done' : ''}`} aria-hidden="true">
+                    {e.ticket.status === 'boarded' ? <Icon name="check" /> : null}
+                  </span>
+                  <span className="manifest-id">
+                    <strong>{tx(e.ticket.passengerName) || t('notProvided')}</strong>
+                    <span className="mono tiny muted">{e.ticket.id}</span>
+                  </span>
+                  <StatusPill text={e.ticket.status === 'boarded' ? t('ticketBoarded') : t('ticketNotBoarded')} />
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 

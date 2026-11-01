@@ -572,10 +572,11 @@ describe('navigation, header and booking banner', () => {
     for (const name of ['Home', 'My Bookings', 'Corporate / Agent', 'Operations', 'Boarding Desk', 'Materials', 'Fleet']) {
       expect(within(nav).getByRole('link', { name })).toBeInTheDocument();
     }
-    // Phone row: Home is added; Book Transfer, Corporate/Agent and Operations are desktop-only,
-    // the last two behind the single Agent Ops entry.
+    // Phase 19: Home was restored on desktop (was mobileOnly). Book Transfer,
+    // Corporate/Agent and Operations stay desktop-only, the last two behind
+    // the single Agent Ops phone entry.
     expect(nav.className).toContain('nav-list-staff');
-    expect(within(nav).getByRole('link', { name: 'Home' }).className).toContain('nav-mobile-only');
+    expect(within(nav).getByRole('link', { name: 'Home' }).className).not.toContain('nav-mobile-only');
     for (const name of ['Book Transfer', 'Corporate / Agent', 'Operations']) {
       expect(within(nav).getByRole('link', { name }).className).toContain('nav-desktop-only');
     }

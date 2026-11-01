@@ -12,7 +12,10 @@ describe('translation tables', () => {
   });
 
   test('Arabic values contain Arabic script', () => {
-    const latinOnly = Object.entries(I18N.ar).filter(([, v]) => !/[؀-ۿ]/.test(v));
+    // Phase 27 (Apple HIG branding rule): the brand wordmark is never localized —
+    // `brandName` stays Latin in both languages by design, like the logo asset.
+    const BRAND_KEYS = new Set(['brandName']);
+    const latinOnly = Object.entries(I18N.ar).filter(([k, v]) => !BRAND_KEYS.has(k) && !/[؀-ۿ]/.test(v));
     expect(latinOnly).toEqual([]);
   });
 
